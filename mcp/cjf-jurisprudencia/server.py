@@ -283,8 +283,22 @@ def buscar_jurisprudencia_cjf(
             registrar_dispositivo("cjf-jurisprudencia", cache_key, html_resultado, ttl_s=7 * 86400)
 
         totais = extrair_totais(html_resultado)
-        documentos = extrair_documentos(html_resultado)[:max_resultados]
+        docs_extraidos = extrair_documentos(html_resultado)
+        documentos = docs_extraidos[:max_resultados]
         n_docs = len(documentos)
+
+        # Canário estrutural: se o portal reporta documentos mas o parser
+        # extraiu zero, o HTML/JSF do CJF provavelmente mudou (ex.: id
+        # autogerado j_idt51, reordenação de <td>). Falha LOUD em vez de
+        # devolver vazio silencioso, que seria indistinguível de "nada
+        # encontrado" e mascararia um parser quebrado.
+        total_portal = sum(totais.values())
+        if total_portal > 0 and not docs_extraidos:
+            raise RuntimeError(
+                f"CJF reportou {total_portal} documento(s) mas o parser extraiu 0 "
+                "— provável mudança no HTML do portal. Verificar regex de "
+                "extrair_documentos/j_idt51 antes de confiar em 'nada encontrado'."
+            )
 
         resultados: List[BaseResultadoJuridico] = []
 

@@ -92,7 +92,19 @@ class EProcSession:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
-        self.session.verify = False  # eProc tem cert auto-assinado em alguns endpoints
+        # TLS: o eProc TJRJ usa cert auto-assinado em alguns endpoints. Em vez de
+        # desabilitar a verificação incondicionalmente (expõe a MITM), permite
+        # fixar um CA bundle via env TJRJ_CA_BUNDLE — aí a validação é real.
+        # Sem CA fixado, mantém o comportamento legado (verify=False) mas
+        # silencia o InsecureRequestWarning para não poluir o stderr do stdio MCP.
+        import os
+        ca_bundle = os.environ.get("TJRJ_CA_BUNDLE")
+        if ca_bundle and os.path.exists(ca_bundle):
+            self.session.verify = ca_bundle
+        else:
+            self.session.verify = False
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
     def obter_sessao(self) -> None:
@@ -550,6 +562,16 @@ def buscar_jurisprudencia_tjrj(
         total = extrair_total(html)
         documentos = extrair_documentos_eproc(html, max_resultados=max_resultados)
         n_results = len(documentos)
+
+        # Canário estrutural: o eProc reporta documentos mas o parser (seletores
+        # BeautifulSoup do ASP.NET) extraiu zero → layout do portal provavelmente
+        # mudou. Falha LOUD em vez de devolver vazio silencioso.
+        if total > 0 and n_results == 0:
+            raise RuntimeError(
+                f"eProc TJRJ reportou {total} documento(s) mas o parser extraiu 0 "
+                "— provável mudança no HTML do portal. Verificar "
+                "extrair_documentos_eproc (classes resultadoItem/divEmenta)."
+            )
 
         xml = formatar_resultados_xml(documentos, "jurisprudencia_tjrj")
         meta = f'<!-- TJRJ/eProc | Busca: "{busca}" | Campo: {campo} | Total encontrado: {total} | Exibindo: {len(documentos)} -->\n'

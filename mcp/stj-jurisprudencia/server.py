@@ -365,7 +365,16 @@ def _buscar_via_cjf(query_brs: str, tamanho: int) -> Tuple[List[BaseResultadoJur
     if m:
         total_stj = int(m.group(1))
 
-    docs = _extrair_cjf(html_resp)[:tamanho]
+    docs_full = _extrair_cjf(html_resp)
+    # Canário estrutural: portal reporta documentos mas o parser extraiu zero
+    # → HTML/JSF do CJF provavelmente mudou. Falha LOUD em vez de devolver
+    # vazio silencioso (indistinguível de "nada encontrado").
+    if total_stj > 0 and not docs_full:
+        raise RuntimeError(
+            f"CJF reportou {total_stj} documento(s) do STJ mas o parser extraiu 0 "
+            "— provável mudança no HTML do portal. Verificar _extrair_cjf/j_idt51."
+        )
+    docs = docs_full[:tamanho]
     resultados: List[BaseResultadoJuridico] = []
     for d in docs:
         ementa = truncar_por_tokens(d.get("ementa", ""), max_tokens=400)
