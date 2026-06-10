@@ -1,0 +1,7 @@
+# Dependências diretas do MCP stj-jurisprudencia (venv: mcp-venvs/stj-jurisprudencia)
+# requests/tenacity também usados via shared/cjf_client.py (fallback CJF)
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4
+beautifulsoup4==4.14.3
+curl_cffi==0.14.0

@@ -258,7 +258,7 @@ async def _buscar_via_playwright(query: str, base: str, tamanho: int) -> dict:
 # Parser de resultado individual
 # ---------------------------------------------------------------------------
 
-def _parse_resultado(hit: dict, base: str) -> BaseResultadoJuridico:
+def _parse_resultado(hit: dict, base: str, max_tokens_ementa: int = 400) -> BaseResultadoJuridico:
     src = hit.get("_source", {})
     numero = src.get("processo_codigo_completo") or src.get("processo_numero", "")
     tipo = src.get("processo_classe_processual_unificada_extenso") or src.get(
@@ -269,7 +269,7 @@ def _parse_resultado(hit: dict, base: str) -> BaseResultadoJuridico:
 
     ementa = src.get("documental_indexacao_texto") or src.get("decisao_texto", "")
     ementa = limpar_texto_html(ementa)
-    ementa = truncar_por_tokens(ementa, max_tokens=400)
+    ementa = truncar_por_tokens(ementa, max_tokens=max_tokens_ementa)
 
     url = src.get("inteiro_teor_url", "")
 
@@ -294,6 +294,7 @@ async def buscar_jurisprudencia_stf(
     query: str,
     base: str = "acordaos",
     tamanho: int = 10,
+    max_tokens_ementa: int = 400,
 ) -> str:
     """
     Busca jurisprudência no Supremo Tribunal Federal (STF).
@@ -308,6 +309,8 @@ async def buscar_jurisprudencia_stf(
         query: Termos de busca em sintaxe Elasticsearch query_string
         base: Base de dados (acordaos | sumulas | decisoes-monocraticas | informativos)
         tamanho: Número de resultados (1–50, padrão 10)
+        max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
+                           Aumente para obter ementa mais longa/íntegra.
 
     Returns:
         XML estruturado com os resultados encontrados.
@@ -323,6 +326,7 @@ async def buscar_jurisprudencia_stf(
            bnp-api, base local ou cjf-jurisprudencia.
     """
     tamanho = max(1, min(tamanho, 50))
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     base = base.lower().strip()
     if base not in BASES_VALIDAS:
         base = "acordaos"
@@ -394,7 +398,7 @@ async def buscar_jurisprudencia_stf(
                 f'</resultados>'
             )
 
-        resultados = [_parse_resultado(h, base) for h in docs]
+        resultados = [_parse_resultado(h, base, max_tokens_ementa) for h in docs]
         n_results = len(resultados)
 
         xml = formatar_resultados_xml(resultados, tag_raiz="resultados")

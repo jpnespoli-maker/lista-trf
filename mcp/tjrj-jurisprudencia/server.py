@@ -28,6 +28,7 @@ from shared.base_juridica import (
     formatar_resultados_xml,
     truncar_por_tokens,
     limpar_texto_html,
+    sanitizar_comentario_xml,
 )
 
 # Onda 2 — cache HTTP (2d para TJRJ; eJuris é caro com Playwright, vale ouro).
@@ -60,7 +61,6 @@ _TJRJ_TTL_S = 2 * 86400
 EPROC_BASE = "https://eproc1g.tjrj.jus.br/eproc/"
 EPROC_PESQUISAR = EPROC_BASE + "externo_controlador.php?acao=jurisprudencia@jurisprudencia/pesquisar"
 EPROC_LISTAR = EPROC_BASE + "externo_controlador.php?acao=jurisprudencia@jurisprudencia/listar_resultados"
-EPROC_AJAX = EPROC_BASE + "externo_controlador.php?acao=jurisprudencia@jurisprudencia/ajax_paginar_resultado"
 
 EJURIS_URL = "https://www3.tjrj.jus.br/ejuris/ConsultarJurisprudencia.aspx"
 EJURIS_RESULT_URL = "https://www3.tjrj.jus.br/ejuris/ProcessarConsJurisES.aspx"
@@ -127,7 +127,7 @@ class EProcSession:
         POST do formulário de busca. Retorna o HTML completo da resposta —
         que já contém os resultados filtrados. (O endpoint AJAX
         ``ajax_paginar_resultado`` ignora o filtro e devolve a base inteira;
-        por isso é evitado aqui — ver ``obter_resultados``.)
+        por isso é evitado aqui.)
         """
         tem_filtros_avancados = any([tipo_documento, data_inicio, data_fim, relator, orgao])
 
@@ -164,25 +164,6 @@ class EProcSession:
         resp.raise_for_status()
         return resp.text
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
-    def obter_resultados(self) -> str:
-        """
-        Fallback legado: GET AJAX para paginação adicional. Retornado em
-        condições normais ignora o filtro da busca e devolve a base inteira;
-        manter apenas para compatibilidade. Use o retorno de ``submeter_busca``.
-        """
-        resp = self.session.get(
-            EPROC_AJAX,
-            headers={
-                **HEADERS,
-                "Referer": EPROC_LISTAR,
-                "X-Requested-With": "XMLHttpRequest",
-            },
-            timeout=40,
-        )
-        resp.raise_for_status()
-        return resp.text
-
 
 # ---------------------------------------------------------------------------
 # Parser de resultados eProc
@@ -196,7 +177,9 @@ def extrair_total(html: str) -> int:
     return 0
 
 
-def extrair_documentos_eproc(html: str, max_resultados: int = 10) -> List[BaseResultadoJuridico]:
+def extrair_documentos_eproc(
+    html: str, max_resultados: int = 10, max_tokens_ementa: int = 700
+) -> List[BaseResultadoJuridico]:
     """
     Extrai documentos do HTML retornado pelo ajax_paginar_resultado.
 
@@ -270,7 +253,7 @@ def extrair_documentos_eproc(html: str, max_resultados: int = 10) -> List[BaseRe
 
         # Montar resultado padronizado
         ementa = doc.get("EMENTA", doc.get("DECISÃO", ""))
-        ementa = truncar_por_tokens(ementa, max_tokens=700)
+        ementa = truncar_por_tokens(ementa, max_tokens=max_tokens_ementa)
 
         # Número preferencial: formatado (com pontos e traços) > raw
         numero = doc.get("NUMERO_FORMATADO", doc.get("NUMERO_RAW", ""))
@@ -315,7 +298,9 @@ def extrair_total_ejuris(html: str) -> int:
     return 0
 
 
-def extrair_documentos_ejuris(html: str, max_resultados: int = 10) -> List[BaseResultadoJuridico]:
+def extrair_documentos_ejuris(
+    html: str, max_resultados: int = 10, max_tokens_ementa: int = 700
+) -> List[BaseResultadoJuridico]:
     """
     Extrai documentos do HTML retornado pelo eJuris.
 
@@ -375,7 +360,7 @@ def extrair_documentos_ejuris(html: str, max_resultados: int = 10) -> List[BaseR
                     if not orgao and len(parts) >= 3:
                         orgao = parts[-1].title()
 
-        ementa_text = truncar_por_tokens(ementa_text, max_tokens=700)
+        ementa_text = truncar_por_tokens(ementa_text, max_tokens=max_tokens_ementa)
 
         resultado = BaseResultadoJuridico(
             conteudo=ementa_text,
@@ -402,6 +387,7 @@ async def _buscar_ejuris_async(
     ano_inicio: str = "",
     ano_fim: str = "",
     tipo_documento: str = "",
+    max_tokens_ementa: int = 700,
 ) -> Tuple[List[BaseResultadoJuridico], int]:
     """Executa busca no eJuris via headless Chromium (Playwright)."""
     async with async_playwright() as p:
@@ -460,7 +446,9 @@ async def _buscar_ejuris_async(
             except Exception:
                 pass
 
-            resultados = extrair_documentos_ejuris(html, max_resultados=max_resultados)
+            resultados = extrair_documentos_ejuris(
+                html, max_resultados=max_resultados, max_tokens_ementa=max_tokens_ementa
+            )
 
             # Paginação: PageSeq é base-0 (página 1 = PageSeq=0, página 2 = PageSeq=1)
             # A URL base da sessão (com Version e outros params) é preservada navegando
@@ -481,6 +469,7 @@ async def _buscar_ejuris_async(
                     novos = extrair_documentos_ejuris(
                         html_extra,
                         max_resultados=max_resultados - len(resultados),
+                        max_tokens_ementa=max_tokens_ementa,
                     )
                     if not novos:
                         break
@@ -507,6 +496,7 @@ def buscar_jurisprudencia_tjrj(
     data_inicio: str = "",
     data_fim: str = "",
     tipo_documento: str = "",
+    max_tokens_ementa: int = 700,
 ) -> str:
     """
     Busca jurisprudência do TJRJ via eProc (Tribunal de Justiça do Estado do Rio de Janeiro).
@@ -526,11 +516,14 @@ def buscar_jurisprudencia_tjrj(
         data_fim: Data fim do julgamento — DD/MM/AAAA. Filtro best-effort (requer JS no portal).
         tipo_documento: Tipo de documento. Ex: "Acórdão", "Decisão monocrática".
                         Deixar em branco para todos os tipos.
+        max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 700.
+                           Aumente para obter ementa mais longa/íntegra.
 
     Returns:
         XML estruturado com: ementa, relator, órgão julgador, data do julgamento,
         data da publicação, classe, número do processo.
     """
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     t0 = time.perf_counter()
     cache_hit = False
     n_results = 0
@@ -540,6 +533,7 @@ def buscar_jurisprudencia_tjrj(
             "mcp": "tjrj-jurisprudencia", "fonte": "eproc",
             "busca": busca, "campo": campo, "max_resultados": max_resultados,
             "data_inicio": data_inicio, "data_fim": data_fim, "tipo_documento": tipo_documento,
+            "max_tokens_ementa": max_tokens_ementa,
         }
         cached = cached_http("tjrj-jurisprudencia", cache_key)
         if cached is not None:
@@ -560,7 +554,9 @@ def buscar_jurisprudencia_tjrj(
         )
 
         total = extrair_total(html)
-        documentos = extrair_documentos_eproc(html, max_resultados=max_resultados)
+        documentos = extrair_documentos_eproc(
+            html, max_resultados=max_resultados, max_tokens_ementa=max_tokens_ementa
+        )
         n_results = len(documentos)
 
         # Canário estrutural: o eProc reporta documentos mas o parser (seletores
@@ -574,7 +570,7 @@ def buscar_jurisprudencia_tjrj(
             )
 
         xml = formatar_resultados_xml(documentos, "jurisprudencia_tjrj")
-        meta = f'<!-- TJRJ/eProc | Busca: "{busca}" | Campo: {campo} | Total encontrado: {total} | Exibindo: {len(documentos)} -->\n'
+        meta = f'<!-- TJRJ/eProc | Busca: "{sanitizar_comentario_xml(busca)}" | Campo: {campo} | Total encontrado: {total} | Exibindo: {len(documentos)} -->\n'
         saida = meta + xml
         try:
             import json as _json
@@ -610,6 +606,7 @@ async def buscar_jurisprudencia_ejuris(
     ano_inicio: str = "",
     ano_fim: str = "",
     tipo_documento: str = "",
+    max_tokens_ementa: int = 700,
 ) -> str:
     """
     Busca jurisprudência do TJRJ via eJuris (portal legado, base histórica ampla).
@@ -631,11 +628,14 @@ async def buscar_jurisprudencia_ejuris(
         ano_fim: Ano final (AAAA). Ex: "2025". Vazio = sem limite superior.
         tipo_documento: Tipo do documento. Aceita: "Acórdão", "Decisão", "Despacho",
                         "Sentença". Vazio = todos os tipos.
+        max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 700.
+                           Aumente para obter ementa mais longa/íntegra.
 
     Returns:
         XML estruturado com: ementa, relator, órgão julgador, data do julgamento.
         Número do processo não disponível nesta base.
     """
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     t0 = time.perf_counter()
     cache_hit = False
     n_results = 0
@@ -645,6 +645,7 @@ async def buscar_jurisprudencia_ejuris(
             "mcp": "tjrj-jurisprudencia", "fonte": "ejuris",
             "busca": busca, "max_resultados": max_resultados,
             "ano_inicio": ano_inicio, "ano_fim": ano_fim, "tipo_documento": tipo_documento,
+            "max_tokens_ementa": max_tokens_ementa,
         }
         cached = cached_http("tjrj-jurisprudencia", cache_key)
         if cached is not None:
@@ -655,12 +656,12 @@ async def buscar_jurisprudencia_ejuris(
             return payload["xml"]
 
         resultados, total = await _buscar_ejuris_async(
-            busca, max_resultados, ano_inicio, ano_fim, tipo_documento
+            busca, max_resultados, ano_inicio, ano_fim, tipo_documento, max_tokens_ementa
         )
         n_results = len(resultados)
         xml = formatar_resultados_xml(resultados, "jurisprudencia_ejuris")
         meta = (
-            f'<!-- TJRJ/eJuris | Busca: "{busca}"'
+            f'<!-- TJRJ/eJuris | Busca: "{sanitizar_comentario_xml(busca)}"'
             f' | Total encontrado: {total}'
             f' | Exibindo: {len(resultados)} -->\n'
         )

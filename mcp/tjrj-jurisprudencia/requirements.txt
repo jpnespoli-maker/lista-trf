@@ -1,0 +1,6 @@
+# Dependências diretas do MCP tjrj-jurisprudencia (venv: mcp-venvs/tjrj-jurisprudencia)
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4
+beautifulsoup4==4.14.3
+playwright==1.58.0

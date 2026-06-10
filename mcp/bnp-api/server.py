@@ -18,6 +18,7 @@ from shared.base_juridica import (
     BaseResultadoJuridico,
     formatar_resultados_xml,
     truncar_por_tokens,
+    sanitizar_comentario_xml,
     TIPOS_PRECEDENTES,
 )
 
@@ -79,7 +80,12 @@ def buscar_precedentes(
     busca: str,
     orgaos: str = "STF,STJ",
     tipos: str = "RG,RR,SV,SUM",
-    max_resultados: int = 10
+    max_resultados: int = 10,
+    data_desde: str = "",
+    data_ate: str = "",
+    pagina: int = 1,
+    incluir_cancelados: bool = False,
+    max_tokens_ementa: int = 700,
 ) -> str:
     """
     Busca precedentes vinculantes no Banco Nacional de Precedentes (BNP/PAGEA/CNJ).
@@ -98,12 +104,20 @@ def buscar_precedentes(
         orgaos: Órgãos separados por vírgula. Default: "STF,STJ"
         tipos: Tipos de precedente. Default: "RG,RR,SV,SUM"
         max_resultados: Máximo de resultados (1-50). Default: 10
+        data_desde: Filtra por última atualização a partir desta data,
+                    formato DD/MM/AAAA (ISO é ignorado pelo portal). Vazio = sem filtro.
+        data_ate: Filtra por última atualização até esta data (DD/MM/AAAA).
+        pagina: Página de resultados (1-based). Default: 1.
+        incluir_cancelados: Inclui precedentes cancelados/superados. Default: False.
+        max_tokens_ementa: Truncamento do conteúdo em tokens (50-4000). Default: 700.
+                           Aumente para obter tese/questão mais longa.
 
     Returns:
         XML estruturado com precedentes: número, tese, questão jurídica, situação
     """
     lista_orgaos = [o.strip().upper() for o in orgaos.split(",")]
     lista_tipos = [t.strip().upper() for t in tipos.split(",")]
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
 
     filtro = {
         "buscaGeral": busca,
@@ -111,12 +125,12 @@ def buscar_precedentes(
         "quaisquerPalavras": "",
         "semPalavras": "",
         "trechoExato": "",
-        "atualizacaoDesde": "",
-        "atualizacaoAte": "",
-        "cancelados": False,
+        "atualizacaoDesde": data_desde,
+        "atualizacaoAte": data_ate,
+        "cancelados": bool(incluir_cancelados),
         "ordenacao": "Text",
         "nr": "",
-        "pagina": 1,
+        "pagina": max(1, int(pagina)),
         "tamanhoPagina": min(max_resultados, 50),
         "orgaos": lista_orgaos,
         "tipos": lista_tipos
@@ -159,7 +173,7 @@ def buscar_precedentes(
                     conteudo_partes.append(f"PROCESSOS PARADIGMA: {', '.join(procs)}")
 
             conteudo = "\n\n".join(conteudo_partes)
-            conteudo = truncar_por_tokens(conteudo, max_tokens=700)
+            conteudo = truncar_por_tokens(conteudo, max_tokens=max_tokens_ementa)
 
             fonte = ""
             if paradigmas and paradigmas[0].get("link"):
@@ -179,7 +193,7 @@ def buscar_precedentes(
         xml_resultado = formatar_resultados_xml(resultados, "precedentes_bnp")
         n_results = len(resultados)
 
-        meta = f'<!-- Busca: "{busca}" | Total: {data.get("total", len(resultados))} | Órgãos: {orgaos} | Cache: {"HIT" if cache_hit else "MISS"} -->\n'
+        meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | Total: {data.get("total", len(resultados))} | Órgãos: {orgaos} | Cache: {"HIT" if cache_hit else "MISS"} -->\n'
 
         return meta + xml_resultado
 

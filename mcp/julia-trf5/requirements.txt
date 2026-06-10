@@ -1,0 +1,4 @@
+# Dependências diretas do MCP julia-trf5 (venv: mcp-venvs/julia-trf5)
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4

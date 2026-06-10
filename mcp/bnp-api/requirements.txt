@@ -1,0 +1,4 @@
+# Dependências diretas do MCP bnp-api (venv: mcp-venvs/bnp-api)
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4

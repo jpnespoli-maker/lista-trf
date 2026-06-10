@@ -1,0 +1,5 @@
+# Dependências diretas do MCP cjf-jurisprudencia (venv: mcp-venvs/cjf-jurisprudencia)
+# requests/tenacity são usados via shared/cjf_client.py
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4

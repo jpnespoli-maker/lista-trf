@@ -89,6 +89,15 @@ def truncar_por_tokens(texto: str, max_tokens: int = 1000) -> str:
     return truncado + " [...]"
 
 
+def sanitizar_comentario_xml(valor: str) -> str:
+    """Torna um valor seguro para interpolação em comentário XML.
+
+    A sequência ``--`` é proibida dentro de ``<!-- ... -->`` (e ``-->``
+    encerraria o comentário no meio da query). Substitui por travessão.
+    """
+    return str(valor).replace("--", "—")
+
+
 def extrair_ementa(texto: str) -> str:
     """
     Extrai a seção de ementa de um documento jurídico.

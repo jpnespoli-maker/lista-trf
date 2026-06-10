@@ -23,6 +23,7 @@ from shared.base_juridica import (
     truncar_por_tokens,
     extrair_ementa,
     limpar_texto_html,
+    sanitizar_comentario_xml,
 )
 
 # Onda 2 — cache HTTP (TTL 2d para Julia — portal mais volátil).
@@ -127,9 +128,9 @@ def _buscar(instancia: str, params: Dict) -> Dict:
     return resp.json()
 
 
-def _doc_para_resultado(doc: Dict) -> BaseResultadoJuridico:
+def _doc_para_resultado(doc: Dict, max_tokens_ementa: int = 400) -> BaseResultadoJuridico:
     texto = doc.get("resumo") or doc.get("texto") or ""
-    texto = truncar_por_tokens(limpar_texto_html(texto), max_tokens=400)
+    texto = truncar_por_tokens(limpar_texto_html(texto), max_tokens=max_tokens_ementa)
     data = (doc.get("dataAssinatura") or doc.get("dataJulgamento") or "")[:10]
     return BaseResultadoJuridico(
         conteudo=texto,
@@ -153,6 +154,7 @@ def buscar_julia(
     data_inicial: str = "",
     data_final: str = "",
     max_resultados: int = 10,
+    max_tokens_ementa: int = 400,
 ) -> str:
     """
     Busca jurisprudência no portal público JULIA do TRF5.
@@ -172,11 +174,14 @@ def buscar_julia(
         data_inicial: Data inicial no formato YYYY-MM-DD.
         data_final: Data final no formato YYYY-MM-DD.
         max_resultados: Máximo de resultados (1–100). Default: 10.
+        max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
+                           Aumente para obter ementa mais longa/íntegra.
 
     Returns:
         XML estruturado com os documentos encontrados.
     """
     instancia = instancia.upper()
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     if instancia not in INSTANCIAS:
         validas = ", ".join(INSTANCIAS.keys())
         return f'<erro>Instância "{instancia}" inválida. Use: {validas}</erro>'
@@ -197,6 +202,7 @@ def buscar_julia(
             "data_inicial": data_inicial,
             "data_final": data_final,
             "max_resultados": max_resultados,
+            "max_tokens_ementa": max_tokens_ementa,
         }
         cached = cached_http("julia-trf5", cache_key)
         if cached is not None:
@@ -217,10 +223,10 @@ def buscar_julia(
         )
         dados = _buscar(instancia, params)
         total = dados.get("recordsTotal", 0)
-        resultados = [_doc_para_resultado(d) for d in dados.get("data", [])]
+        resultados = [_doc_para_resultado(d, max_tokens_ementa) for d in dados.get("data", [])]
         n_results = len(resultados)
         xml = formatar_resultados_xml(resultados, "jurisprudencia_julia")
-        meta = f'<!-- Busca: "{termo}" | Instância: {instancia} ({INSTANCIAS[instancia]}) | Total: {total} -->\n'
+        meta = f'<!-- Busca: "{sanitizar_comentario_xml(termo)}" | Instância: {instancia} ({INSTANCIAS[instancia]}) | Total: {total} -->\n'
         saida = meta + xml
         try:
             import json as _json

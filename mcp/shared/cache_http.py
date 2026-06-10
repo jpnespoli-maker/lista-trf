@@ -16,8 +16,10 @@ Decisões de design:
 3. **TTL por entrada**, não global. Cada MCP escolhe seu TTL conforme
    volatilidade da fonte (vinculantes 30d, acórdãos com data fechada 7d,
    portais voláteis 48h).
-4. **Auto-purge no read**: registros vencidos são descartados na leitura,
-   sem janitor agendado. Custo amortizado em <1ms por acesso.
+4. **Auto-purge no read + no write**: registros vencidos são descartados na
+   leitura da própria chave, e a cada ``_PURGE_A_CADA_N_WRITES`` gravações um
+   DELETE varre todos os vencidos do DB (sem janitor agendado). Custo
+   amortizado em <1ms por acesso.
 5. **Falha silenciosa**: qualquer OSError/sqlite3 erro NÃO propaga — pesquisa
    é mais importante que cache. Devolve None (cache miss) e segue.
 
@@ -93,6 +95,13 @@ TTL_RECOMENDADO = {
 }
 
 
+# Poda automática: a cada N gravações, apaga TODOS os vencidos do DB.
+# Contador por processo — servidores MCP são processos longevos, então a
+# poda acontece de fato; o primeiro write de cada processo também poda.
+_PURGE_A_CADA_N_WRITES = 25
+_writes_desde_purge = 0
+
+
 def _hash_chave(key: dict) -> str:
     """sha256 hex sobre json canônico (sort_keys=True) da chave."""
     blob = json.dumps(key, sort_keys=True, ensure_ascii=False, default=str)
@@ -164,15 +173,23 @@ def registrar_dispositivo(
     con = _con()
     if con is None:
         return
+    global _writes_desde_purge
     try:
         key_hash = _hash_chave(key)
         key_json = json.dumps(key, sort_keys=True, ensure_ascii=False, default=str)
+        now = int(time.time())
         con.execute(
             "INSERT OR REPLACE INTO cache_http "
             "(mcp, key_hash, key_json, body, fetched_at, ttl_s, hits, bytes) "
             "VALUES (?, ?, ?, ?, ?, ?, 0, ?)",
-            (mcp, key_hash, key_json, body, int(time.time()), int(ttl_s), len(body)),
+            (mcp, key_hash, key_json, body, now, int(ttl_s), len(body)),
         )
+        # Poda barata dos vencidos a cada N writes (e no primeiro do processo).
+        if _writes_desde_purge % _PURGE_A_CADA_N_WRITES == 0:
+            con.execute(
+                "DELETE FROM cache_http WHERE fetched_at + ttl_s < ?", (now,)
+            )
+        _writes_desde_purge += 1
         con.commit()
     except sqlite3.Error:
         pass
