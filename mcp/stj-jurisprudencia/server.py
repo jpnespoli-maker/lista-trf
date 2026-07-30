@@ -1,15 +1,23 @@
 """
 MCP Server: STJ Jurisprudência
 
-PRIMÁRIO: SCON STJ via curl_cffi (https://scon.stj.jus.br/SCON/)
-FALLBACK: CJF Unificada com filtro tribunais=STJ
-          (https://jurisprudencia.cjf.jus.br/unificada/index.xhtml)
+ACÓRDÃOS (ACOR)   → CJF Unificada com filtro tribunais=STJ
+                    (https://jurisprudencia.cjf.jus.br/unificada/index.xhtml)
+SÚMULAS (SUMU) e
+INFORMATIVOS (INFJ) → SCON STJ via curl_cffi (https://scon.stj.jus.br/SCON/)
 
-O SCON migrou para Cloudflare com challenge JS (Turnstile) que bloqueia
-acesso programático. Enquanto isso, este servidor delega ao CJF Unificada,
-que cobre acórdãos do STJ na mesma base. A API pública continua sendo
-`buscar_jurisprudencia_stj(query, base, tamanho)`; a resposta indica
-qual fonte respondeu.
+O SCON migrou para Cloudflare com challenge JS (Turnstile) que bloqueia acesso
+programático. Até 2026-07-30 este servidor ainda o tentava primeiro em toda
+chamada e só então caía no CJF — a telemetria do período mostrou 359 de 366
+chamadas terminando no fallback, ao custo de ~44 s cada (268 min). Desde então
+a precedência é invertida para ACOR: o CJF responde direto (~1,3 s) e o SCON
+vira fallback. Em SUMU/INFJ, que o CJF não cobre, o SCON segue primeiro, com
+pedágio curto (1 tentativa, 8 s); bloqueado, a via é a escada do projeto
+(Playwright → desafio resolvido pelo Defensor).
+
+A API pública continua sendo `buscar_jurisprudencia_stj(query, base, tamanho)`,
+agora com `forcar_scon` para pedir o SCON explicitamente em ACOR. O comentário
+inicial da resposta declara qual fonte respondeu de fato.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -60,6 +68,16 @@ except ImportError:
 
 mcp = FastMCP("stj-jurisprudencia")
 _STJ_TTL_S = 7 * 86400
+
+# Pedágio do SCON (auditoria 2026-07-30). O SCON está atrás de Cloudflare desde
+# a migração e, na telemetria de 23/05 a 30/07 (DPU/logs/jurisprudencia_queries.jsonl),
+# 359 de 366 chamadas terminaram no fallback CJF — depois de gastar ~44 s por
+# chamada (2 tentativas × timeout 20 s + backoff), 268 min no período. Como o
+# CJF cobre acórdãos do STJ e responde em ~1,3 s, ACOR passa a ir direto ao CJF
+# (ver `buscar_jurisprudencia_stj`) e o SCON só é tentado onde é insubstituível
+# (SUMU/INFJ) ou por pedido explícito — aí com pedágio curto.
+_SCON_TENTATIVAS = 1
+_SCON_TIMEOUT_S = 8
 
 # --- SCON (primário) -------------------------------------------------------
 
@@ -147,7 +165,8 @@ def _criar_session_scon():
     return s
 
 
-@retry(wait=wait_exponential(multiplier=1, min=2, max=6), stop=stop_after_attempt(2), reraise=True)
+@retry(wait=wait_exponential(multiplier=1, min=2, max=6),
+       stop=stop_after_attempt(_SCON_TENTATIVAS), reraise=True)
 def _pesquisar_scon(session, query: str, base: str) -> str:
     params = {
         "acao": "pesquisar",
@@ -159,7 +178,7 @@ def _pesquisar_scon(session, query: str, base: str) -> str:
         "p": "true",
         "O": "JT",
     }
-    resp = session.get(SCON_PESQUISAR, params=params, timeout=20)
+    resp = session.get(SCON_PESQUISAR, params=params, timeout=_SCON_TIMEOUT_S)
     resp.raise_for_status()
     text = resp.text
     # Sentinelas de Cloudflare/erro silencioso
@@ -262,6 +281,49 @@ def _buscar_via_cjf(
 
 
 # ---------------------------------------------------------------------------
+# Rotas — cada uma devolve (saida_xml, n_resultados) ou levanta exceção
+# ---------------------------------------------------------------------------
+
+def _rota_scon(
+    query: str, base: str, tamanho: int, max_tokens_ementa: int
+) -> Tuple[str, int]:
+    sess = _criar_session_scon()
+    html_str = _pesquisar_scon(sess, query, base)
+    parseados, total = _parse_scon_html(html_str, base, max_tokens_ementa)
+    # Canário estrutural: a página indica total > 0 mas o parser
+    # (seletores .itemlistadocumentos) extraiu 0 itens → layout do SCON
+    # provavelmente mudou. Falha LOUD em vez de devolver vazio silencioso.
+    if total > 0 and not parseados:
+        raise RuntimeError(
+            f"SCON reportou {total} documento(s) mas o parser extraiu 0 "
+            "— provável mudança no HTML do portal. Verificar "
+            "_parse_scon_html (.itemlistadocumentos/.numDocs)."
+        )
+    resultados = parseados[:tamanho]
+    meta = (
+        f'<!-- STJ/SCON | Base: {BASES_VALIDAS[base]} '
+        f'| Total encontrado: {total} | Exibindo: {len(resultados)} -->\n'
+    )
+    return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
+
+
+def _rota_cjf(
+    query: str, tamanho: int, max_tokens_ementa: int, *, apos_falha_scon: str = ""
+) -> Tuple[str, int]:
+    resultados, total = _buscar_via_cjf(query, tamanho, max_tokens_ementa)
+    origem = (
+        f"fallback após falha do SCON: {apos_falha_scon}"
+        if apos_falha_scon
+        else "rota primária para acórdãos"
+    )
+    meta = (
+        f'<!-- STJ via CJF Unificada ({sanitizar_comentario_xml(origem)}) '
+        f'| Total STJ: {total} | Exibindo: {len(resultados)} -->\n'
+    )
+    return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
+
+
+# ---------------------------------------------------------------------------
 # Tool pública
 # ---------------------------------------------------------------------------
 
@@ -271,6 +333,7 @@ def buscar_jurisprudencia_stj(
     base: str = "ACOR",
     tamanho: int = 10,
     max_tokens_ementa: int = 400,
+    forcar_scon: bool = False,
 ) -> str:
     """
     Busca jurisprudência no Superior Tribunal de Justiça (STJ).
@@ -287,16 +350,22 @@ def buscar_jurisprudencia_stj(
         tamanho: Número de resultados por página (1–40, padrão 10)
         max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
                            Aumente para obter ementa mais longa/íntegra.
+        forcar_scon: Tenta o SCON primeiro mesmo em ACOR. Default False — o SCON
+                     está sob Cloudflare e falha em ~98% das chamadas, então
+                     acórdãos vão direto ao CJF Unificada. Use quando quiser
+                     especificamente a ficha do SCON e aceitar a espera.
 
     Returns:
         XML estruturado com os resultados encontrados.
-        A resposta indica qual fonte respondeu (SCON ou CJF Unificada).
+        O comentário inicial declara qual fonte respondeu de fato.
 
     Notas:
-        Quando o SCON estiver sob Cloudflare Challenge ou indisponível,
-        a busca é roteada automaticamente para a base CJF Unificada
-        com filtro tribunais=STJ. Bases SUMU e INFJ só estão disponíveis
-        no SCON; em fallback, retornam aviso de indisponibilidade.
+        ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
+        que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
+        SUMU e INFJ existem apenas no SCON — ali ele é tentado primeiro, com
+        pedágio curto (1 tentativa, 8 s). Bloqueado o SCON, a via para súmula
+        e informativo é a escada documentada no projeto (Playwright e, se o
+        desafio do Cloudflare aparecer, resolução manual pelo Defensor).
     """
     tamanho = max(1, min(tamanho, 40))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
@@ -308,13 +377,18 @@ def buscar_jurisprudencia_stj(
     cache_hit = False
     n_results = 0
     erro_final: Optional[str] = None
-    rota = "scon"
+    # `scon_primeiro`: o SCON é insubstituível em SUMU/INFJ (o CJF não cobre
+    # súmula nem informativo) e opcional em ACOR. Fora desses casos ele entra
+    # como fallback, não como pedágio de entrada.
+    scon_primeiro = base != "ACOR" or forcar_scon
+    rota = "scon" if scon_primeiro else "cjf"
     try:
         # A1 — cache HTTP. Chave inclui base (e o truncamento, pois o XML
-        # cacheado já está truncado).
+        # cacheado já está truncado) e a preferência de rota, que muda a fonte.
         cache_key = {
             "mcp": "stj-jurisprudencia", "query": query, "base": base,
             "tamanho": tamanho, "max_tokens_ementa": max_tokens_ementa,
+            "forcar_scon": forcar_scon,
         }
         cached = cached_http("stj-jurisprudencia", cache_key)
         if cached is not None:
@@ -324,72 +398,52 @@ def buscar_jurisprudencia_stj(
             n_results = payload.get("n", 0)
             return payload["xml"]
 
-        erros = []
-
-        # 1) Tenta SCON
-        try:
-            sess = _criar_session_scon()
-            html_str = _pesquisar_scon(sess, query, base)
-            parseados, total = _parse_scon_html(html_str, base, max_tokens_ementa)
-            # Canário estrutural: a página indica total > 0 mas o parser
-            # (seletores .itemlistadocumentos) extraiu 0 itens → layout do
-            # SCON provavelmente mudou. Falha LOUD (cai no fallback CJF) em
-            # vez de devolver vazio silencioso.
-            if total > 0 and not parseados:
-                raise RuntimeError(
-                    f"SCON reportou {total} documento(s) mas o parser extraiu 0 "
-                    "— provável mudança no HTML do portal. Verificar "
-                    "_parse_scon_html (.itemlistadocumentos/.numDocs)."
-                )
-            resultados = parseados[:tamanho]
-            n_results = len(resultados)
-            xml = formatar_resultados_xml(resultados, tag_raiz="resultados")
-            meta = (
-                f'<!-- STJ/SCON | Base: {BASES_VALIDAS[base]} '
-                f'| Total encontrado: {total} | Exibindo: {len(resultados)} -->\n'
-            )
-            saida = meta + xml
+        def _guardar(saida: str, n: int) -> str:
             try:
                 import json as _json
                 registrar_dispositivo(
                     "stj-jurisprudencia", cache_key,
-                    _json.dumps({"xml": saida, "n": n_results}), ttl_s=_STJ_TTL_S,
+                    _json.dumps({"xml": saida, "n": n}), ttl_s=_STJ_TTL_S,
                 )
             except Exception:
                 pass
             return saida
-        except Exception as e:
-            erros.append(f"SCON: {type(e).__name__}: {str(e)[:160]}")
 
-        # 2) Fallback CJF (apenas para ACOR; CJF não cobre súmulas/informativos)
-        if base != "ACOR":
+        erros = []
+
+        # 1) Rota primária.
+        try:
+            if scon_primeiro:
+                saida, n_results = _rota_scon(query, base, tamanho, max_tokens_ementa)
+            else:
+                saida, n_results = _rota_cjf(query, tamanho, max_tokens_ementa)
+            return _guardar(saida, n_results)
+        except Exception as e:
+            rotulo = "SCON" if scon_primeiro else "CJF"
+            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
+
+        # 2) Fallback pela outra rota. O CJF não cobre súmula/informativo, então
+        #    quando a primária era SCON por causa da base não há para onde ir.
+        if scon_primeiro and base != "ACOR":
             erro_final = " | ".join(erros)
             return (
                 f'<erro>Base {base} disponível apenas no SCON, que está indisponível. '
                 f'Detalhes: {erro_final}</erro>'
             )
 
-        rota = "cjf-fallback"
         try:
-            resultados, total = _buscar_via_cjf(query, tamanho, max_tokens_ementa)
-            n_results = len(resultados)
-            xml = formatar_resultados_xml(resultados, tag_raiz="resultados")
-            meta = (
-                f'<!-- STJ via CJF Unificada (fallback) | Total STJ: {total} '
-                f'| Exibindo: {len(resultados)} | SCON inacessível: {erros[0]} -->\n'
-            )
-            saida = meta + xml
-            try:
-                import json as _json
-                registrar_dispositivo(
-                    "stj-jurisprudencia", cache_key,
-                    _json.dumps({"xml": saida, "n": n_results}), ttl_s=_STJ_TTL_S,
+            if scon_primeiro:
+                rota = "cjf-fallback"
+                saida, n_results = _rota_cjf(
+                    query, tamanho, max_tokens_ementa, apos_falha_scon=erros[0]
                 )
-            except Exception:
-                pass
-            return saida
+            else:
+                rota = "scon-fallback"
+                saida, n_results = _rota_scon(query, base, tamanho, max_tokens_ementa)
+            return _guardar(saida, n_results)
         except Exception as e:
-            erros.append(f"CJF: {type(e).__name__}: {str(e)[:160]}")
+            rotulo = "CJF" if scon_primeiro else "SCON"
+            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
             erro_final = " | ".join(erros)
             return f'<erro>Falha em SCON e CJF. {erro_final}</erro>'
     finally:
@@ -443,11 +497,12 @@ DICAS:
   - Resultados ordenados por data de julgamento (mais recentes primeiro)
 
 ROTEAMENTO INTERNO:
-  Tenta SCON primeiro. Se inacessível (Cloudflare/timeout), faz fallback
-  automático para CJF Unificada com filtro STJ — operadores BRS são
-  convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.).
-  A resposta indica em comentário qual fonte respondeu.
-  Bases SUMU e INFJ só existem no SCON.
+  ACOR vai direto ao CJF Unificada com filtro STJ (~1,3 s) — operadores BRS
+  são convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.). O SCON, que
+  está sob Cloudflare e falhava em ~98% das chamadas, entra só como fallback
+  se o CJF falhar; para tentá-lo primeiro use forcar_scon=True.
+  SUMU e INFJ só existem no SCON e vão a ele primeiro, com 1 tentativa e 8 s.
+  A resposta indica em comentário qual fonte respondeu de fato.
 """
 
 
