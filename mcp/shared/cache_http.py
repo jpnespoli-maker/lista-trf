@@ -59,8 +59,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Optional
 
@@ -102,9 +104,82 @@ _PURGE_A_CADA_N_WRITES = 25
 _writes_desde_purge = 0
 
 
+# ---------------------------------------------------------------------------
+# Normalização da chave (auditoria 2026-07-30)
+# ---------------------------------------------------------------------------
+# Diagnóstico: 402 entradas gravadas, 4 hits (0,8%). A chave era a query
+# LITERAL, e um agente LLM não reescreve a mesma frase duas vezes — "CPAP
+# +apneia +sono" e "apneia CPAP sono" viravam entradas distintas. Normalizar o
+# texto (minúscula, sem acento, pontuação colapsada, tokens ordenados) faz as
+# duas colidirem.
+#
+# O que NÃO se normaliza, e por quê:
+#
+# - Campos de TAMANHO (`tamanho`, `max_resultados`, `max_tokens_ementa`)
+#   permanecem na chave. Tirá-los renderia alguns hits a mais, mas o corpo
+#   cacheado é opaco (XML/JSON já truncado): quem pedisse 10 resultados podia
+#   receber os 3 de uma chamada anterior, sem aviso. Num sistema cuja regra é
+#   citar ementa integral e não omitir precedente, servir MENOS do que se pediu
+#   é regressão silenciosa — o ganho não paga o risco.
+#
+# - Query com operador POSICIONAL (`adj5`, `prox3`), aspas de frase exata,
+#   parênteses ou NEGAÇÃO não tem os tokens ordenados: nesses casos a ordem
+#   carrega significado ("a nao b" != "b nao a"), e ordenar faria colidir
+#   buscas diferentes. Aí a normalização se limita a minúscula/acento/espaço.
+
+_CAMPOS_TEXTO = frozenset({
+    "query", "busca", "buscaGeral", "termo", "termos", "livre", "texto",
+})
+
+# Operadores cuja presença torna a ordem dos tokens significativa.
+_RE_ORDEM_SIGNIFICATIVA = re.compile(
+    r'["()]|(?:^|\s)(?:nao|não|not|adj\d*|prox\d*|com\d*|mesmo\d*)(?:\s|$)|(?:^|\s)-\S',
+    re.IGNORECASE,
+)
+_RE_PONTUACAO = re.compile(r"[^0-9a-z\s*$+\-]", re.IGNORECASE)
+
+
+def normalizar_texto_busca(texto: str) -> str:
+    """Forma canônica de uma expressão de busca, para fins de chave de cache.
+
+    Minúscula, sem acentos, pontuação colapsada em espaço. Os tokens são
+    ordenados apenas quando a ordem não carrega significado (ver comentário
+    acima). Não altera a query enviada ao portal — só a chave do cache.
+    """
+    if not isinstance(texto, str) or not texto.strip():
+        return texto
+    ordem_importa = bool(_RE_ORDEM_SIGNIFICATIVA.search(texto))
+    s = unicodedata.normalize("NFD", texto.lower())
+    s = "".join(c for c in s if not unicodedata.combining(c))
+    s = _RE_PONTUACAO.sub(" ", s)
+    tokens = s.split()
+    if not ordem_importa:
+        tokens = sorted(set(tokens))
+    return " ".join(tokens)
+
+
+def normalizar_chave(key: Any) -> Any:
+    """Aplica `normalizar_texto_busca` aos campos textuais, em profundidade.
+
+    Percorre dicts e listas aninhados (o BNP encaixa a busca em
+    ``filtro.buscaGeral``). Campos não textuais passam intactos.
+    """
+    if isinstance(key, dict):
+        return {
+            k: (normalizar_texto_busca(v) if k in _CAMPOS_TEXTO and isinstance(v, str)
+                else normalizar_chave(v))
+            for k, v in key.items()
+        }
+    if isinstance(key, list):
+        return [normalizar_chave(v) for v in key]
+    return key
+
+
 def _hash_chave(key: dict) -> str:
-    """sha256 hex sobre json canônico (sort_keys=True) da chave."""
-    blob = json.dumps(key, sort_keys=True, ensure_ascii=False, default=str)
+    """sha256 hex sobre json canônico (sort_keys=True) da chave normalizada."""
+    blob = json.dumps(
+        normalizar_chave(key), sort_keys=True, ensure_ascii=False, default=str
+    )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
@@ -176,7 +251,11 @@ def registrar_dispositivo(
     global _writes_desde_purge
     try:
         key_hash = _hash_chave(key)
-        key_json = json.dumps(key, sort_keys=True, ensure_ascii=False, default=str)
+        # Guarda a chave JÁ normalizada: é ela que corresponde ao hash, então é
+        # ela que serve para depurar colisão/miss inesperado.
+        key_json = json.dumps(
+            normalizar_chave(key), sort_keys=True, ensure_ascii=False, default=str
+        )
         now = int(time.time())
         con.execute(
             "INSERT OR REPLACE INTO cache_http "
