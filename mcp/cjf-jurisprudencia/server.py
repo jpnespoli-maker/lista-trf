@@ -19,6 +19,7 @@ from shared.base_juridica import (
     sanitizar_comentario_xml,
 )
 from shared import cjf_client
+from shared.relaxamento import AVISO_RELAXADA, relaxar_cjf
 
 # Onda 2 — cache HTTP de respostas (TTL 7d para CJF).
 try:
@@ -93,19 +94,35 @@ def buscar_jurisprudencia_cjf(
             "max_resultados": max_resultados, "v": 2,
         }
         import json as _json
+        busca_relaxada: Optional[str] = None
         cached = cached_http("cjf-jurisprudencia", cache_key)
         if cached is not None:
             cache_hit = True
             payload = _json.loads(cached)
             documentos = payload["docs"]
             totais = payload["totais"]
+            busca_relaxada = payload.get("relaxada")
         else:
             documentos, totais = cjf_client.buscar_documentos(
                 busca, lista_tribunais, max_resultados
             )
+            # Degradação de recall (auditoria 2026-07-30): a busca conjuntiva
+            # zerava em 60,4% das 1.496 chamadas do período. Zerou, reexecuta
+            # em OU — o precedente-âncora costuma casar a maioria dos termos,
+            # não todos. Mesma ideia que a base local adotou em 2026-07-09.
+            if not documentos:
+                relaxada = relaxar_cjf(busca)
+                if relaxada:
+                    documentos, totais = cjf_client.buscar_documentos(
+                        relaxada, lista_tribunais, max_resultados
+                    )
+                    busca_relaxada = relaxada if documentos else None
             registrar_dispositivo(
                 "cjf-jurisprudencia", cache_key,
-                _json.dumps({"docs": documentos, "totais": totais}),
+                _json.dumps({
+                    "docs": documentos, "totais": totais,
+                    "relaxada": busca_relaxada,
+                }),
                 ttl_s=7 * 86400,
             )
         n_docs = len(documentos)
@@ -131,6 +148,11 @@ def buscar_jurisprudencia_cjf(
 
         totais_str = ", ".join([f"{k}:{v}" for k, v in totais.items()])
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | Totais: {totais_str} -->\n'
+        if busca_relaxada:
+            meta += (
+                f'<!-- BUSCA RELAXADA: "{sanitizar_comentario_xml(busca_relaxada)}" '
+                f'| {AVISO_RELAXADA} -->\n'
+            )
 
         return meta + xml_resultado
 

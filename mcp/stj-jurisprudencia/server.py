@@ -38,6 +38,7 @@ from shared.base_juridica import (
     sanitizar_comentario_xml,
 )
 from shared import cjf_client
+from shared.relaxamento import AVISO_RELAXADA, relaxar_cjf
 
 # Onda 2 — cache HTTP (7d para STJ).
 try:
@@ -311,6 +312,15 @@ def _rota_cjf(
     query: str, tamanho: int, max_tokens_ementa: int, *, apos_falha_scon: str = ""
 ) -> Tuple[str, int]:
     resultados, total = _buscar_via_cjf(query, tamanho, max_tokens_ementa)
+    # Degradação de recall — 83% dos 248 zeros do STJ no período eram elegíveis.
+    # O relaxamento roda aqui (e não no cjf_client) porque esta rota chama o
+    # cliente compartilhado direto, sem passar pela tool do servidor CJF.
+    relaxada = None
+    if not resultados:
+        candidata = relaxar_cjf(_brs_para_cjf(query))
+        if candidata:
+            resultados, total = _buscar_via_cjf(candidata, tamanho, max_tokens_ementa)
+            relaxada = candidata if resultados else None
     origem = (
         f"fallback após falha do SCON: {apos_falha_scon}"
         if apos_falha_scon
@@ -320,6 +330,11 @@ def _rota_cjf(
         f'<!-- STJ via CJF Unificada ({sanitizar_comentario_xml(origem)}) '
         f'| Total STJ: {total} | Exibindo: {len(resultados)} -->\n'
     )
+    if relaxada:
+        meta += (
+            f'<!-- BUSCA RELAXADA: "{sanitizar_comentario_xml(relaxada)}" '
+            f'| {AVISO_RELAXADA} -->\n'
+        )
     return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
 
 

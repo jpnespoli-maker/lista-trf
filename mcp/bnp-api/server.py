@@ -21,6 +21,7 @@ from shared.base_juridica import (
     sanitizar_comentario_xml,
     TIPOS_PRECEDENTES,
 )
+from shared.relaxamento import AVISO_RELAXADA, relaxar_bnp
 
 # Onda 2 — cache HTTP (TTL 30d para BNP — vinculantes mudam pouco).
 try:
@@ -143,13 +144,28 @@ def buscar_precedentes(
     try:
         # A1 — cache HTTP (chave = filtro inteiro).
         cache_key = {"mcp": "bnp-api", "filtro": filtro}
+        busca_relaxada: Optional[str] = None
         cached = cached_http("bnp-api", cache_key)
         if cached is not None:
             import json as _json
             data = _json.loads(cached)
             cache_hit = True
+            busca_relaxada = data.get("_relaxada")
         else:
             data = _api.buscar(filtro)
+            # Degradação de recall (auditoria 2026-07-30): 63,8% das 309
+            # chamadas do período zeraram. No PAGEA o prefixo `+` marca termo
+            # OBRIGATÓRIO — removê-lo converte exigência em preferência, sem
+            # tocar nas exclusões `-termo`.
+            if not data.get("resultados"):
+                relaxada = relaxar_bnp(busca)
+                if relaxada:
+                    filtro_relaxado = dict(filtro, buscaGeral=relaxada)
+                    data_r = _api.buscar(filtro_relaxado)
+                    if data_r.get("resultados"):
+                        data = data_r
+                        busca_relaxada = relaxada
+                        data["_relaxada"] = relaxada
             import json as _json
             registrar_dispositivo("bnp-api", cache_key, _json.dumps(data), ttl_s=_BNP_TTL_S)
 
@@ -194,6 +210,11 @@ def buscar_precedentes(
         n_results = len(resultados)
 
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | Total: {data.get("total", len(resultados))} | Órgãos: {orgaos} | Cache: {"HIT" if cache_hit else "MISS"} -->\n'
+        if busca_relaxada:
+            meta += (
+                f'<!-- BUSCA RELAXADA: "{sanitizar_comentario_xml(busca_relaxada)}" '
+                f'| {AVISO_RELAXADA} -->\n'
+            )
 
         return meta + xml_resultado
 
