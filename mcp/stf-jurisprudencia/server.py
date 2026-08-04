@@ -33,6 +33,9 @@ except ImportError:
     _HAS_STEALTH = False
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared import tls_sistema
+
+tls_sistema.aplicar()
 from shared.base_juridica import (
     BaseResultadoJuridico,
     formatar_resultados_xml,

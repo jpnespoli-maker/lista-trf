@@ -30,6 +30,9 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+from shared import tls_sistema
+
+tls_sistema.aplicar()
 from shared.base_juridica import (
     BaseResultadoJuridico,
     formatar_resultados_xml,
@@ -179,7 +182,9 @@ def _pesquisar_scon(session, query: str, base: str) -> str:
         "p": "true",
         "O": "JT",
     }
-    resp = session.get(SCON_PESQUISAR, params=params, timeout=_SCON_TIMEOUT_S)
+    # curl_cffi/libcurl não lê REQUESTS_CA_BUNDLE — verify explícito.
+    resp = session.get(SCON_PESQUISAR, params=params, timeout=_SCON_TIMEOUT_S,
+                       verify=tls_sistema.caminho_bundle())
     resp.raise_for_status()
     text = resp.text
     # Sentinelas de Cloudflare/erro silencioso
