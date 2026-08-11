@@ -9,6 +9,7 @@ O sistema de analise automatizada (Claude Code) depende de 3 servidores MCP para
 | `bnp-api` | BNP/PAGEA (CNJ) | Temas vinculantes, Repercussao Geral, Repetitivos |
 | `julia-trf5` | JULIA (TRF5) | Jurisprudencia 1o e 2o grau da 5a Regiao |
 | `cjf-jurisprudencia` | CJF Unificada | STF, STJ, todos os TRFs — **so o tribunal** |
+| `trf-jurisprudencia` | eProc TRF2/TRF4/TRF6 | Turmas Recursais dos JEFs e TRU (Turma Regional de Uniformizacao) — acervo que a base unificada do CJF nao indexa. TRF2 = RJ/ES |
 | `trf1-jurisprudencia` | CJF Regional 1a Regiao | Fonte `TRF1` (tribunal, duplica a unificada) e fonte `JEF1` = **Turmas Recursais**, unico acervo de TR do projeto. So existe para a 1a Regiao (`/trf2`..`/trf6` respondem 404) |
 
 ## Instalacao
