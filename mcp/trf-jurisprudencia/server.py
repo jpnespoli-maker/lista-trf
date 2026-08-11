@@ -79,6 +79,7 @@ def _buscar(
     data_inicio: Optional[str],
     data_fim: Optional[str],
     max_resultados: int,
+    somente_caput: bool = False,
 ):
     import json as _json
 
@@ -92,7 +93,8 @@ def _buscar(
         "data_inicio": data_inicio or "",
         "data_fim": data_fim or "",
         "max_resultados": max_resultados,
-        "v": 1,
+        "somente_caput": somente_caput,
+        "v": 2,
     }
     cached = cached_http("trf-jurisprudencia", cache_key)
     if cached is not None:
@@ -101,7 +103,7 @@ def _buscar(
 
     docs, meta = eproc.buscar_documentos(
         tribunal, busca, origem, campo, tipo_documento,
-        data_inicio, data_fim, max_resultados,
+        data_inicio, data_fim, max_resultados, somente_caput,
     )
     registrar_dispositivo(
         "trf-jurisprudencia", cache_key,
@@ -121,6 +123,7 @@ def buscar_jurisprudencia_trf(
     data_fim: str = "",
     max_resultados: int = 10,
     max_tokens_ementa: int = 600,
+    somente_caput: bool = False,
 ) -> str:
     """
     Jurisprudência de TURMA RECURSAL e TRU no eProc do TRF2, TRF4 ou TRF6.
@@ -150,13 +153,17 @@ def buscar_jurisprudencia_trf(
         tribunal: "TRF2" (padrão), "TRF4" ou "TRF6".
         origem: "turmas_recursais" (padrão), "tru", "tribunal" ou "varas"
                 (varas só existe em TRF4 e TRF6).
-        campo: "EM" ementa (padrão, rápido) ou "IT" inteiro teor (amplo, lento).
+        campo: "EM" ementa (padrão, rápido) ou "IT" inteiro teor (bem mais
+               abrangente — ~20x mais documentos).
         tipo_documento: vazio = todos. Ex.: "Acórdão", "Decisão monocrática"
                         (o conjunto varia por tribunal; ajuda_sintaxe_trf lista).
         data_inicio / data_fim: DD/MM/AAAA.
         max_resultados: 1-150. O eProc devolve 50 por página e a busca pagina
                         até 5 páginas.
         max_tokens_ementa: truncamento da ementa (50-4000). Padrão 600.
+        somente_caput: restringe ao CAPUT da ementa (checkbox do portal, que vem
+                       desmarcado). Reduz ruído em termo genérico, mas ANULA o
+                       campo="IT" e estreita também a busca por ementa.
 
     Returns:
         XML com número CNJ, tipo, órgão julgador, relator, data, UF e ementa.
@@ -174,7 +181,7 @@ def buscar_jurisprudencia_trf(
     try:
         documentos, meta, cache_hit = _buscar(
             tribunal, busca, origem, campo, tipo_documento or None,
-            data_inicio or None, data_fim or None, max_resultados,
+            data_inicio or None, data_fim or None, max_resultados, somente_caput,
         )
         n_docs = len(documentos)
 

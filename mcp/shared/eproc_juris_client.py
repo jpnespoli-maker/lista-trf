@@ -190,6 +190,7 @@ class EProcJurisSession:
         data_fim: Optional[str] = None,
         pagina: int = 1,
         tamanho_pagina: int = _TAMANHO_PAGINA,
+        somente_caput: bool = False,
     ) -> str:
         if not self.sessao_fresca:
             self.abrir()
@@ -202,12 +203,13 @@ class EProcJurisSession:
             "selOrigem[]": self.origens[origem],
             "selTamanhoPagina": str(tamanho_pagina),
         }
-        # `chkCaput` restringe a busca ao caput/ementa e ANULA o inteiro teor:
-        # medido no TRF2 em 2026-08-11 com o termo "fibromialgia" — 123
-        # resultados com o checkbox (idêntico em rdoCampo=E e I) contra 2.576
-        # sem ele em rdoCampo=I. Enviá-lo sempre faria de `campo="IT"` uma
-        # opção inerte, que promete abrangência e devolve a busca por ementa.
-        if rdo == "E":
+        # "Somente Caput da Ementa" — o checkbox vem DESMARCADO no formulário,
+        # e enviá-lo custa de duas maneiras (medido no TRF2 em 2026-08-11 com
+        # "fibromialgia"): ANULA o inteiro teor (123 resultados com ele, tanto
+        # em rdoCampo=E quanto em I, contra 2.576 sem ele em I) e ainda estreita
+        # a busca por ementa, que passa a ver só o caput. Fica por conta de quem
+        # chama, com o padrão do portal.
+        if somente_caput:
             dados["chkCaput"] = "on"
         if pagina > 1:
             dados["hdnPaginaAtual"] = str(pagina)
@@ -371,6 +373,7 @@ def buscar_documentos(
     data_inicio: Optional[str] = None,
     data_fim: Optional[str] = None,
     max_resultados: int = 10,
+    somente_caput: bool = False,
 ) -> Tuple[List[Dict[str, str]], Dict[str, Any]]:
     """Busca no eProc do tribunal e devolve ``(documentos, meta)``.
 
@@ -395,7 +398,10 @@ def buscar_documentos(
             f"Disponíveis: {', '.join(sorted(sess.origens))}."
         )
 
-    html = sess.buscar(busca, orig, campo, tipo_documento, data_inicio, data_fim)
+    html = sess.buscar(
+        busca, orig, campo, tipo_documento, data_inicio, data_fim,
+        somente_caput=somente_caput,
+    )
     total = extrair_total(html)
     docs = extrair_documentos(html)
 
@@ -412,7 +418,8 @@ def buscar_documentos(
         pagina += 1
         try:
             html_extra = sess.buscar(
-                busca, orig, campo, tipo_documento, data_inicio, data_fim, pagina=pagina
+                busca, orig, campo, tipo_documento, data_inicio, data_fim,
+                pagina=pagina, somente_caput=somente_caput,
             )
         except Exception:
             break
