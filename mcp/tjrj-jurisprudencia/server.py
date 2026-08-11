@@ -122,12 +122,16 @@ class EProcSession:
         data_fim: Optional[str] = None,
         relator: Optional[str] = None,
         orgao: Optional[str] = None,
+        somente_caput: bool = False,
     ) -> str:
         """
         POST do formulário de busca. Retorna o HTML completo da resposta —
         que já contém os resultados filtrados. (O endpoint AJAX
         ``ajax_paginar_resultado`` ignora o filtro e devolve a base inteira;
         por isso é evitado aqui.)
+
+        ``somente_caput`` corresponde ao checkbox "Somente Caput da Ementa",
+        que o portal deixa DESMARCADO — ver a nota em ``chkCaput`` abaixo.
         """
         tem_filtros_avancados = any([tipo_documento, data_inicio, data_fim, relator, orgao])
 
@@ -139,8 +143,19 @@ class EProcSession:
             "txtPesquisa": termo,
             "hdnExibirPesquisaAvancada": "1" if tem_filtros_avancados else "0",
             "rdoCampo": rdo_value,
-            "chkCaput": "on",  # checkbox HTML default (era "S", inválido)
         }
+        # "Somente Caput da Ementa" — o checkbox vem DESMARCADO no formulário do
+        # portal, e enviá-lo sempre custava caro de duas maneiras (medido em
+        # 2026-08-11 no próprio eProc TJRJ):
+        #   1. anulava o inteiro teor. "fibromialgia" devolvia 9 resultados
+        #      tanto em rdoCampo=E quanto em I; sem o checkbox, 45 em I. O
+        #      parâmetro campo="IT" desta ferramenta não fazia nada;
+        #   2. estreitava a própria busca por ementa, que passava a ver só o
+        #      caput: 9 contra 11 em E, 258 contra 340 em "dignidade da pessoa
+        #      humana", 655 contra 797 em "laudo pericial".
+        # Agora é opção de quem chama, e o padrão é o do portal.
+        if somente_caput:
+            post_data["chkCaput"] = "on"
 
         if tipo_documento:
             post_data["selTipoDocumento[]"] = tipo_documento
@@ -497,6 +512,7 @@ def buscar_jurisprudencia_tjrj(
     data_fim: str = "",
     tipo_documento: str = "",
     max_tokens_ementa: int = 700,
+    somente_caput: bool = False,
 ) -> str:
     """
     Busca jurisprudência do TJRJ via eProc (Tribunal de Justiça do Estado do Rio de Janeiro).
@@ -510,7 +526,8 @@ def buscar_jurisprudencia_tjrj(
         busca: Termo de busca. Suporta operadores: e, ou, não, prox, "frase exata", "prefixo*".
                Ex: "plano de saude" e fornecimento
                Ex: "obrigacao de fazer" e medicamento e tutela
-        campo: Campo de busca — "EM" (ementa, padrão) ou "IT" (inteiro teor).
+        campo: Campo de busca — "EM" (ementa, padrão) ou "IT" (inteiro teor,
+               bem mais abrangente: ~5x mais documentos).
         max_resultados: Máximo de resultados (1-100, padrão: 10).
         data_inicio: Data início do julgamento — DD/MM/AAAA. Filtro best-effort (requer JS no portal).
         data_fim: Data fim do julgamento — DD/MM/AAAA. Filtro best-effort (requer JS no portal).
@@ -518,6 +535,11 @@ def buscar_jurisprudencia_tjrj(
                         Deixar em branco para todos os tipos.
         max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 700.
                            Aumente para obter ementa mais longa/íntegra.
+        somente_caput: Restringe a busca ao CAPUT da ementa (o checkbox "Somente
+                       Caput da Ementa" do portal). Default False, como no
+                       portal. Use True para reduzir ruído quando o termo é
+                       genérico — mas saiba que ele ANULA o `campo="IT"` e
+                       estreita também a busca por ementa.
 
     Returns:
         XML estruturado com: ementa, relator, órgão julgador, data do julgamento,
@@ -534,6 +556,11 @@ def buscar_jurisprudencia_tjrj(
             "busca": busca, "campo": campo, "max_resultados": max_resultados,
             "data_inicio": data_inicio, "data_fim": data_fim, "tipo_documento": tipo_documento,
             "max_tokens_ementa": max_tokens_ementa,
+            "somente_caput": somente_caput,
+            # v2: até 2026-08-11 o chkCaput ia sempre, e o cache guarda o
+            # resultado estreitado. Sem virar a versão, ele seguiria servindo
+            # a busca antiga por mais 2 dias.
+            "v": 2,
         }
         cached = cached_http("tjrj-jurisprudencia", cache_key)
         if cached is not None:
@@ -551,6 +578,7 @@ def buscar_jurisprudencia_tjrj(
             tipo_documento=tipo_documento or None,
             data_inicio=data_inicio or None,
             data_fim=data_fim or None,
+            somente_caput=somente_caput,
         )
 
         total = extrair_total(html)
@@ -732,7 +760,14 @@ FRASE EXATA:
 
 CAMPO DE BUSCA (parâmetro campo):
   "EM"  — Ementa (padrão, mais rápido, recomendado)
-  "IT"  — Inteiro teor (mais abrangente, mais lento)
+  "IT"  — Inteiro teor (bem mais abrangente: ~5x mais documentos)
+
+SOMENTE CAPUT (parâmetro somente_caput, default False):
+  Restringe a busca ao CAPUT da ementa — o checkbox "Somente Caput da Ementa",
+  que o portal deixa desmarcado. Serve para cortar ruído de termo genérico.
+  ATENÇÃO: ele ANULA o campo="IT" (a busca vira ementa de novo) e estreita
+  também a busca por ementa. Até 2026-08-11 esta ferramenta o enviava sempre,
+  e por isso o campo="IT" não fazia nada.
 
 ═══════════════════════════════
 TIPOS DE DOCUMENTO
