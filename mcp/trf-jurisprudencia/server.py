@@ -17,7 +17,7 @@ COBERTURA (verificada em 2026-08-11)
 | TRF4   | jurisprudencia.trf4.jus.br/eproc2trf4 | sim (+ TRU4)   |
 | TRF6   | eproc1g.trf6.jus.br                   | sim (+ TRU6)   |
 | TRF1   | servidor ``trf1-jurisprudencia``      | sim (fonte JEF1) |
-| TRF5   | servidor ``julia-trf5``               | não            |
+| TRF5   | servidor ``julia-trf5``               | sim (+ TRU5)   |
 | TRF3   | sem portal acessível por HTTP          | não            |
 
 Origens: ``turmas_recursais`` (padrão), ``tru``, ``tribunal``, ``varas``
@@ -132,7 +132,7 @@ def buscar_jurisprudencia_trf(
 
     JURISDIÇÃO: TRF2 = RJ/ES · TRF4 = RS/SC/PR · TRF6 = MG.
     Para a 1ª Região use `buscar_jurisprudencia_trf1` (fonte JEF1); para o TRF5,
-    o `julia-trf5`. O TRF3 não tem base acessível.
+    o `julia-trf5` (instâncias TR_AL…TR_SE e TRU). O TRF3 não tem base acessível.
 
     NÃO USE PARA: jurisprudência do TRIBUNAL em geral — `buscar_jurisprudencia_cjf`
     cobre os seis TRFs numa só consulta. Aqui `origem="tribunal"` serve para
@@ -344,8 +344,8 @@ O QUE ESTE SERVIDOR TEM DE ÚNICO
 JURISDIÇÃO
   TRF2 = RJ/ES · TRF4 = RS/SC/PR · TRF6 = MG
   TRF1 → servidor trf1-jurisprudencia (fonte JEF1)
-  TRF5 → servidor julia-trf5 (1º e 2º grau; NÃO tem turma recursal)
-  TRF3 → sem portal acessível por HTTP
+  TRF5 → servidor julia-trf5 (instâncias TR_AL…TR_SE e TRU; NÃO tem 1º grau)
+  TRF3 → sem portal acessível por HTTP (WAF); só o 2º grau, pela CJF Unificada
 
 ORIGENS (parâmetro `origem`)
   turmas_recursais  Turmas Recursais dos JEFs (PADRÃO — o motivo deste servidor)

@@ -30,9 +30,16 @@ Verificado em 2026-08-11:
   Federais
 - **TRF1** — não usa eProc; a 1ª Região tem base regional própria no CJF, que é
   o servidor ``trf1-jurisprudencia`` (fonte ``JEF1``)
-- **TRF3** e **TRF5** — não têm eProc de jurisprudência acessível (``eproc``,
-  ``jurisprudencia`` e ``pje`` nesses domínios não resolvem em DNS). O TRF5
-  segue pelo ``julia-trf5``, que cobre 1º e 2º grau, não turma recursal.
+- **TRF5** — não usa eProc, e não precisa: o ``julia-trf5`` já cobre as Turmas
+  Recursais das seis seções (instâncias ``TR_AL`` … ``TR_SE``) e a TRU da 5ª
+  Região. A instância vai no path da API.
+- **TRF3** — sem via por HTTP puro. Não usa eProc, e o portal
+  ``web.trf3.jus.br/jurisprudencia`` fica atrás de WAF que faz *tarpit*: o TCP
+  conecta, o TLS 1.3 completa, o GET é aceito e voltam zero bytes até o
+  timeout. Uma resposta em ~55 tentativas (2026-08-11). O 2º grau do TRF3 sai
+  pelo ``cjf-jurisprudencia``; a turma recursal do TRF3 permanece inalcançável
+  — a CJF devolve 7 documentos com ``"turma recursal"[ORGA]`` numa base de 62
+  mil, o que é ruído, não cobertura.
 
 SINTAXE
 -------
