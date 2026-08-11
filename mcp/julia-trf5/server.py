@@ -4,11 +4,17 @@ MCP Server: JULIA - Sistema de Jurisprudência do TRF5 (Interface Pública)
 Acesso ao portal público JULIA do TRF5:
   https://juliapesquisa.trf5.jus.br/julia-pesquisa/
 
-Cobre 2º grau (TRF5) e Turmas Recursais (TR por seção e TRU nacional).
-Não requer autenticação — API pública.
+Cobre o 2º grau do TRF5 (``G2``), as Turmas Recursais das seis seções
+(``TR_AL``, ``TR_CE``, ``TR_PB``, ``TR_PE``, ``TR_RN``, ``TR_SE``) e a Turma
+Regional de Uniformização da 5ª Região (``TRU``). NÃO cobre o 1º grau — a
+instância ``G1`` não existe na API — nem a TNU. Não requer autenticação.
+
+A instância é o único isolamento de órgão que a API oferece: ela vai no path,
+não em parâmetro. ``orgaoJulgador`` filtra DENTRO da instância escolhida.
 """
 
 from mcp.server.fastmcp import FastMCP
+import re
 import requests
 import time
 from typing import List, Dict, Any, Optional
@@ -24,7 +30,6 @@ from shared.base_juridica import (
     BaseResultadoJuridico,
     formatar_resultados_xml,
     truncar_por_tokens,
-    extrair_ementa,
     limpar_texto_html,
     sanitizar_comentario_xml,
 )
@@ -71,7 +76,10 @@ INSTANCIAS = {
     "TR_PE": "Turma Recursal — Pernambuco",
     "TR_RN": "Turma Recursal — Rio Grande do Norte",
     "TR_SE": "Turma Recursal — Sergipe",
-    "TRU":   "Turma Recursal Unificada — Nacional",
+    # TRU é REGIONAL (5ª Região), não nacional — a nacional é a TNU, que este
+    # portal não indexa. Chamá-la de "nacional" convida a citá-la com peso que
+    # ela não tem.
+    "TRU":   "Turma Regional de Uniformização — 5ª Região",
 }
 
 HEADERS = {
@@ -131,13 +139,60 @@ def _buscar(instancia: str, params: Dict) -> Dict:
     return resp.json()
 
 
-def _doc_para_resultado(doc: Dict, max_tokens_ementa: int = 400) -> BaseResultadoJuridico:
-    texto = doc.get("resumo") or doc.get("texto") or ""
-    texto = truncar_por_tokens(limpar_texto_html(texto), max_tokens=max_tokens_ementa)
+def _extrair_ementa_julia(texto: str) -> str:
+    """Recorta a ementa do inteiro teor devolvido pelo JULIA.
+
+    O documento repete a palavra EMENTA como cabeçalho antes do timbre e do
+    número do processo, e só a terceira ocorrência costuma iniciar o texto
+    ementado. Nas Turmas Recursais é assim::
+
+        EMENTA | PODER JUDICIÁRIO Turma Recursal de Pernambuco … RECORRIDO: INSS
+        EMENTA 0059104-96.2025.4.05.8300
+        EMENTA: DIREITO PREVIDENCIÁRIO. BENEFÍCIOS POR INCAPACIDADE. …   ← esta
+
+    Por isso a marca é procurada pelo que vem DEPOIS dela: descarta a ocorrência
+    seguida de "PODER JUDICIÁRIO" (timbre) ou de número de processo. O corte
+    final é no início do relatório/voto — o que se cita é a ementa, não o
+    acórdão inteiro.
+
+    Sem marca reconhecível, devolve o texto como veio; melhor entregar demais
+    que entregar recorte errado de um julgado que vai para a peça.
+    """
+    if not texto:
+        return ""
+    for m in re.finditer(r"\bEMENTA\b:?", texto):
+        seguinte = texto[m.end():m.end() + 60].strip()
+        if seguinte.upper().startswith("PODER JUDICI"):
+            continue
+        if re.match(r"^\d{7}-?\d{2}\.?\d{4}", seguinte) or re.match(r"^\d{15,}", seguinte):
+            continue
+        corpo = texto[m.end():].lstrip(" :")
+        fim = re.search(r"\b(RELAT[ÓO]RIO|VOTO|AC[ÓO]RD[ÃA]O)\b", corpo)
+        return (corpo[:fim.start()] if fim else corpo).strip()
+    return texto
+
+
+def _doc_para_resultado(
+    doc: Dict, max_tokens_ementa: int = 400, instancia: str = ""
+) -> BaseResultadoJuridico:
+    # `resumo` NÃO é a ementa: é uma linha de cabeçalho de ~120-155 caracteres
+    # ("(PROCESSO: …, RECURSO INOMINADO CÍVEL, <relator>, …, JULGAMENTO: …)").
+    # Como nunca vem vazia, o antigo `resumo or texto` curto-circuitava sempre e
+    # o campo `texto` — 2 mil a 33 mil caracteres, onde está a EMENTA e o voto —
+    # jamais era lido. Toda citação do TRF5 saía sem ementa, o que esvazia a
+    # regra da ementa integral e deixa o `validar_fontes.py` sem trecho para
+    # casar. Medido em 2026-08-11 nas instâncias G2, TR_PE e TRU.
+    bruto = doc.get("texto") or doc.get("resumo") or ""
+    texto = truncar_por_tokens(
+        _extrair_ementa_julia(limpar_texto_html(bruto)), max_tokens=max_tokens_ementa
+    )
     data = (doc.get("dataAssinatura") or doc.get("dataJulgamento") or "")[:10]
+    # `url` vem null em toda resposta da API; sem isto o campo `fonte` saía
+    # vazio. A instância é o que a peça precisa saber: 2º grau, Turma Recursal
+    # ou TRU não têm o mesmo peso.
     return BaseResultadoJuridico(
         conteudo=texto,
-        fonte=doc.get("url", ""),
+        fonte=doc.get("url") or (f"JULIA/{instancia}" if instancia else ""),
         tipo=doc.get("tipoDocumento", ""),
         orgao=doc.get("orgaoJulgador", ""),
         numero=doc.get("numeroProcesso", ""),
@@ -206,6 +261,10 @@ def buscar_julia(
             "data_final": data_final,
             "max_resultados": max_resultados,
             "max_tokens_ementa": max_tokens_ementa,
+            # v2: até 2026-08-11 o `conteudo` cacheado era o cabeçalho do campo
+            # `resumo`, não a ementa. Sem virar a versão, o cache de 2 dias
+            # continuaria servindo o resultado sem ementa já corrigido no código.
+            "v": 2,
         }
         cached = cached_http("julia-trf5", cache_key)
         if cached is not None:
@@ -226,7 +285,10 @@ def buscar_julia(
         )
         dados = _buscar(instancia, params)
         total = dados.get("recordsTotal", 0)
-        resultados = [_doc_para_resultado(d, max_tokens_ementa) for d in dados.get("data", [])]
+        resultados = [
+            _doc_para_resultado(d, max_tokens_ementa, instancia)
+            for d in dados.get("data", [])
+        ]
         n_results = len(resultados)
         xml = formatar_resultados_xml(resultados, "jurisprudencia_julia")
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(termo)}" | Instância: {instancia} ({INSTANCIAS[instancia]}) | Total: {total} -->\n'
