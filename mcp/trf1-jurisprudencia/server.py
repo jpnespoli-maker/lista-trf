@@ -142,8 +142,15 @@ def buscar_jurisprudencia_trf1(
     base do projeto alcança — previdenciário, BPC/LOAS, Bolsa Família, saque
     fraudulento, passe livre nos Juizados.
 
-    NÃO USE PARA: buscar só o tribunal. A fonte TRF1 é o mesmo acervo que
-    buscar_jurisprudencia_cjf(tribunais="TRF1") já devolve.
+    USE TAMBÉM PARA: acórdão do TRF1 que se pretenda CITAR em peça. O acervo é o
+    mesmo de buscar_jurisprudencia_cjf(tribunais="TRF1"), mas a CJF devolve a
+    ementa SEM o número do processo e esta base o devolve em campo próprio
+    (<numero>), junto com órgão, relator e data. Como precedente de 2º grau sem
+    CNJ não se cita (regra de recuperação de CNJ do projeto), buscar aqui evita
+    ementa inaproveitável e uma pendência de recuperação. Medido em 22/08/2026:
+    dois subagentes pesquisaram pela CJF, quatro acórdãos voltaram "não citáveis"
+    e o leading indicado nunca se confirmou; uma consulta a esta base devolveu
+    sete, com número conferido.
 
     ALCANCE: só a 1ª Região. Não existe base regional para TRF2-TRF6.
 
