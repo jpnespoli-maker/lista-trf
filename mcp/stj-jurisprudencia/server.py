@@ -43,6 +43,14 @@ from shared.base_juridica import (
 from shared import cjf_client
 from shared.relaxamento import AVISO_RELAXADA, relaxar_cjf
 
+# Rota de navegador real por CDP — o que efetivamente atravessa o Cloudflare do
+# SCON. Opcional: sem playwright no venv, a rota some e o servidor segue com
+# HTTP + CJF, como antes.
+try:
+    from shared import cdp_edge  # type: ignore
+except Exception:  # noqa: BLE001
+    cdp_edge = None  # type: ignore
+
 # Onda 2 — cache HTTP (7d para STJ).
 try:
     from shared.cache_http import cached_http, registrar_dispositivo  # type: ignore
@@ -313,6 +321,164 @@ def _rota_scon(
     return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
 
 
+_RE_TIPO = re.compile(r"^\((.+)\)$")
+_RE_RELATOR = re.compile(r"^Ministr[oa]\b", re.I)
+_RE_PUBLICACAO = re.compile(r"^(DJe|DJEN|DJ|RSTJ|RT)\b.*?(\d{2}/\d{2}/\d{4})")
+_RE_JULGAMENTO = re.compile(r"^Decis[ãa]o:\s*(\d{2}/\d{2}/\d{4})")
+
+
+def _parse_scon_resumo(
+    html_str: str, base: str, max_tokens_ementa: int = 400
+) -> Tuple[List[BaseResultadoJuridico], int]:
+    """Parser da lista do SCON na visualização RESUMO (a que a rota CDP usa).
+
+    Distinto de `_parse_scon_html`, que foi escrito para o HTML servido por HTTP
+    e usa `.col-sm-3`/`.clsEmentaCompleta` — classes que o portal renderizado não
+    tem mais. Aqui a leitura é pelos RÓTULOS do item (Processo / (TIPO) /
+    Ministro / DJe / Decisão: / Ementa), que são estáveis e legíveis por humano,
+    em vez de classe CSS, que muda a cada reforma do portal.
+
+    LIMITE DECLARADO: nesta visualização o SCON TRUNCA a ementa (termina em "..."
+    seguido de "(+)"). Serve para CONFIRMAR e LOCALIZAR o julgado — relator,
+    órgão, datas, número —, que é o uso do gate de citações. NÃO serve para
+    transcrever ementa em peça: a regra de ementa integral do projeto exige abrir
+    o espelho do documento. O campo `extra["ementa_truncada"]` sinaliza isso.
+    """
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    total = 0
+    num_docs_el = soup.find(class_="numDocs")
+    if num_docs_el:
+        m = re.search(r"(\d[\d.]*)", num_docs_el.get_text())
+        if m:
+            total = int(m.group(1).replace(".", ""))
+
+    resultados: List[BaseResultadoJuridico] = []
+    for item in soup.select(".itemlistadocumentos"):
+        linhas = [ln.strip() for ln in item.get_text("\n", strip=True).split("\n") if ln.strip()]
+
+        numero_partes: List[str] = []
+        tipo = BASES_VALIDAS.get(base, base)
+        relator = ""
+        data = ""
+        julgamento = ""
+        ementa_linhas: List[str] = []
+        estado = "inicio"
+
+        for ln in linhas:
+            if ln.lower() == "processo":
+                estado = "numero"
+                continue
+            if ln.lower() == "ementa":
+                estado = "ementa"
+                continue
+            if estado == "ementa":
+                if ln == "(+)":
+                    break
+                ementa_linhas.append(ln)
+                continue
+            m_tipo = _RE_TIPO.match(ln)
+            if m_tipo and estado == "numero":
+                tipo = m_tipo.group(1).strip()
+                estado = "meta"
+                continue
+            if estado == "numero":
+                numero_partes.append(ln)
+                continue
+            if _RE_RELATOR.match(ln) and not relator:
+                relator = re.sub(r"\s*\(\d+\)\s*$", "", ln).strip()
+                continue
+            m_pub = _RE_PUBLICACAO.match(ln)
+            if m_pub and not data:
+                data = ln
+                continue
+            m_julg = _RE_JULGAMENTO.match(ln)
+            if m_julg and not julgamento:
+                julgamento = m_julg.group(1)
+                continue
+
+        ementa = " ".join(ementa_linhas).strip()
+        truncada = ementa.endswith("...")
+        ementa = truncar_por_tokens(ementa, max_tokens=max_tokens_ementa)
+
+        extra = {"base": base}
+        if julgamento:
+            extra["julgamento"] = julgamento
+        if truncada:
+            extra["ementa_truncada"] = (
+                "SIM — visualização RESUMO do SCON. Para citar em peça, abrir o "
+                "espelho do documento (regra de ementa integral)."
+            )
+
+        resultados.append(
+            BaseResultadoJuridico(
+                conteudo=ementa,
+                fonte="STJ",
+                tipo=tipo,
+                orgao="Superior Tribunal de Justiça",
+                numero=" ".join(numero_partes).strip(),
+                relator=relator,
+                data=data,
+                extra=extra,
+            )
+        )
+
+    return resultados, total
+
+
+def _rota_scon_cdp(
+    query: str, base: str, tamanho: int, max_tokens_ementa: int
+) -> Tuple[str, int]:
+    """SCON por navegador REAL, alcançado por CDP.
+
+    Existe porque o SCON responde 403 a cliente HTTP (Cloudflare Turnstile) e o
+    desafio NÃO se vence com o Defensor clicando — medido em 24/08/2026: ele
+    clicou e o desafio voltou. A detecção é do modo de lançamento do navegador,
+    não do clique. Ver `shared/cdp_edge.py` para o racional completo e para a
+    armadilha do `--user-data-dir` (obrigatório desde Edge/Chrome 136).
+    """
+    if cdp_edge is None:
+        raise RuntimeError("shared.cdp_edge indisponível (playwright não instalado)")
+
+    from urllib.parse import urlencode
+
+    params = {
+        "acao": "pesquisar", "novaConsulta": "true", "i": "1", "b": base,
+        "livre": query, "tipo_visualizacao": "RESUMO", "p": "true", "O": "JT",
+    }
+    url_alvo = f"{SCON_PESQUISAR}?{urlencode(params)}"
+
+    # `tipo_visualizacao=RESUMO` é obrigatório: sem ele a lista volta VAZIA
+    # (medido em 24/08/2026 — a visualização cheia depende de estado de sessão
+    # que a querystring sozinha não estabelece). O preço é a ementa truncada,
+    # declarado em `extra["ementa_truncada"]` de cada resultado.
+    _titulo, html_str = cdp_edge.obter_html(
+        url_alvo, "scon.stj.jus.br", url_base=SCON_HOME,
+    )
+    parseados, total = _parse_scon_resumo(html_str, base, max_tokens_ementa)
+
+    if total > 0 and not parseados:
+        raise RuntimeError(
+            f"SCON/CDP reportou {total} documento(s) mas o parser extraiu 0 "
+            "— provável mudança no HTML do portal."
+        )
+    # Canário do item OCO. O canário de cima só vê lista vazia; em 24/08/2026 o
+    # modo de falha real foi outro — 2 itens extraídos, todos SEM número, sem
+    # relator e sem ementa, porque o parser mirava classes que o portal não tem
+    # mais. Resultado oco passa por resultado e vira citação sem fonte.
+    if parseados and not any(r.numero for r in parseados):
+        raise RuntimeError(
+            f"SCON/CDP extraiu {len(parseados)} item(ns), todos SEM número "
+            "— seletores/rótulos do portal mudaram. Ver _parse_scon_resumo."
+        )
+    resultados = parseados[:tamanho]
+    meta = (
+        f'<!-- STJ/SCON via navegador (CDP) | Base: {BASES_VALIDAS[base]} '
+        f'| Total encontrado: {total} | Exibindo: {len(resultados)} -->\n'
+    )
+    return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
+
+
 def _rota_cjf(
     query: str, tamanho: int, max_tokens_ementa: int, *, apos_falha_scon: str = ""
 ) -> Tuple[str, int]:
@@ -383,9 +549,20 @@ def buscar_jurisprudencia_stj(
         ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
         que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
         SUMU e INFJ existem apenas no SCON — ali ele é tentado primeiro, com
-        pedágio curto (1 tentativa, 8 s). Bloqueado o SCON, a via para súmula
-        e informativo é a escada documentada no projeto (Playwright e, se o
-        desafio do Cloudflare aparecer, resolução manual pelo Defensor).
+        pedágio curto (1 tentativa, 8 s).
+
+        BLOQUEADO O SCON POR HTTP, A ROTA É AUTOMÁTICA: `scon-cdp` abre um Edge
+        REAL (lançado fora do Playwright, com porta de depuração) e conecta-se a
+        ele por CDP, atravessando o Cloudflare sem intervenção humana. Uma janela
+        do navegador aparece na máquina e é reaproveitada entre chamadas.
+
+        NÃO peça ao Defensor para "clicar no desafio": foi medido em 24/08/2026
+        que o clique NÃO resolve — o Turnstile relança o desafio porque detecta o
+        modo de lançamento do navegador, não a ausência de clique. A orientação
+        anterior desta docstring, que mandava pedir resolução manual, estava
+        errada. Racional e limites em `shared/cdp_edge.py`.
+
+        Para desligar a rota (ambiente sem sessão gráfica, CI): DPU_CDP_DESABILITADO=1.
     """
     tamanho = max(1, min(tamanho, 40))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
@@ -442,7 +619,20 @@ def buscar_jurisprudencia_stj(
             rotulo = "SCON" if scon_primeiro else "CJF"
             erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
 
-        # 2) Fallback pela outra rota. O CJF não cobre súmula/informativo, então
+        # 2) SCON por NAVEGADOR REAL (CDP). Entra sempre que a via HTTP do SCON
+        #    falhou — e é a única saída quando a base é SUMU/INFJ, que o CJF não
+        #    cobre. Antes daqui o servidor devolvia <erro> nesses casos.
+        if scon_primeiro and cdp_edge is not None:
+            try:
+                rota = "scon-cdp"
+                saida, n_results = _rota_scon_cdp(
+                    query, base, tamanho, max_tokens_ementa
+                )
+                return _guardar(saida, n_results)
+            except Exception as e:
+                erros.append(f"SCON/CDP: {type(e).__name__}: {str(e)[:160]}")
+
+        # 3) Fallback pela outra rota. O CJF não cobre súmula/informativo, então
         #    quando a primária era SCON por causa da base não há para onde ir.
         if scon_primeiro and base != "ACOR":
             erro_final = " | ".join(erros)
@@ -464,8 +654,22 @@ def buscar_jurisprudencia_stj(
         except Exception as e:
             rotulo = "CJF" if scon_primeiro else "SCON"
             erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
-            erro_final = " | ".join(erros)
-            return f'<erro>Falha em SCON e CJF. {erro_final}</erro>'
+
+        # 4) Último degrau em ACOR: o SCON pelo navegador real. Chega-se aqui
+        #    quando CJF não tinha o julgado E o SCON recusou por HTTP — que é
+        #    exatamente o caso do AgInt no AREsp 1.859.057/SP (24/08/2026).
+        if not scon_primeiro and cdp_edge is not None:
+            try:
+                rota = "scon-cdp-fallback"
+                saida, n_results = _rota_scon_cdp(
+                    query, base, tamanho, max_tokens_ementa
+                )
+                return _guardar(saida, n_results)
+            except Exception as e:
+                erros.append(f"SCON/CDP: {type(e).__name__}: {str(e)[:160]}")
+
+        erro_final = " | ".join(erros)
+        return f'<erro>Falha em SCON e CJF. {erro_final}</erro>'
     finally:
         log_query(
             mcp="stj-jurisprudencia",
