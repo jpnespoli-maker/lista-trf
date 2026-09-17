@@ -190,6 +190,129 @@ def test_suspeito_marcado_chega_ao_resultado_da_busca(con):
     assert r102["suspeito"] is False
 
 
+# --- A CASCATA DE IDIOMA, exercitada de verdade ----------------------------
+# Buraco de cobertura achado por MUTAÇÃO: fazer a função devolver sempre o
+# idioma achado no FTS, em vez de percorrer a ordem de preferência, não matava
+# teste nenhum — porque nenhum teste indexava o MESMO parágrafo em dois
+# idiomas. A cascata é o mecanismo que implementa a regra de idioma da spec §7
+# (preferir português; não havendo, devolver o original marcando a dívida de
+# tradução), então ela não pode ser a única parte não medida.
+
+# Marcas para distinguir os dois textos nas asserções. NÃO usar
+# "vulnerabilidade"/"vulnerabilidad": a espanhola é substring da portuguesa, e
+# o `in` daria verdadeiro nos dois — asserção que não discrimina.
+_MARCA = {"por": "situação", "esp": "situación"}
+
+_ENCHIMENTO = (
+    " O presente trecho segue por diversas linhas adicionais com termos que "
+    "nao repetem a consulta, apenas para alongar o documento indexado."
+)
+
+
+def _texto(idioma: str, *, curto: bool) -> str:
+    base = f"Ximenes Lopes em {_MARCA[idioma]} de especial vulnerabilidade."
+    return base if curto else base + _ENCHIMENTO
+
+
+def _con_bilingue(favorecido: str, primeiro: str):
+    """Banco novo com o MESMO parágrafo em português e espanhol.
+
+    DUAS dimensões, porque cada uma cobre um mecanismo distinto de falso
+    positivo, e a primeira versão destes testes tropeçou nas duas:
+
+    - `favorecido`: qual idioma o FTS ranqueia PRIMEIRO. O `buscar` deduplica
+      por (documento, parágrafo) e fica com a primeira linha, então a cascata
+      só é exercitada quando o idioma favorecido é o NÃO pedido. Quem manda no
+      ranking é o `bm25`, que favorece o documento mais CURTO — medido, não
+      suposto: a 1ª versão destes testes passava sob mutação porque o texto
+      português era naturalmente mais curto e vencia sempre.
+    - `primeiro`: a ordem de inserção, que decide o desempate quando os scores
+      empatam. A 2ª versão variou só esta, e não bastou.
+
+    O assert no fim confere a PRÓPRIA PREMISSA do teste. Se o `bm25` mudar de
+    comportamento, ele falha aqui, ruidosamente — em vez de deixar o teste
+    passar sem exercitar nada, que é o defeito que estas três versões
+    perseguiram.
+    """
+    c = indice.abrir(":memory:")
+    indice.criar_schema(c)
+    doc_id = indice.inserir_documento(
+        c, serie="C", numero=149, tipo="CC",
+        caso="Ximenes Lopes Vs. Brasil", estado="Brasil", data="2006-07-04",
+        tem_por=1,
+        url_por="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_por.pdf",
+        url_esp="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_esp.pdf")
+
+    ordem = ("por", "esp") if primeiro == "por" else ("esp", "por")
+    for idi in ordem:
+        indice.inserir_paragrafos(
+            c, doc_id, idi,
+            [Paragrafo(89, _texto(idi, curto=(idi == favorecido)))])
+
+    ranking = [r["idioma"] for r in c.execute(
+        "SELECT idioma FROM paragrafo_fts WHERE paragrafo_fts MATCH 'Ximenes'"
+        " ORDER BY bm25(paragrafo_fts)")]
+    assert ranking and ranking[0] == favorecido, (
+        f"premissa do teste quebrada: esperava {favorecido!r} primeiro no "
+        f"ranking do FTS, veio {ranking!r}"
+    )
+    return c, doc_id
+
+
+def test_cascata_prefere_portugues_mesmo_quando_o_espanhol_pontua_mais():
+    """O espanhol vem primeiro no FTS de propósito. Só passa se a cascata
+    escolher o português depois — é o caso que mata o mutante."""
+    for primeiro in ("por", "esp"):
+        con, _ = _con_bilingue("esp", primeiro)
+        try:
+            res = indice.buscar(con, consulta="Ximenes")
+            assert len(res) == 1, f"dedup falhou (inserção {primeiro} primeiro)"
+            assert res[0]["idioma"] == "por", (
+                f"espanhol favorecido, inserção {primeiro} primeiro: veio "
+                f"{res[0]['idioma']!r} em vez de português")
+            assert _MARCA["por"] in res[0]["texto"]
+            assert res[0]["exige_traducao"] is False
+        finally:
+            con.close()
+
+
+def test_cascata_respeita_espanhol_pedido_mesmo_quando_o_portugues_pontua_mais():
+    """Espelho do anterior: o português vem primeiro no FTS, e pedir espanhol
+    tem de trazer espanhol."""
+    for primeiro in ("por", "esp"):
+        con, _ = _con_bilingue("por", primeiro)
+        try:
+            res = indice.buscar(con, consulta="Ximenes", idioma_preferido="esp")
+            assert len(res) == 1
+            assert res[0]["idioma"] == "esp", (
+                f"português favorecido, inserção {primeiro} primeiro: veio "
+                f"{res[0]['idioma']!r} em vez de espanhol")
+            assert _MARCA["esp"] in res[0]["texto"]
+            assert res[0]["exige_traducao"] is True
+        finally:
+            con.close()
+
+
+def test_paragrafo_sem_portugues_aparece_em_espanhol_em_vez_de_desaparecer():
+    """Este NÃO mede a ordem de preferência — mede a não-omissão, que é
+    requisito distinto: a cascata é por PARÁGRAFO, e documento com tradução
+    parcial não pode fazer o parágrafo sem português desaparecer da busca.
+
+    O nome diz o que ele mede, e não a família a que pertence. Um teste desta
+    série já tinha sido pego prometendo mais do que media.
+    """
+    con, doc_id = _con_bilingue("por", "por")
+    try:
+        indice.inserir_paragrafos(con, doc_id, "esp", [
+            Paragrafo(120, "El derecho a la salud exige supervision estatal.")])
+        r120 = indice.buscar(con, consulta="supervision")[0]
+        assert r120["paragrafo"] == 120
+        assert r120["idioma"] == "esp"
+        assert r120["exige_traducao"] is True
+    finally:
+        con.close()
+
+
 def test_reindexar_atualiza_a_marca_de_suspeito(con):
     """A Tarefa 6 pode medir melhor e desmarcar — a marca não é permanente."""
     doc_id = indice.inserir_documento(
