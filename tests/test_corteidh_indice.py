@@ -313,6 +313,158 @@ def test_paragrafo_sem_portugues_aparece_em_espanhol_em_vez_de_desaparecer():
         con.close()
 
 
+# --- Achados da revisão da Tarefa 3 ---------------------------------------
+# Nenhum destes veio de mutação: vieram de rodar o código com entrada
+# plausível, porque não havia teste nestes caminhos para mutar. É a lição do
+# ciclo — mutação mede o que já se testa; não acha o que ninguém testou.
+
+def test_virgula_na_consulta_nao_derruba_a_busca(con):
+    """O FTS5 só aceita vírgula dentro de NEAR(); fora disso é erro de
+    sintaxe. Este é o ÚNICO ponto de entrada de busca do servidor, e uma frase
+    em português corrido tem vírgula.
+
+    Este teste asserta APENAS o contrato: não levantar exceção. Uma versão
+    anterior exigia `len(res) >= 1` com uma consulta que continha a palavra
+    "proteger", ausente do fixture — e como o FTS5 combina termos com AND
+    implícito, zero resultado era o comportamento CORRETO. A asserção media
+    outra coisa (que a consulta casasse) e reprovava o código por um defeito
+    do próprio teste.
+    """
+    _ximenes(con)
+    res = indice.buscar(con, consulta="dever de regular, fiscalizar e proteger")
+    assert isinstance(res, list)
+
+
+def test_virgula_e_NEUTRALIZADA_e_nao_apenas_tolerada(con):
+    """Mais forte que o teste acima: com todos os termos presentes na fonte, a
+    mesma consulta com e sem vírgula tem de dar o MESMO resultado. Isso prova
+    que a vírgula é removida, e não que o FTS por acaso a engoliu.
+
+    Todas as palavras abaixo existem no parágrafo 88 do fixture, de propósito:
+    "O Estado tem o dever de regular e fiscalizar."
+    """
+    _ximenes(con)
+    com = indice.buscar(con, consulta="dever de regular, fiscalizar")
+    sem = indice.buscar(con, consulta="dever de regular fiscalizar")
+    assert [(r["documento_id"], r["paragrafo"]) for r in com] == \
+           [(r["documento_id"], r["paragrafo"]) for r in sem]
+    assert len(com) == 1, "a consulta sem a vírgula casa o parágrafo 88"
+    assert com[0]["paragrafo"] == 88
+
+
+@pytest.mark.parametrize("consulta", [
+    "saúde, vida",
+    'NEAR(saude vida, 5)',
+    "vulnerabilidade (especial)",
+    'vigiar "e" fiscalizar',
+    "regular* fiscaliza^2",
+    "dever-de-vigiar",
+])
+def test_pontuacao_de_sintaxe_do_fts_nunca_estoura(con, consulta):
+    """Varredura dos caracteres que o FTS5 lê como operador. O contrato é: a
+    busca pode não achar nada, mas não pode levantar exceção."""
+    _ximenes(con)
+    assert isinstance(indice.buscar(con, consulta=consulta), list)
+
+
+def test_documento_sem_serie_e_idempotente(con):
+    """`UNIQUE` não casa NULL com NULL, então o `ON CONFLICT` não disparava
+    para documento sem série — resolução de supervisão, que é o que a Fase 2
+    indexa. Duplicava a cada reindexação E gravava a atualização numa linha
+    órfã, com o `id` devolvido apontando para a versão velha."""
+    comum = dict(serie=None, numero=None, tipo="SS",
+                 caso="Gomes Lund e outros Vs. Brasil")
+    a = indice.inserir_documento(con, estado="Brasil", data="2021-11-19", **comum)
+    b = indice.inserir_documento(con, estado="Brasil", data="2022-06-01", **comum)
+
+    assert a == b, "a segunda chamada tem de reaproveitar a mesma linha"
+    assert con.execute("SELECT COUNT(*) FROM documento").fetchone()[0] == 1
+    # e a atualização foi para a linha que o id aponta, não para uma órfã
+    assert con.execute("SELECT data FROM documento WHERE id = ?",
+                       (a,)).fetchone()["data"] == "2022-06-01"
+
+
+def test_reindexacao_parcial_nao_some_com_os_outros_paragrafos(con):
+    """Chamada com SUBCONJUNTO de parágrafos — a Tarefa 6 reprocessando só os
+    suspeitos — não pode sumir com os demais do índice de busca. As tabelas
+    `paragrafo` e `paragrafo_fts` dessincronizavam em silêncio: a ficha achava
+    o parágrafo, a busca não."""
+    doc_id = indice.inserir_documento(
+        con, serie="C", numero=333, tipo="CC",
+        caso="Favela Nova Brasília Vs. Brasil", estado="Brasil",
+        data="2017-02-16", tem_por=1)
+    indice.inserir_paragrafos(con, doc_id, "por", [
+        Paragrafo(1, "Primeiro trecho sobre investigação policial."),
+        Paragrafo(2, "Segundo trecho sobre reparação coletiva."),
+        Paragrafo(3, "Terceiro trecho sobre impunidade sistêmica."),
+    ])
+    # reprocessa SÓ o parágrafo 3
+    indice.inserir_paragrafos(con, doc_id, "por", [
+        Paragrafo(3, "Terceiro trecho sobre impunidade sistêmica.")],
+        suspeitos={3})
+
+    assert len(indice.buscar(con, consulta="investigação")) == 1, \
+        "o parágrafo 1 desapareceu da busca"
+    assert len(indice.buscar(con, consulta="reparação")) == 1, \
+        "o parágrafo 2 desapareceu da busca"
+    assert indice.buscar(con, consulta="impunidade")[0]["suspeito"] is True
+
+
+def test_ficha_ambigua_devolve_o_casamento_mais_proximo_e_declara_os_outros(con):
+    """"Vs. Brasil" é sufixo de quase todo caso brasileiro da Corte. Resolver
+    em silêncio pela data mais antiga faria a peça citar o caso errado sem
+    aviso nenhum."""
+    _ximenes(con)
+    indice.inserir_documento(
+        con, serie="C", numero=435, tipo="CC",
+        caso="Barbosa de Souza e outros Vs. Brasil", estado="Brasil",
+        data="2021-09-07", tem_por=1)
+
+    f = indice.ficha(con, caso="Vs. Brasil")
+    assert f is not None
+    assert len(f["outros_candidatos"]) == 1, \
+        "a ambiguidade tem de ser declarada, não resolvida em silêncio"
+    assert f["caso"] != f["outros_candidatos"][0]
+
+
+def test_ficha_sem_ambiguidade_nao_declara_candidato(con):
+    _ximenes(con)
+    assert indice.ficha(con, caso="Ximenes")["outros_candidatos"] == []
+
+
+def test_ficha_aceita_a_forma_Serie_C_149(con):
+    """O ramo com o prefixo "Série" existia no regex e nenhum teste o exercia
+    — mutação provou: removê-lo matava 0 de 19."""
+    _ximenes(con)
+    for forma in ("C-149", "Série C 149", "serie c 149", "C 149"):
+        f = indice.ficha(con, caso=forma)
+        assert f is not None, f"a forma {forma!r} não casou"
+        assert f["numero"] == 149
+
+
+def test_ficha_exclui_artigo_marcado_como_NAO_violado(con):
+    """O filtro `violado = 1` existia sem cobertura — mutação provou:
+    removê-lo matava 0 de 19."""
+    doc_id = _ximenes(con)
+    con.execute("INSERT INTO artigo_cadh (documento_id, artigo, violado)"
+                " VALUES (?, '5', 1), (?, '21', 0)", (doc_id, doc_id))
+    con.commit()
+    assert indice.ficha(con, caso="Ximenes")["artigos_violados"] == ["5"]
+
+
+def test_ficha_expoe_os_quatro_idiomas(con):
+    doc_id = indice.inserir_documento(
+        con, serie="C", numero=222, tipo="CC", caso="Y Vs. Peru",
+        estado="Peru", data="2010-01-01", tem_por=0,
+        url_esp="https://www.corteidh.or.cr/x_esp.pdf",
+        url_ing="https://www.corteidh.or.cr/x_ing.pdf")
+    indice.inserir_paragrafos(con, doc_id, "esp", [Paragrafo(1, "texto")])
+    f = indice.ficha(con, caso="Y Vs. Peru")
+    for chave in ("url_por", "url_esp", "url_ing", "url_fra"):
+        assert chave in f, chave
+    assert f["url_ing"].endswith("_ing.pdf")
+
+
 def test_reindexar_atualiza_a_marca_de_suspeito(con):
     """A Tarefa 6 pode medir melhor e desmarcar — a marca não é permanente."""
     doc_id = indice.inserir_documento(

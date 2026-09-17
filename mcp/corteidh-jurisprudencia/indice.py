@@ -110,27 +110,48 @@ def inserir_documento(
     etapa=None, url_por=None, url_esp=None, url_ing=None, url_fra=None,
     tem_por=0, sha256_por=None, sha256_esp=None,
 ) -> int:
-    """Insere ou atualiza; devolve o id. Idempotente pela UNIQUE."""
-    con.execute(
+    """Insere ou atualiza; devolve o id. Idempotente INCLUSIVE sem série.
+
+    NÃO usa `ON CONFLICT`, de propósito. Em SQL, `NULL` não é igual a si mesmo
+    para efeito de `UNIQUE`, então a cláusula **não dispara** para documento
+    sem série — resolução de supervisão de cumprimento, por exemplo, que é o
+    que a Fase 2 indexa. O efeito medido pelo revisor em 2026-09-17 era duplo e
+    silencioso: cada reindexação criava linha nova, E a atualização de
+    metadados ia para uma linha órfã enquanto o `id` devolvido seguia
+    apontando para a versão velha.
+
+    A busca explícita com `IS` trata `NULL` como igual a `NULL`, que é a
+    semântica desejada aqui. A `UNIQUE` do schema fica como rede para os casos
+    com série preenchida, não como mecanismo principal.
+    """
+    row = con.execute(
+        "SELECT id FROM documento WHERE tipo IS ? AND serie IS ?"
+        " AND numero IS ? AND caso IS ?",
+        (tipo, serie, numero, caso),
+    ).fetchone()
+
+    if row is not None:
+        con.execute(
+            "UPDATE documento SET estado = ?, data = ?, etapa = ?,"
+            " url_por = ?, url_esp = ?, url_ing = ?, url_fra = ?,"
+            " tem_por = ?, sha256_por = ?, sha256_esp = ?,"
+            " baixado_em = datetime('now') WHERE id = ?",
+            (estado, data, etapa, url_por, url_esp, url_ing, url_fra,
+             int(tem_por), sha256_por, sha256_esp, row["id"]),
+        )
+        con.commit()
+        return row["id"]
+
+    cur = con.execute(
         "INSERT INTO documento (serie, numero, tipo, caso, estado, data, etapa,"
         " url_por, url_esp, url_ing, url_fra, tem_por, sha256_por, sha256_esp,"
         " baixado_em)"
-        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))"
-        " ON CONFLICT (tipo, serie, numero, caso) DO UPDATE SET"
-        "   estado=excluded.estado, data=excluded.data, etapa=excluded.etapa,"
-        "   url_por=excluded.url_por, url_esp=excluded.url_esp,"
-        "   url_ing=excluded.url_ing, url_fra=excluded.url_fra,"
-        "   tem_por=excluded.tem_por, sha256_por=excluded.sha256_por,"
-        "   sha256_esp=excluded.sha256_esp",
+        " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))",
         (serie, numero, tipo, caso, estado, data, etapa, url_por, url_esp,
          url_ing, url_fra, int(tem_por), sha256_por, sha256_esp),
     )
     con.commit()
-    return con.execute(
-        "SELECT id FROM documento WHERE tipo IS ? AND serie IS ? "
-        "AND numero IS ? AND caso IS ?",
-        (tipo, serie, numero, caso),
-    ).fetchone()["id"]
+    return int(cur.lastrowid)
 
 
 def inserir_paragrafos(
@@ -160,10 +181,22 @@ def inserir_paragrafos(
     # documento, e a busca passaria a devolver o mesmo trecho repetido. O
     # `buscar` deduplica por (documento, parágrafo) e esconderia o sintoma,
     # o que torna o defeito silencioso — daí apagar aqui, na origem.
-    con.execute(
-        "DELETE FROM paragrafo_fts WHERE documento_id = ? AND idioma = ?",
-        (documento_id, idioma),
-    )
+    #
+    # O apagamento é pelos NÚMEROS PASSADOS, e não por (documento, idioma)
+    # inteiro. A versão anterior apagava tudo do par documento+idioma, então
+    # uma chamada com SUBCONJUNTO de parágrafos — a Tarefa 6 reprocessando só
+    # os trechos suspeitos, por exemplo — sumia com os demais do índice de
+    # busca, embora eles continuassem intactos na tabela `paragrafo`. As duas
+    # tabelas dessincronizavam em silêncio: `ficha` e `_melhor_idioma` achavam
+    # o parágrafo, `buscar` não. Medido pelo revisor em 2026-09-17.
+    numeros = [p.numero for p in paragrafos]
+    if numeros:
+        marcas = ",".join("?" * len(numeros))
+        con.execute(
+            f"DELETE FROM paragrafo_fts WHERE documento_id = ? AND idioma = ?"
+            f" AND numero IN ({marcas})",
+            (documento_id, idioma, *numeros),
+        )
     con.executemany(
         "INSERT INTO paragrafo_fts (texto, documento_id, numero, idioma)"
         " VALUES (?,?,?,?)",
@@ -179,8 +212,16 @@ def inserir_paragrafos(
 
 
 def _para_fts(consulta: str) -> str:
-    """Neutraliza pontuação que o FTS5 leria como sintaxe."""
-    limpa = re.sub(r'["():*^-]', " ", consulta).strip()
+    """Neutraliza pontuação que o FTS5 leria como sintaxe.
+
+    A VÍRGULA entra nesta lista, e é o caractere que mais importa: o FTS5 só a
+    aceita dentro de `NEAR(a b, N)` e, fora disso, levanta
+    `OperationalError: fts5: syntax error near ","`. Como este é o ÚNICO ponto
+    de entrada de busca do servidor, uma consulta em português corrido — "dever
+    de vigiar, fiscalizar e proteger" — derrubava a ferramenta em vez de
+    buscar. Medido pelo revisor em 2026-09-17.
+    """
+    limpa = re.sub(r'["():*^,-]', " ", consulta).strip()
     return limpa or '""'
 
 
@@ -257,6 +298,11 @@ def _melhor_idioma(con, doc_id, par, preferido, idioma_achado, texto_achado):
 
 
 def ficha(con, *, caso: str) -> dict | None:
+    """Ficha do documento por número de série ("C-149", "Série C 149") ou por
+    nome. O casamento por nome pode ser ambíguo, e a ambiguidade sai declarada
+    em `outros_candidatos` — ver o comentário no ramo `else`.
+    """
+    outros: list[str] = []
     m = re.fullmatch(r"\s*(?:s[ée]rie\s+)?([ACE])[-\s]*([0-9]{1,4})\s*",
                      caso, re.IGNORECASE)
     if m:
@@ -265,10 +311,20 @@ def ficha(con, *, caso: str) -> dict | None:
             (m.group(1).upper(), int(m.group(2))),
         ).fetchone()
     else:
-        row = con.execute(
-            "SELECT * FROM documento WHERE caso LIKE ? ORDER BY data LIMIT 1",
+        # Ordena pelo nome MAIS CURTO, que é o casamento mais próximo do termo
+        # pedido — e não pela data, como fazia antes. "Vs. Brasil" é sufixo de
+        # quase todo caso brasileiro da Corte, então ordenar por data devolvia
+        # silenciosamente o mais ANTIGO: `ficha("Vs. Brasil")` respondia
+        # Ximenes Lopes (2006) tendo Barbosa de Souza (2021) igualmente no
+        # banco. Citar o caso errado é o pior defeito possível aqui, então a
+        # ambiguidade também é DECLARADA no retorno, e não só resolvida.
+        candidatos = con.execute(
+            "SELECT * FROM documento WHERE caso LIKE ?"
+            " ORDER BY LENGTH(caso), data",
             (f"%{caso.strip()}%",),
-        ).fetchone()
+        ).fetchall()
+        row = candidatos[0] if candidatos else None
+        outros = [r["caso"] for r in candidatos[1:]]
     if row is None:
         return None
 
@@ -288,5 +344,14 @@ def ficha(con, *, caso: str) -> dict | None:
         "data": row["data"], "etapa": row["etapa"],
         "n_paragrafos": row["n_paragrafos"],
         "artigos_violados": artigos, "reparacoes": reparacoes,
-        "idiomas": idiomas, "url_por": row["url_por"], "url_esp": row["url_esp"],
+        "idiomas": idiomas,
+        # Os QUATRO idiomas, por simetria com `buscar`: sem `url_ing`/`url_fra`
+        # aqui, quem montar link a partir da ficha de um caso que só tenha
+        # versão inglesa ou francesa teria de consultar a tabela por fora.
+        "url_por": row["url_por"], "url_esp": row["url_esp"],
+        "url_ing": row["url_ing"], "url_fra": row["url_fra"],
+        # Ambiguidade DECLARADA: os outros casos que casaram o mesmo termo.
+        # Vazio quando o casamento foi por número de série ou foi único.
+        # Resolver em silêncio faria a peça citar o caso errado sem aviso.
+        "outros_candidatos": outros,
     }
