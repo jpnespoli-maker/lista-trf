@@ -149,6 +149,116 @@ def test_sha256_estavel():
     assert baixador.sha256(PDF_FALSO) != baixador.sha256(PDF_FALSO + b" ")
 
 
+# --- O caminho de RETENTATIVA, que não tinha teste nenhum ------------------
+# Provado por mutação na revisão: zerar `_TRANSITORIOS` matava 0 testes, e
+# trocar o `except Exception` por `raise` matava 0. Ou seja, o backoff inteiro
+# podia ser apagado sem a suíte acusar — justamente o mecanismo que existe
+# porque o site estrangula quem o martela (522/403 medidos).
+
+class _SessaoSequencial:
+    """Devolve, em ordem, uma resposta por chamada. Item que seja exceção é
+    levantado — é assim que se dubla `ConnectionError`/timeout de rede."""
+
+    def __init__(self, respostas):
+        self.respostas = list(respostas)
+        self.chamadas = 0
+
+    def get(self, url, **kw):
+        self.chamadas += 1
+        item = self.respostas.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def test_status_transitorio_e_retentado_e_o_pdf_seguinte_e_aceito(monkeypatch):
+    """503 na primeira, PDF na segunda: tem de devolver o PDF. Sem o ramo
+    `_TRANSITORIOS`, o 503 viraria PdfInvalido imediato e nada seria
+    retentado."""
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+    ses = _SessaoSequencial([
+        _RespostaFalsa(503, b"<html>indisponivel</html>"),
+        _RespostaFalsa(200, PDF_FALSO),
+    ])
+    assert baixador.baixar_pdf("http://x/a.pdf", sessao=ses, tentativas=3) == PDF_FALSO
+    assert ses.chamadas == 2
+
+
+def test_excecao_de_rede_e_retentada(monkeypatch):
+    """Timeout na primeira, PDF na segunda. Sem o `except Exception`, a
+    primeira exceção subiria e o backoff nunca aconteceria."""
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+    ses = _SessaoSequencial([
+        ConnectionError("conexao caiu"),
+        _RespostaFalsa(200, PDF_FALSO),
+    ])
+    assert baixador.baixar_pdf("http://x/a.pdf", sessao=ses, tentativas=3) == PDF_FALSO
+    assert ses.chamadas == 2
+
+
+def test_transitorio_ate_o_fim_estoura_dizendo_qual_foi(monkeypatch):
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+    ses = _SessaoSequencial([_RespostaFalsa(503, b"x")] * 2)
+    with pytest.raises(baixador.PdfInvalido) as exc:
+        baixador.baixar_pdf("http://x/a.pdf", sessao=ses, tentativas=2)
+    assert "503" in str(exc.value)
+    assert ses.chamadas == 2
+
+
+def test_status_permanente_nao_e_retentado(monkeypatch):
+    """404 não é transitório: estoura na primeira, sem gastar espera."""
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+    ses = _SessaoSequencial([_RespostaFalsa(404, b"nao achei")])
+    with pytest.raises(baixador.PdfInvalido):
+        baixador.baixar_pdf("http://x/a.pdf", sessao=ses, tentativas=3)
+    assert ses.chamadas == 1, "status permanente não pode ser retentado"
+
+
+# --- A CAUSA por idioma, que o crawler precisa para decidir ----------------
+
+def test_cascata_esgotada_diz_a_causa_de_CADA_idioma(monkeypatch):
+    """Site fora do ar e documento sem tradução produziam mensagem IDÊNTICA —
+    e as condutas são opostas: a primeira se repete depois, a segunda se
+    registra e segue. A mensagem final tem de nomear a causa por idioma."""
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+    ses = _SessaoSequencial([_RespostaFalsa(503, b"fora do ar")] * 8)
+    with pytest.raises(baixador.PdfInvalido) as exc:
+        baixador.baixar_melhor_idioma("http://x/seriec_999", sessao=ses,
+                                      pausa_s=0)
+    msg = str(exc.value)
+    for idioma in ("por", "esp", "ing", "fra"):
+        assert f"{idioma}:" in msg, f"faltou a causa de {idioma}: {msg}"
+    assert "503" in msg, "a mensagem tem de deixar ver que foi indisponibilidade"
+
+
+def test_causa_de_idioma_ausente_e_DISTINGUIVEL_de_site_fora_do_ar(monkeypatch):
+    """O par que prova a discriminação: os dois cenários esgotam a cascata,
+    e as mensagens NÃO podem ser iguais."""
+    monkeypatch.setattr(baixador.time, "sleep", lambda _s: None)
+
+    fora = _SessaoSequencial([_RespostaFalsa(503, b"fora")] * 8)
+    with pytest.raises(baixador.PdfInvalido) as e_fora:
+        baixador.baixar_melhor_idioma("http://x/s_1", sessao=fora, pausa_s=0)
+
+    ausente = _SessaoSequencial([_RespostaFalsa(206, HTML_206)] * 4)
+    with pytest.raises(baixador.PdfInvalido) as e_ausente:
+        baixador.baixar_melhor_idioma("http://x/s_1", sessao=ausente, pausa_s=0)
+
+    assert str(e_fora.value) != str(e_ausente.value)
+    assert "503" in str(e_fora.value)
+    assert "206" in str(e_ausente.value)
+
+
+def test_tentativas_zero_diz_que_nenhuma_chamada_foi_feita():
+    """Erro de quem chama, mas o diagnóstico é de quem lê o log: sem isto
+    saía 'desistiu depois de 0 — ' com a causa em branco."""
+    ses = _SessaoSequencial([])
+    with pytest.raises(baixador.PdfInvalido) as exc:
+        baixador.baixar_pdf("http://x/a.pdf", sessao=ses, tentativas=0)
+    assert "nenhuma tentativa" in str(exc.value)
+    assert ses.chamadas == 0
+
+
 @pytest.mark.rede
 def test_ximenes_lopes_em_portugues_de_verdade():
     """Controle positivo contra a fonte real. Marcado `rede`: fora do CI."""

@@ -26,7 +26,12 @@ CABECALHOS = {
     "Accept-Language": "pt-BR,pt;q=0.9,es;q=0.8,en;q=0.7",
     "Referer": "https://www.corteidh.or.cr/",
 }
-_TRANSITORIOS = (403, 429, 502, 503, 522, 524)
+# 403 e 522 estão aqui por MEDIÇÃO: na sondagem de 2026-09-17 foram ritmo, não
+# bloqueio — em cadência civilizada o site respondeu na primeira tentativa. O
+# 504 entra por COERÊNCIA com 502/503/522/524, e isto se declara: NÃO há
+# medição de que a Corte o devolva. Sem ele, um gateway timeout seria
+# diagnosticado como "não é PDF", que é a confusão que esta tarefa combate.
+_TRANSITORIOS = (403, 429, 502, 503, 504, 522, 524)
 
 
 class PdfInvalido(Exception):
@@ -52,7 +57,11 @@ def _sessao_padrao():
 def baixar_pdf(url: str, *, sessao=None, tentativas: int = 3) -> bytes:
     ses = sessao or _sessao_padrao()
     espera = 4.0
-    ultimo = ""
+    # Sentinela explícita para `tentativas < 1`: sem ela, o `range` vazio faz a
+    # função levantar "desistiu depois de 0 — " com a causa em branco, e quem
+    # ler o log conclui que o site não respondeu quando na verdade nenhuma
+    # chamada foi feita. Erro de quem chama, mas o diagnóstico é de quem lê.
+    ultimo = "nenhuma tentativa foi feita (tentativas < 1)"
     for n in range(1, tentativas + 1):
         try:
             r = ses.get(url, timeout=120)
@@ -77,17 +86,28 @@ def baixar_pdf(url: str, *, sessao=None, tentativas: int = 3) -> bytes:
 def baixar_melhor_idioma(
     base_url_sem_sufixo: str, *, sessao=None, pausa_s: float = 2.0
 ) -> tuple[str, bytes, str]:
-    """Tenta `_por` → `_esp` → `_ing` → `_fra`; devolve o primeiro PDF real."""
+    """Tenta `_por` → `_esp` → `_ing` → `_fra`; devolve o primeiro PDF real.
+
+    A exceção final carrega a CAUSA DE CADA IDIOMA, e isso não é luxo de
+    mensagem: o crawler precisa distinguir "este documento não tem tradução
+    nesses idiomas" de "o site estava fora do ar", e as duas condutas são
+    OPOSTAS — a primeira se registra e segue, a segunda se repete depois.
+    Sem as causas, as duas produzem texto idêntico, e o relatório do crawler
+    diria "documento indisponível" para um site que apenas piscou.
+    """
     ses = sessao or _sessao_padrao()
+    causas: list[str] = []
     for i, idioma in enumerate(CASCATA):
         url = f"{base_url_sem_sufixo}_{idioma}.pdf"
         try:
             corpo = baixar_pdf(url, sessao=ses, tentativas=2)
-        except PdfInvalido:
+        except PdfInvalido as e:
+            causas.append(f"{idioma}: {e}")
             if i < len(CASCATA) - 1 and pausa_s:
                 time.sleep(pausa_s)
             continue
         return idioma, corpo, url
     raise PdfInvalido(
         f"{base_url_sem_sufixo}: nenhum dos idiomas {CASCATA} devolveu PDF"
+        + " — " + " | ".join(causas)
     )
