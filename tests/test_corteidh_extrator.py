@@ -324,3 +324,64 @@ def test_relatorio_lacunas_vazio_quando_contiguo():
 def test_texto_vazio_devolve_lista_vazia_sem_estourar():
     assert ep.segmentar("") == []
     assert ep.segmentar("   \n\n  ") == []
+
+
+def test_url_com_disponivel_em_fundida_no_meio_da_frase_e_removida():
+    """Achado 4 (round 4): "Disponível em: <URL>" é literalmente o
+    marcador que um verificador de fase posterior usa como gate duro (toda
+    citação da Corte tem de carregar endereço conferível). Medido em PDF
+    real: nota que não começa por "Cf."/"Cfr." (ex.: "Ver Declaração
+    de...") continua vazando por inteiro, inclusive o seu próprio
+    "Disponível em: <URL>" de fechamento — e esse fragmento, sozinho,
+    bastaria para satisfazer o gate sem que o parágrafo tenha trazido
+    citação nenhuma. A limpeza é de STRING (o artefato está fundido no
+    meio da frase, sem fronteira de linha), aplicada depois da junção do
+    parágrafo."""
+    texto = (
+        "1. O Tribunal considera que a justificação é razoável. Disponível "
+        "em: https://exemplo.org/pagina.html. Portanto, admite o pedido.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = pars[0]
+    assert "http" not in p1.texto
+    assert "Disponível em" not in p1.texto
+    # a frase ao redor fica legivel, sem espaço duplo onde a URL saiu
+    assert p1.texto == (
+        "O Tribunal considera que a justificação é razoável. "
+        "Portanto, admite o pedido."
+    )
+
+
+def test_url_nua_sem_disponivel_em_e_removida_do_meio_da_frase():
+    """Forma mais rara do Achado 4: URL NUA (sem "Disponível em:" antes)
+    fundida no meio de uma frase, substituindo aparentemente o número de
+    referência em sobrescrito de uma nota — medido no par. 51 de um
+    documento de calibração ("...qualificaram o Brasil <URL>. como o país
+    com a quinta taxa..."). Sem a URL, a frase fica gramaticalmente
+    perfeita, o que é a evidência de que o artefato substituiu um
+    marcador, não um trecho de prosa real."""
+    texto = (
+        "1. As organizações qualificaram o Brasil "
+        "http://www.exemplo.org/pagina.html. como o país com a maior "
+        "taxa.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = pars[0]
+    assert "http" not in p1.texto
+    assert p1.texto == (
+        "As organizações qualificaram o Brasil como o país com a maior "
+        "taxa."
+    )
+
+
+def test_disponivel_em_sem_url_sobrevive():
+    """A restrição que não se negocia: se o parágrafo genuinamente disser
+    "Disponível em" sem URL nenhuma depois, isso não pode ser removido —
+    só entra em jogo havendo "http://"/"https://" de fato."""
+    texto = (
+        "1. O relatório está Disponível em: anexo próprio, sem link "
+        "nenhum nesta frase.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = pars[0]
+    assert "Disponível em" in p1.texto

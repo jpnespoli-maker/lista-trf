@@ -83,9 +83,56 @@ fonte da Corte. É um sinal mais forte que "há um dígito solto": nenhum
 item de lista, argumento de Estado ou número de página real observado nos
 dois documentos de calibração começa dessa forma logo em seguida. O preço
 é NÃO capturar nota cujo corpo comece de outro jeito (ex.: "O artigo 110 da
-Constituição... ", observada num dos documentos) — aceito, porque a
-alternativa (regra ampla) mediu perda de corpo real, e o objetivo aqui é
-não perder parágrafo, não zerar toda nota.
+Constituição... ", ou "Ver Declaração de...", observadas nos documentos de
+calibração) — aceito, porque a alternativa (regra ampla) mediu perda de
+corpo real, e o objetivo aqui é não perder parágrafo, não zerar toda nota.
+
+Auditoria de composição (round 4): medi diretamente — instrumentando o
+próprio laço de consumo, não por diff de texto (diff de string por
+similaridade se confunde com citação judicial repetitiva; um "trecho
+suspeito" que pareceu corpo perdido, ao ler o parágrafo inteiro, era na
+verdade o texto SOBREVIVENTE mal alinhado pelo `difflib`, não algo
+removido) — que 100% dos blocos que o modo-nota consumiu, nos dois
+documentos de calibração, começam por "Cf."/"Cfr." logo após o marcador.
+Nenhum corpo de parágrafo foi identificado entre o removido.
+
+Sétima armadilha, que o gate de "Cf."/"Cfr." não cobre: nota que NÃO
+começa por essas abreviações (ex.: "Ver Declaração de...", no par. 44 de
+um documento de calibração) continua vazando por inteiro — inclusive o
+seu próprio "Disponível em: <URL>" de fechamento —, e ESSE marcador
+("Disponível em:") é precisamente o que um verificador de fase posterior
+usa como gate duro para exigir que toda citação carregue endereço
+conferível. Parágrafo contaminado por nota vazada que, por acaso, contém
+"Disponível em: <URL>" satisfaria esse gate sem que o parágrafo tenha,
+ele próprio, trazido citação nenhuma — gate que se satisfaz com lixo da
+fonte é pior que gate nenhum. Medida também uma forma mais rara: URL NUA
+(sem "Disponível em:" antes) fundida no meio de uma frase, substituindo
+aparentemente o número de referência em sobrescrito de uma nota (efeito
+de extração de anotação de hyperlink do PyMuPDF quando o marcador também
+é link clicável).
+
+`_remover_url_absoluta` cobre as duas formas: remove "Disponível em:
+<URL>" (com o prefixo) e URL nua, sempre que houver "http://"/"https://"
+de fato — nunca a frase "disponível em" sozinha, para não arriscar o caso
+(não observado nos documentos de calibração, mas hipoteticamente possível)
+de um parágrafo dizer "disponível em" em prosa comum sem URL nenhuma.
+Aplicada ao TEXTO JÁ CONCATENADO do parágrafo (não é regra de linha — o
+artefato está fundido no meio de uma frase, sem fronteira de linha ao
+redor), depois da junção e da normalização de espaços.
+
+Limite declarado, e é maior que o da regra de "Cf."/"Cfr.": em pelo menos
+dois parágrafos observados (101 e 106 de um documento de calibração), o
+vazamento de nota não é apenas ANEXADO ao final do parágrafo — ele é
+INSERIDO NO MEIO de uma frase, deslocando palavras da própria frase para
+depois do trecho vazado (ex.: "...contra um de seus [bloco de nota
+inteiro] membros." — a palavra "membros." pertence logo após "seus", mas
+o layout de extração a empurrou para o fim). Remover a URL/"Disponível
+em:" desses casos tira o gatilho do gate, mas NÃO restaura a ordem
+correta da frase — isso é um problema de ORDEM DE LEITURA do PyMuPDF
+(texto extraído fora de ordem), não de RUÍDO removível por regex, e este
+módulo não tenta resolvê-lo. Fica documentado para a indexação (Tarefa 6)
+decidir o que fazer com esses parágrafos — possivelmente sinalizá-los
+para conferência humana em vez de indexá-los como se estivessem íntegros.
 """
 
 from __future__ import annotations
@@ -117,6 +164,11 @@ _NUMERO_SEM_PONTO = re.compile(r"^[ \t]*[0-9]{1,3}[ \t]+(\S.*)$")
 # Abreviação latina que introduz quase toda citação de fonte da Corte —
 # o sinal que autoriza entrar em modo-nota mesmo sem linha em branco antes.
 _CITACAO = re.compile(r"^(?:Cf\.|Cfr\.)")
+
+# URL absoluta, com ou sem o prefixo "Disponível em:", fundida no meio de
+# texto já concatenado — sétima armadilha (ver docstring do módulo). Só
+# dispara havendo "http(s)://" de fato, nunca por causa da frase sozinha.
+_URL_ABSOLUTA = re.compile(r"(?:Disponível em:\s*)?https?://\S+")
 
 
 @dataclass(frozen=True)
@@ -226,9 +278,25 @@ def segmentar(texto: str) -> list[Paragrafo]:
         i += 1
 
     return [
-        Paragrafo(numero=n, texto=re.sub(r"\s+", " ", " ".join(partes)).strip())
+        Paragrafo(
+            numero=n,
+            texto=_remover_url_absoluta(
+                re.sub(r"\s+", " ", " ".join(partes)).strip()
+            ),
+        )
         for n, partes in achados
     ]
+
+
+def _remover_url_absoluta(texto: str) -> str:
+    """Remove URL absoluta (com ou sem "Disponível em:") fundida no meio de
+    texto já concatenado — limpeza de STRING, não de linha, porque o
+    artefato não tem fronteira de linha ao redor (ver docstring do módulo,
+    sétima armadilha). Colapsa o espaço duplo que a remoção deixa, para a
+    frase ao redor continuar legível.
+    """
+    sem_url = _URL_ABSOLUTA.sub("", texto)
+    return re.sub(r"[ \t]{2,}", " ", sem_url).strip()
 
 
 def relatorio_lacunas(paragrafos: list[Paragrafo]) -> list[int]:
