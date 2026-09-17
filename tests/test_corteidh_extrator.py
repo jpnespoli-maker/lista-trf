@@ -87,6 +87,104 @@ def test_continuacao_iniciada_por_numero_sobrevive_quando_nao_apos_branco():
     assert "5 pessoas participaram do ato" in p1.texto
 
 
+def test_nota_de_rodape_multilinha_nao_vaza_para_paragrafo_anterior():
+    """Achado 1 da revisão: a nota de rodapé real da Corte costuma quebrar em
+    mais de uma linha (toda citação a precedente com "par. X" tende a
+    estourar a largura da página). A regra original só descartava a
+    PRIMEIRA linha da nota; a segunda linha em diante não casava nenhum
+    padrão de ruído nem de início e era colada ao parágrafo ANTERIOR —
+    contaminando-o com texto de outro caso."""
+    texto = (
+        "1. A Corte e competente para conhecer do presente caso1.\n"
+        "\n"
+        "1 Cfr. Caso Velasquez Rodriguez Vs. Honduras. Excecoes Preliminares.\n"
+        "Sentenca de 26 de junho de 1987, par. 30.\n"
+        "\n"
+        "2. Prosseguindo o exame do merito.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == "A Corte e competente para conhecer do presente caso1."
+    assert "Velasquez Rodriguez" not in p1.texto
+    assert "par. 30" not in p1.texto
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_nota_de_rodape_de_tres_linhas_e_descartada_por_inteiro():
+    """A mesma regra tem de aguentar nota com 3 linhas de continuação, não
+    só 2 — não é caso especial de "uma linha extra"."""
+    texto = (
+        "1. Primeiro paragrafo do documento.\n"
+        "\n"
+        "2 Cfr. Caso Genie Lacayo Vs. Nicaragua. Excecoes Preliminares,\n"
+        "Fondo, Reparaciones y Costas. Sentenca de 29 de janeiro de 1997,\n"
+        "par. 45, e Caso Loayza Tamayo Vs. Peru, par. 12.\n"
+        "\n"
+        "2. Segundo paragrafo do documento.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    juntos = " ".join(p.texto for p in pars)
+    assert "Genie Lacayo" not in juntos
+    assert "Loayza Tamayo" not in juntos
+
+
+def test_paragrafo_seguinte_a_nota_multilinha_e_capturado_normalmente():
+    """O parágrafo que vem depois da nota multilinha não pode ser afetado —
+    a numeração segue normal, sem lacuna nem duplicidade."""
+    texto = (
+        "1. A Corte e competente para conhecer do presente caso1.\n"
+        "\n"
+        "1 Cfr. Caso Velasquez Rodriguez Vs. Honduras. Excecoes Preliminares.\n"
+        "Sentenca de 26 de junho de 1987, par. 30.\n"
+        "\n"
+        "2. Prosseguindo o exame do merito.\n"
+    )
+    pars = ep.segmentar(texto)
+    p2 = next(p for p in pars if p.numero == 2)
+    assert p2.texto == "Prosseguindo o exame do merito."
+
+
+def test_valor_de_tabela_de_indenizacao_sobrevive_na_linha_isolada():
+    """Achado 2 da revisão: a regra antiga de "linha só com número" não
+    tinha gate de contexto e descartava QUALQUER linha só de dígitos —
+    inclusive um valor de indenização isolado em célula própria pela
+    extração de PDF (quantum é o dado mais sensível de uma peça)."""
+    texto = (
+        "1. A Corte fixa como indenizacao por dano material o seguinte "
+        "valor:\n"
+        "\n"
+        "10000\n"
+        "\n"
+        "dolares dos Estados Unidos da America, a ser pago no prazo de um "
+        "ano.\n"
+        "\n"
+        "2. Quanto ao dano imaterial...\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "10000" in p1.texto
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_numero_de_pagina_de_ate_tres_digitos_continua_descartado():
+    """O conserto do Achado 2 não pode reabrir o que já funcionava: número
+    de página plausível (até 3 dígitos), solto e após linha em branco,
+    continua sendo ruído."""
+    texto = (
+        "1. Primeiro paragrafo que continua por varias linhas ate o fim "
+        "da pagina.\n"
+        "\n"
+        "12\n"
+        "\n"
+        "2. Segundo paragrafo, ja na pagina seguinte.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    assert "12" not in " ".join(p.texto for p in pars)
+
+
 def test_descarta_numero_de_pagina():
     texto = FIXTURE.read_text(encoding="utf-8")
     pars = ep.segmentar(texto)
