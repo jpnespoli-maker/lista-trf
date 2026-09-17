@@ -54,6 +54,38 @@ reintroduza achando-a mais conservadora; ela é o contrário disso aqui. Essa
 condição de posição CONTINUA valendo para `_NUMERO_SEM_PONTO` (a nota sem
 ponto, com texto depois do número) — ali o gate é o que distingue nota de
 rodapé de uma continuação legítima que começa por ano ou quantidade.
+
+Uma sexta armadilha, mais grave: o marcador de nota (isolado OU seguido de
+texto) é só o NÚMERO — o CORPO da nota (a citação em si, que pode ocupar
+várias linhas: "Cf. Autor. Obra. Data. Disponível em: <URL>.") não casava
+nenhuma das regras acima, porque começa com uma palavra, não com dígito.
+Esse corpo vazava por inteiro para dentro do parágrafo anterior sempre que
+a nota seguinte de um mesmo bloco de rodapé de página vinha colada, sem
+linha em branco, à nota anterior — e a URL de outro documento contamina
+justamente o instrumento que serviria para conferir a citação na fonte.
+
+A hipótese óbvia — tratar TODA linha só-de-dígitos como entrada num "modo
+rodapé" que consome tudo até a próxima linha em branco, marcador de página
+ou início de parágrafo — foi TESTADA E REJEITADA: medido num documento real
+(Caso Ximenes Lopes, mais antigo, cuja paginação usa número solto SEM
+traços, igual ao marcador de nota), essa entrada dispara também sobre
+NÚMERO DE PÁGINA de fim de página, e o texto que vem depois nem sempre é
+nota — às vezes é a CONTINUAÇÃO LEGÍTIMA do corpo, quebrada pela paginação
+no meio de uma lista de itens `a) b) c) d) e)` do próprio parágrafo. Como
+os itens de lista não casam `_INICIO` (não têm ponto), o "modo rodapé"
+ampliado engoliria silenciosamente 23 linhas de argumento do Estado — dado
+de corpo perdido, o que é PIOR do que o vazamento que se queria consertar.
+
+A regra adotada é mais estreita: só entra em modo-nota (consumo de bloco)
+quando o texto logo após o marcador começa por "Cf." ou "Cfr." — a
+abreviação latina ("confer"/"conferir") que introduz quase toda citação de
+fonte da Corte. É um sinal mais forte que "há um dígito solto": nenhum
+item de lista, argumento de Estado ou número de página real observado nos
+dois documentos de calibração começa dessa forma logo em seguida. O preço
+é NÃO capturar nota cujo corpo comece de outro jeito (ex.: "O artigo 110 da
+Constituição... ", observada num dos documentos) — aceito, porque a
+alternativa (regra ampla) mediu perda de corpo real, e o objetivo aqui é
+não perder parágrafo, não zerar toda nota.
 """
 
 from __future__ import annotations
@@ -78,8 +110,13 @@ _NUMERO_ISOLADO = re.compile(r"^[ \t]*[0-9]{1,3}[ \t]*$")
 
 # Candidato a nota de rodapé: número de 1 a 3 dígitos seguido de espaço e
 # texto, SEM o ponto que marcaria início de parágrafo. Só é tratado como
-# ruído quando a linha anterior estava em branco (ver docstring do módulo).
-_NUMERO_SEM_PONTO = re.compile(r"^[ \t]*[0-9]{1,3}[ \t]+\S.*$")
+# ruído quando a linha anterior estava em branco OU quando o texto que
+# segue começa por "Cf."/"Cfr." (ver docstring do módulo).
+_NUMERO_SEM_PONTO = re.compile(r"^[ \t]*[0-9]{1,3}[ \t]+(\S.*)$")
+
+# Abreviação latina que introduz quase toda citação de fonte da Corte —
+# o sinal que autoriza entrar em modo-nota mesmo sem linha em branco antes.
+_CITACAO = re.compile(r"^(?:Cf\.|Cfr\.)")
 
 
 @dataclass(frozen=True)
@@ -103,10 +140,12 @@ def segmentar(texto: str) -> list[Paragrafo]:
     tratado como continuação do parágrafo corrente. É essa regra que descarta
     `a)`, nota de rodapé com ponto e número de página sem precisar de lista de
     exceções. A nota de rodapé SEM ponto (mesma forma do início de parágrafo,
-    mas sem o `.`) precisa de regra própria, condicionada a vir após linha em
-    branco — ver `_NUMERO_SEM_PONTO`. O número de página solto (sem traços) e
-    o marcador de nota em sobrescrito usam outra regra própria, por contagem
-    de dígitos e SEM condição de posição — ver `_NUMERO_ISOLADO`.
+    mas sem o `.`) e o número de página solto (sem traços) precisam de regra
+    própria — ver `_NUMERO_SEM_PONTO` e `_NUMERO_ISOLADO`. O CORPO da nota
+    (a citação que segue o marcador, que pode ocupar várias linhas e conter
+    URL) só é consumido quando o texto após o marcador começa por
+    "Cf."/"Cfr." — ver `_CITACAO` e a docstring do módulo sobre por que uma
+    regra mais ampla foi testada e rejeitada.
     """
     if not texto or not texto.strip():
         return []
@@ -137,21 +176,45 @@ def segmentar(texto: str) -> list[Paragrafo]:
             i += 1
             continue
 
-        if _NUMERO_ISOLADO.match(linha):
-            # número de página OU marcador de nota em sobrescrito: só
-            # dígitos, até 3, em QUALQUER posição — sem gate de linha em
-            # branco (ver docstring do módulo).
-            linha_anterior_em_branco = em_branco
+        m_sem_ponto = _NUMERO_SEM_PONTO.match(linha)
+        m_isolado = _NUMERO_ISOLADO.match(linha)
+
+        entra_modo_nota = False
+        if m_sem_ponto:
+            resto = m_sem_ponto.group(1)
+            if linha_anterior_em_branco or _CITACAO.match(resto):
+                entra_modo_nota = True
+        elif m_isolado:
+            proxima = linhas[i + 1].strip() if i + 1 < total else ""
+            if _CITACAO.match(proxima):
+                entra_modo_nota = True
+
+        if entra_modo_nota:
+            # corpo da nota reconhecido ("Cf."/"Cfr." logo em seguida):
+            # consome o bloco inteiro — todas as linhas até a próxima linha
+            # em branco, marcador de página ou início de parágrafo exato —
+            # porque pode conter mais de uma nota consecutiva do mesmo
+            # bloco de rodapé, sem linha em branco entre elas.
             i += 1
+            while i < total:
+                prox = linhas[i]
+                if not prox.strip():
+                    break
+                if _PAGINA_COM_TRACOS.match(prox):
+                    break
+                m_prox = _INICIO.match(prox)
+                if m_prox and int(m_prox.group(1)) == esperado:
+                    break
+                i += 1
             continue
 
-        if linha_anterior_em_branco and _NUMERO_SEM_PONTO.match(linha):
-            # nota de rodapé: consome o BLOCO inteiro (todas as linhas até a
-            # próxima linha em branco ou o fim do texto), não só esta linha —
-            # a nota real da Corte costuma quebrar em várias linhas.
+        if m_isolado:
+            # marcador solto sem "Cf."/"Cfr." reconhecível em seguida:
+            # descarta só esta linha (número de página plausível, ou nota
+            # cujo corpo não foi possível confirmar) — nunca o que vem
+            # depois, que pode ser corpo legítimo (ver docstring do módulo).
+            linha_anterior_em_branco = em_branco
             i += 1
-            while i < total and linhas[i].strip():
-                i += 1
             continue
 
         if corrente is not None:

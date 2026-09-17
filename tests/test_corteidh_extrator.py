@@ -212,6 +212,91 @@ def test_marcador_de_nota_em_sobrescrito_no_meio_do_paragrafo_nao_vaza():
     )
 
 
+def test_nota_apos_nota_nao_vaza_citacao_nem_url_para_paragrafo_anterior():
+    """Achado 3 da revisão (round 3): quando um bloco de rodapé de página
+    tem MAIS DE UMA nota consecutiva, sem linha em branco entre elas, o
+    CORPO de cada nota (a citação em si — "Cf. Autor. Obra. Disponível em:
+    URL.") não casava nenhuma regra de ruído, porque começa com uma
+    palavra, não com dígito. O corpo inteiro (inclusive a URL de outro
+    documento) vazava para dentro do parágrafo anterior. Medido em PDF real
+    (Caso Barbosa de Souza Vs. Brasil, par. 51): um bloco de 5 notas
+    consecutivas (50 a 54) vazou por inteiro. Cenário reduzido aqui a duas
+    notas."""
+    texto = (
+        "1. Entre 2006 e 2010 o Brasil ficou em setimo lugar1.\n"
+        "\n"
+        "50\n"
+        "Cf. WAISELFISZ, Julio. Mapa da Violencia 2015. Disponivel em:\n"
+        "http://www.onumulheres.org.br/mapa2015.pdf.\n"
+        "51 Cf. Lei no 13.104 de 2015. Disponivel em:\n"
+        "http://www.planalto.gov.br/lei13104.htm.\n"
+        "\n"
+        "2. A Corte pondera as alegacoes.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == "Entre 2006 e 2010 o Brasil ficou em setimo lugar1."
+    assert "WAISELFISZ" not in p1.texto
+    assert "http" not in p1.texto
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_paragrafo_seguinte_a_bloco_de_notas_e_capturado_por_inteiro():
+    """O parágrafo que vem depois de um bloco de rodapé com várias notas
+    consecutivas tem de ser capturado inteiro, sem lacuna — o "modo nota"
+    tem de saber sair no marcador de página tanto quanto na linha em
+    branco."""
+    texto = (
+        "1. Primeiro paragrafo do documento1.\n"
+        "\n"
+        "50\n"
+        "Cf. Referencia da primeira nota do bloco.\n"
+        "51 Cf. Referencia da segunda nota, colada a primeira.\n"
+        "\n"
+        "2. Segundo paragrafo inteiro, capturado sem perda de texto algum "
+        "depois da zona de nota.\n"
+    )
+    pars = ep.segmentar(texto)
+    p2 = next(p for p in pars if p.numero == 2)
+    assert p2.texto == (
+        "Segundo paragrafo inteiro, capturado sem perda de texto algum "
+        "depois da zona de nota."
+    )
+
+
+def test_corpo_com_numero_no_meio_sobrevive_mesmo_sem_citacao_reconhecivel():
+    """A restrição que não se negocia: o "modo nota" amplo (qualquer linha
+    só-de-dígitos dispara consumo até o próximo sinal) foi TESTADO e
+    REJEITADO, porque um documento real (Caso Ximenes Lopes Vs. Brasil,
+    2006) usa número de página SOLTO, sem traços — sintaticamente idêntico
+    ao marcador de nota — e ele pode cair no MEIO de uma lista de itens do
+    próprio corpo do parágrafo (quebra de página no meio da lista), sem
+    linha em branco antes da continuação. Medido: a regra ampla engoliria
+    23 linhas de argumento do Estado (itens b a e de uma lista, mais o
+    título da seção seguinte). A regra adotada só entra em modo-nota
+    quando reconhece "Cf."/"Cfr." logo em seguida — este cenário não tem
+    esse sinal, então o número de página é descartado sozinho e a lista
+    sobrevive por inteiro."""
+    texto = (
+        "1. O Estado alegou o seguinte:\n"
+        "\n"
+        "61\n"
+        "os responsaveis pelos maus-tratos nao foram identificados;\n"
+        "b) o processo penal observou as garantias fundamentais;\n"
+        "c) a investigacao nao acarretou prejuizo algum.\n"
+        "\n"
+        "2. A Corte pondera as alegacoes.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "os responsaveis pelos maus-tratos" in p1.texto
+    assert "garantias fundamentais" in p1.texto
+    assert "investigacao nao acarretou prejuizo algum" in p1.texto
+    assert "61" not in p1.texto
+
+
 def test_descarta_numero_de_pagina():
     texto = FIXTURE.read_text(encoding="utf-8")
     pars = ep.segmentar(texto)
