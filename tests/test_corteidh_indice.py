@@ -34,7 +34,7 @@ def _ximenes(con):
     doc_id = indice.inserir_documento(
         con, serie="C", numero=149, tipo="CC",
         caso="Ximenes Lopes Vs. Brasil", estado="Brasil", data="2006-07-04",
-        etapa="Mérito, Reparações e Custas", tem_por=1,
+        etapa="Mérito, Reparações e Custas",
         url_por="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_por.pdf",
         url_esp="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_esp.pdf",
     )
@@ -50,7 +50,7 @@ def _poblete(con):
     doc_id = indice.inserir_documento(
         con, serie="C", numero=349, tipo="CC",
         caso="Poblete Vilches e outros Vs. Chile", estado="Chile",
-        data="2018-03-08", tem_por=0,
+        data="2018-03-08",
         url_esp="https://www.corteidh.or.cr/docs/casos/articulos/seriec_349_esp.pdf",
     )
     indice.inserir_paragrafos(con, doc_id, "esp", [
@@ -177,7 +177,7 @@ def test_suspeito_marcado_chega_ao_resultado_da_busca(con):
     doc_id = indice.inserir_documento(
         con, serie="C", numero=435, tipo="CC",
         caso="Barbosa de Souza e outros Vs. Brasil", estado="Brasil",
-        data="2021-09-07", tem_por=1,
+        data="2021-09-07",
         url_por="https://www.corteidh.or.cr/docs/casos/articulos/seriec_435_por.pdf")
     indice.inserir_paragrafos(con, doc_id, "por", [
         Paragrafo(101, "Texto com palavra deslocada por ordem de leitura."),
@@ -239,7 +239,6 @@ def _con_bilingue(favorecido: str, primeiro: str):
     doc_id = indice.inserir_documento(
         c, serie="C", numero=149, tipo="CC",
         caso="Ximenes Lopes Vs. Brasil", estado="Brasil", data="2006-07-04",
-        tem_por=1,
         url_por="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_por.pdf",
         url_esp="https://www.corteidh.or.cr/docs/casos/articulos/seriec_149_esp.pdf")
 
@@ -353,18 +352,93 @@ def test_virgula_e_NEUTRALIZADA_e_nao_apenas_tolerada(con):
 
 
 @pytest.mark.parametrize("consulta", [
+    # vírgula e parênteses — a 1ª leva de achados
     "saúde, vida",
     'NEAR(saude vida, 5)',
     "vulnerabilidade (especial)",
     'vigiar "e" fiscalizar',
     "regular* fiscaliza^2",
     "dever-de-vigiar",
+    # PONTO e BARRA — o vocabulário normal de quem redige peça, e o que a
+    # lista negra ainda deixava estourar. "Vs. Brasil" está no fixture deste
+    # próprio projeto e derrubava a busca.
+    "Vs. Brasil",
+    "art. 5",
+    "CF/88",
+    "Lei n. 8.742/93",
+    "Resolução 240/2025",
+    "20/06/2018",
+    "dever de vigiar e/ou fiscalizar",
+    # operador solto, em maiúscula, nas três posições
+    "AND",
+    "OR saúde",
+    "saúde NOT",
+    "saúde AND OR vida",
+    # chaves, colchetes e mais pontuação estrutural
+    "dever[vigiar]",
+    "dever{vigiar}",
+    "saúde: vida; morte!",
+    "art. 5º, § 1º, inciso II",
+    # degenerados
+    "",
+    "   ",
+    "---",
+    "///",
+    '"',
 ])
-def test_pontuacao_de_sintaxe_do_fts_nunca_estoura(con, consulta):
-    """Varredura dos caracteres que o FTS5 lê como operador. O contrato é: a
-    busca pode não achar nada, mas não pode levantar exceção."""
+def test_consulta_do_mundo_real_nunca_estoura(con, consulta):
+    """Contrato do único ponto de entrada de busca do servidor: **pode não
+    achar nada, NÃO pode levantar exceção.**
+
+    Duas versões anteriores eram lista negra de caracteres de operador, e
+    lista negra não fecha: tapada a vírgula, o `.` e a `/` seguiram
+    estourando. Agora cada termo vira frase entre aspas, e estes casos são a
+    medida de que a inversão funciona — não a lista do que se proibiu.
+    """
     _ximenes(con)
     assert isinstance(indice.buscar(con, consulta=consulta), list)
+
+
+def test_operador_OR_continua_funcionando_como_operador(con):
+    """A neutralização por aspas não pode matar a sintaxe que a ajuda do
+    servidor documenta. `OR` em maiúscula segue sendo união, e é como se acha
+    um caso cuja versão portuguesa não existe pelo termo espanhol."""
+    _ximenes(con)
+    _poblete(con)
+    res = indice.buscar(con, consulta="vulnerabilidade OR salud")
+    assert len(res) == 2, "o OR tem de unir os dois documentos"
+
+
+def test_prefixo_com_asterisco_continua_funcionando(con):
+    """`regular*` casa "regular"; e não estoura em termo com pontuação."""
+    _ximenes(con)
+    assert len(indice.buscar(con, consulta="regul*")) >= 1
+    assert isinstance(indice.buscar(con, consulta="8.742/93*"), list)
+
+
+def test_reindexar_com_um_idioma_nao_apaga_o_endereco_do_outro(con):
+    """O `UPDATE` incondicional apagava um `url_esp` já gravado quando a
+    reindexação vinha só com o português. O crawler chama esta função uma vez
+    por idioma baixado, então cada passada perderia o que a anterior achou —
+    e o endereço é o instrumento de conferência na fonte."""
+    comum = dict(serie="C", numero=149, tipo="CC",
+                 caso="Ximenes Lopes Vs. Brasil", estado="Brasil",
+                 data="2006-07-04")
+    doc_id = indice.inserir_documento(
+        con, url_esp="https://www.corteidh.or.cr/seriec_149_esp.pdf",
+        sha256_esp="aaa", **comum)
+    indice.inserir_documento(
+        con, url_por="https://www.corteidh.or.cr/seriec_149_por.pdf",
+        sha256_por="bbb", **comum)
+
+    f = indice.ficha(con, caso="C-149")
+    assert f["documento_id"] == doc_id
+    assert f["url_esp"].endswith("_esp.pdf"), "o espanhol foi apagado"
+    assert f["url_por"].endswith("_por.pdf")
+    linha = con.execute("SELECT tem_por, sha256_esp, sha256_por FROM documento"
+                        " WHERE id = ?", (doc_id,)).fetchone()
+    assert linha["tem_por"] == 1, "tem_por é derivado do url_por resultante"
+    assert linha["sha256_esp"] == "aaa" and linha["sha256_por"] == "bbb"
 
 
 def test_documento_sem_serie_e_idempotente(con):
@@ -392,7 +466,7 @@ def test_reindexacao_parcial_nao_some_com_os_outros_paragrafos(con):
     doc_id = indice.inserir_documento(
         con, serie="C", numero=333, tipo="CC",
         caso="Favela Nova Brasília Vs. Brasil", estado="Brasil",
-        data="2017-02-16", tem_por=1)
+        data="2017-02-16")
     indice.inserir_paragrafos(con, doc_id, "por", [
         Paragrafo(1, "Primeiro trecho sobre investigação policial."),
         Paragrafo(2, "Segundo trecho sobre reparação coletiva."),
@@ -418,7 +492,7 @@ def test_ficha_ambigua_devolve_o_casamento_mais_proximo_e_declara_os_outros(con)
     indice.inserir_documento(
         con, serie="C", numero=435, tipo="CC",
         caso="Barbosa de Souza e outros Vs. Brasil", estado="Brasil",
-        data="2021-09-07", tem_por=1)
+        data="2021-09-07")
 
     f = indice.ficha(con, caso="Vs. Brasil")
     assert f is not None
@@ -455,7 +529,7 @@ def test_ficha_exclui_artigo_marcado_como_NAO_violado(con):
 def test_ficha_expoe_os_quatro_idiomas(con):
     doc_id = indice.inserir_documento(
         con, serie="C", numero=222, tipo="CC", caso="Y Vs. Peru",
-        estado="Peru", data="2010-01-01", tem_por=0,
+        estado="Peru", data="2010-01-01",
         url_esp="https://www.corteidh.or.cr/x_esp.pdf",
         url_ing="https://www.corteidh.or.cr/x_ing.pdf")
     indice.inserir_paragrafos(con, doc_id, "esp", [Paragrafo(1, "texto")])
@@ -469,7 +543,7 @@ def test_reindexar_atualiza_a_marca_de_suspeito(con):
     """A Tarefa 6 pode medir melhor e desmarcar — a marca não é permanente."""
     doc_id = indice.inserir_documento(
         con, serie="C", numero=1, tipo="CC", caso="X Vs. Brasil",
-        estado="Brasil", data="2020-01-01", tem_por=1)
+        estado="Brasil", data="2020-01-01")
     indice.inserir_paragrafos(con, doc_id, "por",
                               [Paragrafo(7, "trecho qualquer")], suspeitos={7})
     assert indice.buscar(con, consulta="trecho")[0]["suspeito"] is True

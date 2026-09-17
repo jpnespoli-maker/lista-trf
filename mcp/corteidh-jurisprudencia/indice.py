@@ -108,7 +108,7 @@ def criar_schema(con: sqlite3.Connection) -> None:
 def inserir_documento(
     con: sqlite3.Connection, *, serie, numero, tipo, caso, estado, data,
     etapa=None, url_por=None, url_esp=None, url_ing=None, url_fra=None,
-    tem_por=0, sha256_por=None, sha256_esp=None,
+    sha256_por=None, sha256_esp=None,
 ) -> int:
     """Insere ou atualiza; devolve o id. Idempotente INCLUSIVE sem série.
 
@@ -131,13 +131,32 @@ def inserir_documento(
     ).fetchone()
 
     if row is not None:
+        # COALESCE em tudo: o que a chamada NÃO trouxe, preserva-se. Medido
+        # pelo re-revisor: o `UPDATE` incondicional apagava um `url_esp` já
+        # gravado quando a reindexação vinha só com o português — e o mesmo
+        # valia para `sha256_*`. O crawler chama esta função uma vez por
+        # idioma baixado, então sobrescrever com `None` perderia, a cada
+        # passada, o que a passada anterior havia descoberto.
+        #
+        # `tem_por` deixa de ser parâmetro que pode mentir e passa a ser
+        # DERIVADO do `url_por` resultante: ou existe endereço em português, ou
+        # não existe, e não há terceiro estado.
         con.execute(
-            "UPDATE documento SET estado = ?, data = ?, etapa = ?,"
-            " url_por = ?, url_esp = ?, url_ing = ?, url_fra = ?,"
-            " tem_por = ?, sha256_por = ?, sha256_esp = ?,"
-            " baixado_em = datetime('now') WHERE id = ?",
+            "UPDATE documento SET"
+            "   estado = COALESCE(?, estado), data = COALESCE(?, data),"
+            "   etapa = COALESCE(?, etapa),"
+            "   url_por = COALESCE(?, url_por), url_esp = COALESCE(?, url_esp),"
+            "   url_ing = COALESCE(?, url_ing), url_fra = COALESCE(?, url_fra),"
+            "   sha256_por = COALESCE(?, sha256_por),"
+            "   sha256_esp = COALESCE(?, sha256_esp),"
+            "   baixado_em = datetime('now')"
+            " WHERE id = ?",
             (estado, data, etapa, url_por, url_esp, url_ing, url_fra,
-             int(tem_por), sha256_por, sha256_esp, row["id"]),
+             sha256_por, sha256_esp, row["id"]),
+        )
+        con.execute(
+            "UPDATE documento SET tem_por = (url_por IS NOT NULL) WHERE id = ?",
+            (row["id"],),
         )
         con.commit()
         return row["id"]
@@ -147,8 +166,12 @@ def inserir_documento(
         " url_por, url_esp, url_ing, url_fra, tem_por, sha256_por, sha256_esp,"
         " baixado_em)"
         " VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, datetime('now'))",
+        # `tem_por` é DERIVADO aqui também, e não parâmetro: ou existe endereço
+        # em português para o documento, ou não existe. Parâmetro separado
+        # permitiria a linha afirmar "tem português" sem ter o link — e o link
+        # é o instrumento de conferência na fonte que o Defensor exigiu.
         (serie, numero, tipo, caso, estado, data, etapa, url_por, url_esp,
-         url_ing, url_fra, int(tem_por), sha256_por, sha256_esp),
+         url_ing, url_fra, 1 if url_por else 0, sha256_por, sha256_esp),
     )
     con.commit()
     return int(cur.lastrowid)
@@ -211,18 +234,66 @@ def inserir_paragrafos(
     return len(dados)
 
 
-def _para_fts(consulta: str) -> str:
-    """Neutraliza pontuação que o FTS5 leria como sintaxe.
+_OPERADORES = {"AND", "OR", "NOT"}
+_TEM_ALNUM = re.compile(r"[0-9A-Za-zÀ-ÿ]")
+_SO_ALNUM = re.compile(r"[0-9A-Za-zÀ-ÿ]+")
 
-    A VÍRGULA entra nesta lista, e é o caractere que mais importa: o FTS5 só a
-    aceita dentro de `NEAR(a b, N)` e, fora disso, levanta
-    `OperationalError: fts5: syntax error near ","`. Como este é o ÚNICO ponto
-    de entrada de busca do servidor, uma consulta em português corrido — "dever
-    de vigiar, fiscalizar e proteger" — derrubava a ferramenta em vez de
-    buscar. Medido pelo revisor em 2026-09-17.
+
+def _para_fts(consulta: str) -> str:
+    """Converte a consulta do usuário em algo que o FTS5 SEMPRE aceita.
+
+    LISTA NEGRA NÃO FECHA, e foi medido duas vezes. A 1ª versão neutralizava
+    `["():*^-]` e estourava na vírgula. A 2ª acrescentou a vírgula — e o
+    re-revisor mediu que `.`, `/`, `[`, `{` e `AND`/`OR`/`NOT` soltos seguiam
+    levantando `fts5: syntax error`. Pior: **"Vs. Brasil" derrubava a busca**, e
+    é o sufixo de todo caso brasileiro da Corte, presente no fixture deste
+    próprio projeto. "art. 5", "CF/88", "Lei n. 8.742/93" e "20/06/2018" são o
+    vocabulário normal de quem redige peça, não caso de borda — e este é o
+    ÚNICO ponto de entrada de busca do servidor.
+
+    A inversão: em vez de enumerar o que proibir, **cada termo vira FRASE entre
+    aspas duplas**, e dentro de aspas o FTS5 não interpreta sintaxe alguma. As
+    aspas internas se escapam dobrando. Sobrevivem de propósito duas coisas que
+    a ajuda do servidor documenta: os operadores em MAIÚSCULA (`AND`/`OR`/`NOT`)
+    e o `*` de prefixo — este último apenas em termo puramente alfanumérico,
+    porque `"algo,"*` não é sintaxe garantida e o objetivo aqui é jamais
+    estourar.
+
+    Contrato: a consulta pode não achar nada; NÃO pode levantar exceção.
     """
-    limpa = re.sub(r'["():*^,-]', " ", consulta).strip()
-    return limpa or '""'
+    if not consulta or not consulta.strip():
+        return '""'
+
+    partes: list[str] = []
+    for bruto in consulta.split():
+        if bruto in _OPERADORES:
+            partes.append(bruto)
+            continue
+
+        prefixo = bruto.endswith("*")
+        termo = bruto[:-1] if prefixo else bruto
+
+        if not _TEM_ALNUM.search(termo):
+            continue  # token só de pontuação ("--", "/") não vira frase vazia
+
+        if prefixo and _SO_ALNUM.fullmatch(termo):
+            partes.append(termo + "*")
+            continue
+
+        partes.append('"' + termo.replace('"', '""') + '"')
+
+    # Operador solto na borda, ou dois seguidos, é erro de sintaxe no FTS5.
+    while partes and partes[0] in _OPERADORES:
+        partes.pop(0)
+    while partes and partes[-1] in _OPERADORES:
+        partes.pop()
+    limpa: list[str] = []
+    for tok in partes:
+        if tok in _OPERADORES and limpa and limpa[-1] in _OPERADORES:
+            continue
+        limpa.append(tok)
+
+    return " ".join(limpa) or '""'
 
 
 def buscar(
