@@ -169,9 +169,12 @@ def test_valor_de_tabela_de_indenizacao_sobrevive_na_linha_isolada():
 
 
 def test_numero_de_pagina_de_ate_tres_digitos_continua_descartado():
-    """O conserto do Achado 2 não pode reabrir o que já funcionava: número
-    de página plausível (até 3 dígitos), solto e após linha em branco,
-    continua sendo ruído."""
+    """O conserto do round 2 não pode reabrir o que já funcionava: número de
+    página plausível (até 3 dígitos), solto após linha em branco, continua
+    sendo ruído. A regra que discrimina é a CONTAGEM DE DÍGITOS (até 3), não
+    mais a posição — o round 1 exigia linha em branco antes, e esse gate foi
+    retirado no round 2 por causar regressão (ver
+    test_marcador_de_nota_em_sobrescrito_no_meio_do_paragrafo_nao_vaza)."""
     texto = (
         "1. Primeiro paragrafo que continua por varias linhas ate o fim "
         "da pagina.\n"
@@ -183,6 +186,30 @@ def test_numero_de_pagina_de_ate_tres_digitos_continua_descartado():
     pars = ep.segmentar(texto)
     assert [p.numero for p in pars] == [1, 2]
     assert "12" not in " ".join(p.texto for p in pars)
+
+
+def test_marcador_de_nota_em_sobrescrito_no_meio_do_paragrafo_nao_vaza():
+    """Regressão do round 1: o gate "só é ruído após linha em branco" da
+    regra de linha só-de-dígitos deixava passar o marcador de nota de
+    rodapé em sobrescrito quando ele cai no MEIO do parágrafo — sem linha
+    em branco antes —, porque o PyMuPDF às vezes extrai esse marcador como
+    linha própria. Medido em PDF real: 46 de 230 parágrafos de um documento
+    ganharam um dígito solto colado ao texto. O conserto do round 2 retira
+    a condição de posição: linha só-de-dígitos (até 3) é ruído em QUALQUER
+    posição."""
+    texto = (
+        "1. A vitima foi identificada como Jose Alves.\n"
+        "3\n"
+        "Os representantes apresentaram prova documental.\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == (
+        "A vitima foi identificada como Jose Alves. "
+        "Os representantes apresentaram prova documental."
+    )
 
 
 def test_descarta_numero_de_pagina():

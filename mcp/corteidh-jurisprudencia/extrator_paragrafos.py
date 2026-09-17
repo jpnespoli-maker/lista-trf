@@ -30,13 +30,30 @@ Uma quinta armadilha: "linha só com número" (usada para descartar número de
 página tipo "3" solto, sem os traços de "- 3 -") não pode ser irrestrita —
 sentenças de reparação reproduzem tabela de indenização, e um valor em
 reais/dólares isolado em célula própria (ex.: "10000") tem essa mesma forma.
-A regra por isso só descarta esse tipo de linha quando ela tem até 3 dígitos
-(número de página plausível) E vem logo após uma linha em branco — mesmo
-gate usado para a nota de rodapé sem ponto. Limite aceito e declarado: um
-valor de até 3 dígitos isolado em célula de tabela, precedido de linha em
-branco, ainda seria perdido por esta regra (indistinguível de número de
-página nesse desenho). É improvável — indenizações da Corte são tipicamente
-em milhares — e fica registrado aqui, não escondido.
+A regra descarta esse tipo de linha quando ela tem até 3 dígitos e nada
+mais — em QUALQUER posição do texto, sem exigir linha em branco antes.
+Número de página e marcador de nota de rodapé em sobrescrito são ambos
+curtos (até 3 dígitos) e ambos podem cair em qualquer posição: o marcador em
+sobrescrito, em particular, aparece no MEIO do parágrafo (colado ao fim da
+frase anterior, sem linha em branco), porque é assim que o PyMuPDF às vezes
+o extrai quando o isola em linha própria. Limite aceito e declarado: um
+valor de até 3 dígitos SEM separador de milhar, isolado em linha própria,
+ainda seria perdido por esta regra (indistinguível de número de página ou
+marcador de nota nesse desenho). É improvável em documento real — a Corte
+grafa indenização com separador de milhar ("10.000,00"), o que já a tira do
+padrão de dígitos puros; só o valor sintético do cenário de teste ("10000")
+não tem separador, e mesmo esse sobrevive, por ter 5 dígitos — e fica
+registrado aqui, não escondido.
+
+Uma condição de posição (só tratar como ruído quando a linha vinha após
+linha em branco) foi TESTADA E RETIRADA desta regra: ela deixava passar o
+marcador de nota em sobrescrito no meio do parágrafo — que não vem após
+linha em branco —, causando regressão medida em 46 de 230 parágrafos de um
+documento real (o dígito solto do marcador ficava colado ao texto). Não a
+reintroduza achando-a mais conservadora; ela é o contrário disso aqui. Essa
+condição de posição CONTINUA valendo para `_NUMERO_SEM_PONTO` (a nota sem
+ponto, com texto depois do número) — ali o gate é o que distingue nota de
+rodapé de uma continuação legítima que começa por ano ou quantidade.
 """
 
 from __future__ import annotations
@@ -53,8 +70,10 @@ _INICIO = re.compile(r"^[ \t]*([0-9]{1,3})\.[ \t]+(.*)$")
 _PAGINA_COM_TRACOS = re.compile(r"^[ \t]*-[ \t]*[0-9]+[ \t]*-[ \t]*$")
 
 # Linha que é SÓ dígitos (1 a 3), sem mais nada — candidato a número de
-# página solto. Só é ruído quando vem logo após linha em branco (ver
-# docstring do módulo sobre o limite que isto aceita).
+# página solto OU marcador de nota de rodapé em sobrescrito. Ruído em
+# QUALQUER posição (sem gate de linha em branco — ver docstring do módulo
+# sobre por que a posição foi testada e retirada, e sobre o limite que isto
+# aceita).
 _NUMERO_ISOLADO = re.compile(r"^[ \t]*[0-9]{1,3}[ \t]*$")
 
 # Candidato a nota de rodapé: número de 1 a 3 dígitos seguido de espaço e
@@ -84,9 +103,10 @@ def segmentar(texto: str) -> list[Paragrafo]:
     tratado como continuação do parágrafo corrente. É essa regra que descarta
     `a)`, nota de rodapé com ponto e número de página sem precisar de lista de
     exceções. A nota de rodapé SEM ponto (mesma forma do início de parágrafo,
-    mas sem o `.`) e o número de página solto (sem traços) precisam de regra
-    própria, condicionada a vir após linha em branco — ver `_NUMERO_SEM_PONTO`
-    e `_NUMERO_ISOLADO`.
+    mas sem o `.`) precisa de regra própria, condicionada a vir após linha em
+    branco — ver `_NUMERO_SEM_PONTO`. O número de página solto (sem traços) e
+    o marcador de nota em sobrescrito usam outra regra própria, por contagem
+    de dígitos e SEM condição de posição — ver `_NUMERO_ISOLADO`.
     """
     if not texto or not texto.strip():
         return []
@@ -117,8 +137,10 @@ def segmentar(texto: str) -> list[Paragrafo]:
             i += 1
             continue
 
-        if linha_anterior_em_branco and _NUMERO_ISOLADO.match(linha):
-            # número de página plausível: só dígitos, até 3, após branco.
+        if _NUMERO_ISOLADO.match(linha):
+            # número de página OU marcador de nota em sobrescrito: só
+            # dígitos, até 3, em QUALQUER posição — sem gate de linha em
+            # branco (ver docstring do módulo).
             linha_anterior_em_branco = em_branco
             i += 1
             continue
