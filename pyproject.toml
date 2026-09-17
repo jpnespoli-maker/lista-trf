@@ -29,3 +29,6 @@ packages = ["src/lista_trf"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
+markers = [
+    "rede: testes que vao ao site da Corte IDH pela rede; ficam fora da corrida padrao (rodar com -m rede)",
+]
