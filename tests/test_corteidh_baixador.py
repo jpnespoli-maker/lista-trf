@@ -59,10 +59,41 @@ def test_eh_pdf_rejeita_vazio():
 
 
 def test_http_206_com_html_nao_passa_por_pdf():
-    """O modo de falha medido: status 'de sucesso' com corpo errado."""
+    """O modo de falha medido contra o site real: status 'de sucesso' com
+    corpo errado."""
     ses = _SessaoFalsa({"http://x/a_por.pdf": _RespostaFalsa(206, HTML_206)})
     with pytest.raises(baixador.PdfInvalido):
         baixador.baixar_pdf("http://x/a_por.pdf", sessao=ses, tentativas=1)
+
+
+def test_status_200_com_corpo_HTML_tambem_e_recusado():
+    """Este é o teste que prova que a validação é por CONTEÚDO e não por
+    status — e sem ele a tarefa inteira passava por cima do seu próprio ponto.
+
+    Medido por mutação: trocar os magic bytes por `status_code == 200` matava
+    **ZERO** testes. O irmão acima usa 206 porque foi o que o site devolveu,
+    e um mutante que exigisse 200 rejeitaria o 206 pelo motivo errado — o
+    fixture tornava as duas hipóteses indistinguíveis.
+
+    Com o 200 aqui, a única implementação que passa nos dois é a que olha o
+    corpo. É a trava contra alguém "simplificar" para uma checagem de status.
+    """
+    ses = _SessaoFalsa({"http://x/a_por.pdf": _RespostaFalsa(200, HTML_206)})
+    with pytest.raises(baixador.PdfInvalido):
+        baixador.baixar_pdf("http://x/a_por.pdf", sessao=ses, tentativas=1)
+
+
+def test_cascata_recusa_200_com_html_e_segue_para_o_proximo_idioma():
+    """O mesmo pelo lado da cascata: 200 com HTML no português não pode ser
+    aceito como 'achei', tem de cair para o espanhol."""
+    ses = _SessaoFalsa({
+        "http://x/seriec_349_por.pdf": _RespostaFalsa(200, HTML_206),
+        "http://x/seriec_349_esp.pdf": _RespostaFalsa(200, PDF_FALSO),
+    })
+    idioma, _, url = baixador.baixar_melhor_idioma(
+        "http://x/seriec_349", sessao=ses, pausa_s=0)
+    assert idioma == "esp"
+    assert url.endswith("_esp.pdf")
 
 
 def test_baixar_pdf_devolve_bytes_quando_valido():
