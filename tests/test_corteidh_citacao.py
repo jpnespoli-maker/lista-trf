@@ -57,7 +57,7 @@ def test_opiniao_consultiva_usa_parecer_e_serie_a():
 
 def test_documento_sem_serie_omite_o_trecho_da_serie():
     assert citacao.formatar_citacao(
-        caso="Caso Gomes Lund e outros Vs. Brasil", data="2021-11-19",
+        caso="Gomes Lund e outros Vs. Brasil", data="2021-11-19",
         serie=None, numero=None, tipo="SS",
     ) == ("Corte IDH. Caso Gomes Lund e outros Vs. Brasil. Supervisão de "
           "Cumprimento de Sentença. Resolução de 19 de novembro de 2021.")
@@ -124,8 +124,79 @@ def test_url_em_branco_equivale_a_ausente():
 
 def test_url_tambem_sai_em_documento_sem_serie():
     saida = citacao.formatar_citacao(
-        caso="Caso Gomes Lund e outros Vs. Brasil", data="2021-11-19",
+        caso="Gomes Lund e outros Vs. Brasil", data="2021-11-19",
         serie=None, numero=None, tipo="SS", url=URL_149_POR,
     )
     assert saida.endswith(f"Disponível em: {URL_149_POR}")
     assert "Resolução de 19 de novembro de 2021." in saida
+
+
+# --- O contrato do prefixo "Caso" ------------------------------------------
+# O `caso` chega NU, como está na coluna `documento.caso` do índice. Prefixar
+# só `CC` faria a supervisão sair sem "Caso" — e é a Tarefa 7 que chama isto
+# com o valor do banco, para qualquer tipo.
+
+def test_supervisao_recebe_o_prefixo_caso_a_partir_do_nome_nu():
+    saida = citacao.formatar_citacao(
+        caso="Gomes Lund e outros Vs. Brasil", data="2021-11-19",
+        serie=None, numero=None, tipo="SS",
+    )
+    assert saida.startswith("Corte IDH. Caso Gomes Lund e outros Vs. Brasil.")
+
+
+def test_parecer_consultivo_NAO_recebe_o_prefixo_caso():
+    """Parecer consultivo não é caso contencioso — não leva "Caso"."""
+    saida = citacao.formatar_citacao(
+        caso="Condição Jurídica e Direitos dos Migrantes Indocumentados",
+        data="2003-09-17", serie="A", numero=18, tipo="OC",
+    )
+    assert "Caso" not in saida
+
+
+def test_nome_com_espaco_sobrando_e_aparado():
+    """Trava o `caso.strip()`, que a mutação provou não estar coberto."""
+    saida = citacao.formatar_citacao(
+        caso="  Ximenes Lopes Vs. Brasil  ", data="2006-07-04",
+        serie="C", numero=149,
+    )
+    assert saida.startswith("Corte IDH. Caso Ximenes Lopes Vs. Brasil.")
+
+
+# --- Tipo desconhecido e data ausente --------------------------------------
+
+def test_tipo_fora_dos_indexados_nao_e_rotulado_de_sentenca():
+    """O filtro oficial tem 19 tipos. Chamar Medida Provisória de "Sentença"
+    é AFIRMAR o que não se sabe — a citação real é "Resolução sobre Medidas
+    Provisórias". Sai rótulo neutro mais a marca da lacuna."""
+    saida = citacao.formatar_citacao(
+        caso="X Vs. Brasil", data="2020-01-01", serie=None, numero=None,
+        tipo="MP",
+    )
+    assert "Sentença" not in saida
+    assert "Decisão de 1 de janeiro de 2020." in saida
+    assert "[tipo MP" in saida
+
+
+def test_data_none_nao_imprime_a_palavra_None():
+    """'Sentença de None.' numa peça é pior que data faltando: parece dado."""
+    saida = citacao.formatar_citacao(
+        caso="X Vs. Brasil", data=None, serie="C", numero=1,
+    )
+    assert "None" not in saida
+    assert "Sentença." in saida
+
+
+def test_data_vazia_omite_a_clausula_sem_deixar_de_preposicao_solta():
+    for vazia in ("", "   "):
+        saida = citacao.formatar_citacao(
+            caso="X Vs. Brasil", data=vazia, serie="C", numero=1)
+        assert "de ." not in saida
+        assert "Sentença." in saida
+
+
+def test_data_presente_mas_ilegivel_passa_como_veio():
+    """Comportamento preservado: string que quem chamou pôs de propósito não
+    se suprime, porque suprimir esconderia o problema."""
+    saida = citacao.formatar_citacao(
+        caso="X Vs. Brasil", data="sem data", serie="C", numero=1)
+    assert "Sentença de sem data." in saida
