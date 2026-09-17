@@ -374,6 +374,14 @@ def test_virgula_e_NEUTRALIZADA_e_nao_apenas_tolerada(con):
     "OR saúde",
     "saúde NOT",
     "saúde AND OR vida",
+    # operador com prefixo de asterisco — a checagem comparava o token CRU,
+    # antes de descontar o `*`, e "AND*" caía no ramo alfanumérico saindo
+    # cru: para o FTS5 isso é o operador AND com um * sem operando.
+    "AND*",
+    "OR*",
+    "NOT*",
+    "a AND* b",
+    "and*",
     # chaves, colchetes e mais pontuação estrutural
     "dever[vigiar]",
     "dever{vigiar}",
@@ -414,6 +422,25 @@ def test_prefixo_com_asterisco_continua_funcionando(con):
     _ximenes(con)
     assert len(indice.buscar(con, consulta="regul*")) >= 1
     assert isinstance(indice.buscar(con, consulta="8.742/93*"), list)
+
+
+def test_operador_com_prefixo_nao_sai_cru():
+    """A checagem de operador comparava o token CRU (`bruto in _OPERADORES`),
+    antes de descontar o `*`. Por isso `AND*` não casava `AND`, caía no
+    ramo de prefixo por ser alfanumérico e saía cru — e `AND*` é, para o
+    FTS5, o operador `AND` com um `*` sem operando (`syntax error near
+    "AND"`).
+
+    Não basta não estourar: o que se quer garantir é a AUSÊNCIA do token
+    cru na saída de `_para_fts`, e um resultado de busca vazio não
+    distinguiria isso — poderia estar vazio por não ter estourado E por não
+    ter achado nada por outro motivo qualquer. Por isso a asserção é direto
+    sobre `_para_fts`, não sobre `buscar`.
+    """
+    assert "AND*" not in indice._para_fts("AND*").split()
+    assert "OR*" not in indice._para_fts("OR*").split()
+    assert "NOT*" not in indice._para_fts("NOT*").split()
+    assert "AND*" not in indice._para_fts("a AND* b").split()
 
 
 def test_reindexar_com_um_idioma_nao_apaga_o_endereco_do_outro(con):

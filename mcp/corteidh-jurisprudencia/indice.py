@@ -276,7 +276,7 @@ def _para_fts(consulta: str) -> str:
         if not _TEM_ALNUM.search(termo):
             continue  # token só de pontuação ("--", "/") não vira frase vazia
 
-        if prefixo and _SO_ALNUM.fullmatch(termo):
+        if prefixo and _SO_ALNUM.fullmatch(termo) and termo not in _OPERADORES:
             partes.append(termo + "*")
             continue
 
