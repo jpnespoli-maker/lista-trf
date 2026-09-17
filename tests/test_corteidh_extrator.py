@@ -87,13 +87,18 @@ def test_continuacao_iniciada_por_numero_sobrevive_quando_nao_apos_branco():
     assert "5 pessoas participaram do ato" in p1.texto
 
 
-def test_nota_de_rodape_multilinha_nao_vaza_para_paragrafo_anterior():
-    """Achado 1 da revisão: a nota de rodapé real da Corte costuma quebrar em
-    mais de uma linha (toda citação a precedente com "par. X" tende a
-    estourar a largura da página). A regra original só descartava a
-    PRIMEIRA linha da nota; a segunda linha em diante não casava nenhum
-    padrão de ruído nem de início e era colada ao parágrafo ANTERIOR —
-    contaminando-o com texto de outro caso."""
+def test_nota_de_rodape_multilinha_so_a_primeira_linha_e_removida():
+    """Round 5, RECUO deliberado e medido (ver task-1-report.md e a
+    "oitava armadilha" na docstring do módulo): o consumo em bloco dos
+    rounds 1/3 foi retirado porque engolia corpo legítimo de parágrafo
+    quando uma nota de UMA linha, já terminada, era seguida de corpo
+    colado sem linha em branco (ver
+    test_item_de_lista_apos_nota_de_uma_linha_sobrevive, que reproduz o
+    achado da re-revisão). O preço: nota que se estende por mais de uma
+    linha só tem a PRIMEIRA removida — "par. 30" (a continuação, sem
+    marcador próprio) volta a vazar para o parágrafo anterior. Entre
+    nota mal cortada (contaminação VISÍVEL) e corpo engolido (perda
+    INVISÍVEL), este módulo escolhe a primeira."""
     texto = (
         "1. A Corte e competente para conhecer do presente caso1.\n"
         "\n"
@@ -105,15 +110,18 @@ def test_nota_de_rodape_multilinha_nao_vaza_para_paragrafo_anterior():
     pars = ep.segmentar(texto)
     assert [p.numero for p in pars] == [1, 2]
     p1 = next(p for p in pars if p.numero == 1)
-    assert p1.texto == "A Corte e competente para conhecer do presente caso1."
+    # a linha do marcador (com "Cfr. Caso Velasquez Rodriguez...") some
     assert "Velasquez Rodriguez" not in p1.texto
-    assert "par. 30" not in p1.texto
+    # mas a CONTINUACAO da nota, sem marcador proprio na linha, vaza —
+    # o preco aceito do recuo do round 5
+    assert "par. 30" in p1.texto
     assert ep.relatorio_lacunas(pars) == []
 
 
-def test_nota_de_rodape_de_tres_linhas_e_descartada_por_inteiro():
-    """A mesma regra tem de aguentar nota com 3 linhas de continuação, não
-    só 2 — não é caso especial de "uma linha extra"."""
+def test_nota_de_tres_linhas_so_a_primeira_e_removida_o_resto_vaza():
+    """Generaliza o teste anterior: não importa se a nota tem 2 ou 3
+    linhas de continuação — a janela fixa do round 5 sempre remove só a
+    primeira, qualquer que seja o tamanho real da nota."""
     texto = (
         "1. Primeiro paragrafo do documento.\n"
         "\n"
@@ -127,7 +135,7 @@ def test_nota_de_rodape_de_tres_linhas_e_descartada_por_inteiro():
     assert [p.numero for p in pars] == [1, 2]
     juntos = " ".join(p.texto for p in pars)
     assert "Genie Lacayo" not in juntos
-    assert "Loayza Tamayo" not in juntos
+    assert "Loayza Tamayo" in juntos
 
 
 def test_paragrafo_seguinte_a_nota_multilinha_e_capturado_normalmente():
@@ -263,6 +271,134 @@ def test_paragrafo_seguinte_a_bloco_de_notas_e_capturado_por_inteiro():
         "Segundo paragrafo inteiro, capturado sem perda de texto algum "
         "depois da zona de nota."
     )
+
+
+# --- Round 5: a janela fixa de consumo (1 ou 2 linhas, nunca mais) tem
+# de aguentar cada combinação plausível do que vem logo depois de uma
+# nota reconhecida, sem linha em branco de separação — é o próprio
+# ponto cego que a re-revisão achou. Os testes abaixo saem da
+# ENUMERAÇÃO de entrada/alcance da docstring do módulo (oitava
+# armadilha), não dos dois PDFs de calibração.
+
+
+def test_item_de_lista_apos_nota_de_uma_linha_sobrevive():
+    """Reprodução exata do achado da re-revisão contra o commit 466a59d:
+    nota de UMA linha, já terminada (marcador e corpo na mesma linha,
+    `_NUMERO_SEM_PONTO`), seguida — sem linha em branco — de um item de
+    lista (`b)`). Antes do round 5, o consumo em bloco engolia o item
+    inteiro, sem lacuna e sem sinal algum de perda."""
+    texto = (
+        "1. O Estado alegou o seguinte:\n"
+        "\n"
+        "a) os primeiros indicios seguem o laudo1.\n"
+        "\n"
+        "1 Cf. Laudo medico as fls. 12.\n"
+        "b) o processo penal observou as garantias fundamentais.\n"
+        "\n"
+        "2. A Corte pondera as alegacoes.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "os primeiros indicios seguem o laudo" in p1.texto
+    assert "o processo penal observou as garantias fundamentais" in p1.texto
+    assert "Laudo medico" not in p1.texto
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_item_de_lista_apos_nota_com_marcador_isolado_sobrevive():
+    """A mesma combinação (item de lista colado, sem linha em branco),
+    agora para o outro tipo de entrada — marcador ISOLADO cujo corpo
+    está na linha seguinte (janela de exatamente 2 linhas)."""
+    texto = (
+        "1. O Estado alegou o seguinte:\n"
+        "\n"
+        "a) primeiro item da lista.\n"
+        "\n"
+        "50\n"
+        "Cf. Nota isolada com corpo na linha seguinte.\n"
+        "b) segundo item, que tem de sobreviver.\n"
+        "\n"
+        "2. Prosseguindo.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "primeiro item da lista" in p1.texto
+    assert "segundo item, que tem de sobreviver" in p1.texto
+    assert "Nota isolada" not in p1.texto
+
+
+def test_corpo_colado_apos_nota_de_uma_linha_sobrevive():
+    """"O que vem depois" nem sempre é item de lista — pode ser prosa
+    comum colada sem linha em branco. Tem de sobreviver do mesmo jeito."""
+    texto = (
+        "1. Primeiro trecho do paragrafo.\n"
+        "1 Cf. Nota curta e completa.\n"
+        "Prosa comum que continua o paragrafo sem marcador algum.\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "Prosa comum que continua o paragrafo" in p1.texto
+    assert "Nota curta e completa" not in p1.texto
+
+
+def test_marcador_de_pagina_logo_apos_nota_de_uma_linha_e_reconhecido():
+    """Marcador de página colado (sem linha em branco) logo após uma
+    nota de uma linha: o marcador de página tem de continuar sendo
+    reconhecido no próximo giro do laço principal, não pela nota."""
+    texto = (
+        "1. Texto do paragrafo antes da nota1.\n"
+        "1 Cf. Nota curta e completa.\n"
+        "- 5 -\n"
+        "2. Segundo paragrafo apos a pagina.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    p2 = next(p for p in pars if p.numero == 2)
+    assert p1.texto == "Texto do paragrafo antes da nota1."
+    assert p2.texto == "Segundo paragrafo apos a pagina."
+
+
+def test_inicio_de_paragrafo_logo_apos_nota_de_uma_linha_e_capturado():
+    """Início de parágrafo exato colado (sem linha em branco) logo após
+    uma nota de uma linha: o próximo parágrafo tem de ser capturado
+    normalmente, sem lacuna nem duplicidade."""
+    texto = (
+        "1. Texto do paragrafo antes da nota1.\n"
+        "1 Cf. Nota curta e completa.\n"
+        "2. Segundo paragrafo, capturado mesmo sem linha em branco antes.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p2 = next(p for p in pars if p.numero == 2)
+    assert p2.texto == (
+        "Segundo paragrafo, capturado mesmo sem linha em branco antes."
+    )
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_janela_do_marcador_isolado_nao_avanca_alem_de_duas_linhas():
+    """Prova de que a janela do marcador isolado é EXATAMENTE 2 linhas,
+    não "até parar de parecer nota": uma terceira linha que também
+    começa por "Cf." mas não tem número próprio não é uma nova nota —
+    é corpo (ou lixo) que tem de sobreviver, porque a janela já fechou."""
+    texto = (
+        "1. Primeiro paragrafo1.\n"
+        "\n"
+        "50\n"
+        "Cf. Primeira nota, contida so nesta linha e na anterior.\n"
+        "Cf. Isto nao e nova nota (sem numero antes) e deve sobreviver.\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "Isto nao e nova nota" in p1.texto
+    assert "Primeira nota, contida" not in p1.texto
 
 
 def test_corpo_com_numero_no_meio_sobrevive_mesmo_sem_citacao_reconhecivel():

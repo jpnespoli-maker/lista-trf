@@ -18,13 +18,12 @@ quantidade), colada ao texto anterior sem linha em branco — é preservada como
 parte do parágrafo corrente.
 
 A nota de rodapé real quase sempre quebra em MAIS de uma linha (toda citação
-a precedente com "par. X" tende a estourar a largura da página). Por isso o
-descarte não é de uma única linha: ao reconhecer o início do bloco, o
-segmentador consome todas as linhas seguintes até a próxima linha em branco
-(ou o fim do texto) — é o bloco inteiro que é ruído, não só a sua primeira
-linha. Sem isso, a segunda linha da nota (que não casa nenhum padrão de
-início nem de ruído) seria colada ao parágrafo ANTERIOR, contaminando-o com
-texto de outro caso.
+a precedente com "par. X" tende a estourar a largura da página). Rounds 1 e
+3 tentaram consumir o BLOCO inteiro (todas as linhas até a próxima linha em
+branco, marcador de página ou início de parágrafo exato), para não deixar a
+segunda linha da nota colada ao parágrafo anterior. **Isso foi RETIRADO no
+round 5** — ver a oitava armadilha, mais abaixo, e a lista de consumo
+LIMITADO que substitui o "modo rodapé" de bloco.
 
 Uma quinta armadilha: "linha só com número" (usada para descartar número de
 página tipo "3" solto, sem os traços de "- 3 -") não pode ser irrestrita —
@@ -76,16 +75,18 @@ os itens de lista não casam `_INICIO` (não têm ponto), o "modo rodapé"
 ampliado engoliria silenciosamente 23 linhas de argumento do Estado — dado
 de corpo perdido, o que é PIOR do que o vazamento que se queria consertar.
 
-A regra adotada é mais estreita: só entra em modo-nota (consumo de bloco)
-quando o texto logo após o marcador começa por "Cf." ou "Cfr." — a
-abreviação latina ("confer"/"conferir") que introduz quase toda citação de
-fonte da Corte. É um sinal mais forte que "há um dígito solto": nenhum
-item de lista, argumento de Estado ou número de página real observado nos
-dois documentos de calibração começa dessa forma logo em seguida. O preço
-é NÃO capturar nota cujo corpo comece de outro jeito (ex.: "O artigo 110 da
-Constituição... ", ou "Ver Declaração de...", observadas nos documentos de
-calibração) — aceito, porque a alternativa (regra ampla) mediu perda de
-corpo real, e o objetivo aqui é não perder parágrafo, não zerar toda nota.
+A regra adotada em round 3 era mais estreita que a hipótese original: só
+entrava em modo-nota quando o texto logo após o marcador começava por
+"Cf." ou "Cfr." — a abreviação latina ("confer"/"conferir") que introduz
+quase toda citação de fonte da Corte. É um sinal mais forte que "há um
+dígito solto": nenhum item de lista, argumento de Estado ou número de
+página real observado nos dois documentos de calibração começa dessa forma
+logo em seguida. **Essa parte da decisão (o GATE de entrada) continua
+valendo no round 5** — o que mudou foi o quanto se consome DEPOIS de
+entrar, não o critério para entrar. O preço aceito continua o mesmo: NÃO
+capturar nota cujo corpo comece de outro jeito (ex.: "O artigo 110 da
+Constituição...", ou "Ver Declaração de...", observadas nos documentos de
+calibração).
 
 Auditoria de composição (round 4): medi diretamente — instrumentando o
 próprio laço de consumo, não por diff de texto (diff de string por
@@ -133,6 +134,81 @@ correta da frase — isso é um problema de ORDEM DE LEITURA do PyMuPDF
 módulo não tenta resolvê-lo. Fica documentado para a indexação (Tarefa 6)
 decidir o que fazer com esses parágrafos — possivelmente sinalizá-los
 para conferência humana em vez de indexá-los como se estivessem íntegros.
+
+Oitava armadilha, e é a mais grave de todas — RECUO do round 5: a
+re-revisão reproduziu uma quebra que os rounds 1 e 3 introduziram juntos.
+Uma nota de UMA linha, já terminada ("1 Cf. Laudo médico às fls. 12.") é
+sintaticamente IDÊNTICA, para o consumo em bloco, a uma nota que continua
+na linha seguinte — nada no texto, sem informação de posição/largura de
+página (que este módulo não tem; `extrair_texto_pdf` usa `get_text("text")`,
+que descarta coordenadas), permite diferenciar as duas com segurança.
+Reproduzido:
+
+    1. O Estado alegou o seguinte:
+
+    a) os primeiros indicios seguem o laudo1.
+
+    1 Cf. Laudo medico as fls. 12.
+    b) o processo penal observou as garantias fundamentais.
+
+    2. A Corte pondera as alegacoes.
+
+Com o consumo em bloco (rounds 1/3), a linha `b)` — corpo legítimo do
+parágrafo 1, um item de lista — era engolida junto, porque o laço só saía
+em linha em branco, marcador de página ou início de parágrafo exato, e
+nenhum dos três aparece antes dela. **O parágrafo ficava mais curto, sem
+lacuna e sem qualquer sinal de que algo sumiu — perda de corpo SILENCIOSA,
+a categoria de defeito mais grave deste projeto.**
+
+O diagnóstico importante aqui não é da regra, é da VERIFICAÇÃO: a auditoria
+do round 4 (100% dos blocos começando por "Cf."/"Cfr." nos 2 PDFs de
+calibração) era verdadeira e ainda assim não provava segurança geral —
+ela testava contra os documentos que se tinha, não contra as CONDIÇÕES DE
+SAÍDA do laço. Nos dois PDFs de calibração, toda nota reconhecida por
+"Cf."/"Cfr." é seguida de linha em branco ou de outra nota — nunca de um
+item de lista ou de prosa colada sem separador. Mas o Ximenes Lopes já
+tinha mostrado, no próprio round 3 (com outro gatilho — número de página
+sem traços), que lista `a) b) c) d) e)` pode ficar colada a um marcador
+sem linha em branco antes. Não há garantia estrutural de que uma nota
+"Cf." jamais terá essa mesma vizinhança em outro documento — só não
+aconteceu de acontecer nestes dois.
+
+**Critério de desempate adotado, explícito:** entre nota mal cortada
+(contaminação VISÍVEL — alguém lê e vê o "Cf." solto) e corpo engolido
+(perda INVISÍVEL — o parágrafo fica mais curto e ninguém percebe), este
+módulo escolhe a contaminação visível. É reversível por releitura humana;
+a perda invisível não é.
+
+**O consumo deixou de ser um LAÇO com condições de saída e virou uma
+JANELA FIXA, sem nenhuma condição de saída para enumerar** — por isso a
+lista abaixo é de ENTRADA e de ALCANCE, não de "entrada e saída":
+
+1. Linha casa `_NUMERO_SEM_PONTO` (dígito(s) + espaço + texto, sem ponto)
+   E (linha anterior em branco OU o texto após o número começa por
+   "Cf."/"Cfr."): consome **só essa linha** — nunca a seguinte, qualquer
+   que seja o seu conteúdo.
+2. Linha casa `_NUMERO_ISOLADO` (só dígitos, 1 a 3) E a linha SEGUINTE
+   começa por "Cf."/"Cfr.": consome **essa linha e a seguinte, exatamente
+   2 linhas** — a segunda é a mesma que já foi inspecionada para decidir
+   entrar, então consumi-la não é "adivinhar mais", é confirmar o que já
+   se sabia. Nenhuma linha além dessas duas é tocada, seja lá o que
+   vier a seguir (branco, outra nota, item de lista, corpo colado,
+   marcador de página, início de parágrafo — todos são o MESMO caso
+   agora: simplesmente não fazem parte da janela).
+3. Linha casa `_NUMERO_ISOLADO` mas a linha seguinte NÃO começa por
+   "Cf."/"Cfr.": consome só essa linha (número de página plausível, ou
+   nota cujo corpo não foi possível confirmar) — inalterado desde o
+   round 2.
+
+**Preço medido do recuo** (não hipotético — ver task-1-report.md para o
+comando e a saída completa): o delta de caracteres em relação ao texto
+original (antes de qualquer conserto desta série) subiu de -51.205 para
+-16.013 em C-149, e de -66.757 para -26.755 em C-435 — ou seja, ~35.192 e
+~40.002 caracteres de nota que os rounds 1/3 removiam voltam a vazar,
+porque notas de 3+ linhas agora só têm a primeira removida. `http` em
+texto de parágrafo continua em 0 nos dois documentos, porque
+`_remover_url_absoluta` roda por cima do resultado final e limpa URL que
+vaze por transbordo, independente do mecanismo que a deixou passar.
 """
 
 from __future__ import annotations
@@ -193,11 +269,11 @@ def segmentar(texto: str) -> list[Paragrafo]:
     `a)`, nota de rodapé com ponto e número de página sem precisar de lista de
     exceções. A nota de rodapé SEM ponto (mesma forma do início de parágrafo,
     mas sem o `.`) e o número de página solto (sem traços) precisam de regra
-    própria — ver `_NUMERO_SEM_PONTO` e `_NUMERO_ISOLADO`. O CORPO da nota
-    (a citação que segue o marcador, que pode ocupar várias linhas e conter
-    URL) só é consumido quando o texto após o marcador começa por
-    "Cf."/"Cfr." — ver `_CITACAO` e a docstring do módulo sobre por que uma
-    regra mais ampla foi testada e rejeitada.
+    própria — ver `_NUMERO_SEM_PONTO` e `_NUMERO_ISOLADO`. O consumo do CORPO
+    da nota é por JANELA FIXA (1 ou 2 linhas, nunca mais) desde o round 5 —
+    ver `_CITACAO` e a "oitava armadilha" na docstring do módulo para a
+    lista completa de entrada/alcance e por que o consumo em bloco (rounds
+    1/3) foi retirado.
     """
     if not texto or not texto.strip():
         return []
@@ -231,36 +307,28 @@ def segmentar(texto: str) -> list[Paragrafo]:
         m_sem_ponto = _NUMERO_SEM_PONTO.match(linha)
         m_isolado = _NUMERO_ISOLADO.match(linha)
 
-        entra_modo_nota = False
         if m_sem_ponto:
             resto = m_sem_ponto.group(1)
             if linha_anterior_em_branco or _CITACAO.match(resto):
-                entra_modo_nota = True
-        elif m_isolado:
-            proxima = linhas[i + 1].strip() if i + 1 < total else ""
-            if _CITACAO.match(proxima):
-                entra_modo_nota = True
-
-        if entra_modo_nota:
-            # corpo da nota reconhecido ("Cf."/"Cfr." logo em seguida):
-            # consome o bloco inteiro — todas as linhas até a próxima linha
-            # em branco, marcador de página ou início de parágrafo exato —
-            # porque pode conter mais de uma nota consecutiva do mesmo
-            # bloco de rodapé, sem linha em branco entre elas.
-            i += 1
-            while i < total:
-                prox = linhas[i]
-                if not prox.strip():
-                    break
-                if _PAGINA_COM_TRACOS.match(prox):
-                    break
-                m_prox = _INICIO.match(prox)
-                if m_prox and int(m_prox.group(1)) == esperado:
-                    break
+                # nota reconhecida, marcador e corpo na MESMA linha: janela
+                # fixa de 1 linha — nunca a seguinte, qualquer que seja o
+                # seu conteúdo (ver "oitava armadilha" na docstring do
+                # módulo; consumir mais do que isto perdeu corpo real de
+                # parágrafo num caso medido).
+                linha_anterior_em_branco = em_branco
                 i += 1
-            continue
+                continue
 
         if m_isolado:
+            proxima = linhas[i + 1].strip() if i + 1 < total else ""
+            if _CITACAO.match(proxima):
+                # nota reconhecida, marcador isolado com corpo na linha
+                # seguinte: janela fixa de EXATAMENTE 2 linhas (o marcador
+                # e a linha que já inspecionamos para decidir entrar — não
+                # é uma terceira linha "adivinhada"). Nunca mais que isso.
+                i += 2
+                linha_anterior_em_branco = False
+                continue
             # marcador solto sem "Cf."/"Cfr." reconhecível em seguida:
             # descarta só esta linha (número de página plausível, ou nota
             # cujo corpo não foi possível confirmar) — nunca o que vem
