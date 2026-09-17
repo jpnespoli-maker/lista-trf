@@ -259,6 +259,65 @@ def test_tentativas_zero_diz_que_nenhuma_chamada_foi_feita():
     assert ses.chamadas == 0
 
 
+# --- A ESPERA, e não só a retentativa -------------------------------------
+# Buraco medido em 2026-09-17 pela re-revisão: achatar `espera *= 2`, ou
+# REMOVER o `time.sleep` inteiro, matava **zero** testes. Todos os testes
+# acima dublam o sleep para `None` e descartam o argumento, e a retentativa
+# acontece com ou sem pausa — o `for` não depende dela. Logo o que estava
+# travado era "há retentativa em erro transitório", e não "há espera
+# crescente entre retentativas". São coisas diferentes, e o achado que gerou
+# o conserto anterior prometeu a segunda.
+#
+# Isto não é preciosismo de cobertura: o site da Corte devolve HTTP 522 quando
+# martelado — medido —, e o crawler da Tarefa 6 vai pedir centenas de PDFs. Um
+# refactor que apague a pausa transforma a ferramenta em algo que o site
+# bloqueia, e nenhum teste avisaria.
+
+def test_backoff_existe_e_CRESCE_entre_as_tentativas(monkeypatch):
+    """Observa o ARGUMENTO do sleep, que é a única forma de a espera ser
+    medida. Dublar para `None` descartando o valor é o que deixou o buraco."""
+    esperas: list[float] = []
+    monkeypatch.setattr(baixador.time, "sleep", lambda s: esperas.append(s))
+
+    ses = _SessaoFalsa({"http://x/a_por.pdf": _RespostaFalsa(503, b"fora")})
+    with pytest.raises(baixador.PdfInvalido):
+        baixador.baixar_pdf("http://x/a_por.pdf", sessao=ses, tentativas=3)
+
+    assert len(esperas) == 2, f"3 tentativas pedem 2 esperas; vieram {esperas}"
+    assert esperas[0] > 0, "a primeira espera não pode ser zero"
+    assert esperas[1] > esperas[0], f"a espera tem de CRESCER: {esperas}"
+
+
+def test_a_ultima_tentativa_nao_dorme(monkeypatch):
+    """Trava o `if n < tentativas`: dormir depois da última tentativa é
+    atrasar o erro sem chance de sucesso. Com uma tentativa só, não há espera
+    nenhuma."""
+    esperas: list[float] = []
+    monkeypatch.setattr(baixador.time, "sleep", lambda s: esperas.append(s))
+
+    ses = _SessaoFalsa({"http://x/a_por.pdf": _RespostaFalsa(503, b"fora")})
+    with pytest.raises(baixador.PdfInvalido):
+        baixador.baixar_pdf("http://x/a_por.pdf", sessao=ses, tentativas=1)
+
+    assert esperas == [], f"não devia haver espera alguma; vieram {esperas}"
+
+
+def test_pausa_entre_idiomas_da_cascata_existe(monkeypatch):
+    """A cascata tem a SUA pausa (`pausa_s`), distinta do backoff interno. Os
+    testes de cascata a passam como 0 de propósito, para não custar segundos
+    na suíte — então ela também precisava de um teste próprio."""
+    esperas: list[float] = []
+    monkeypatch.setattr(baixador.time, "sleep", lambda s: esperas.append(s))
+
+    ses = _SessaoFalsa({"http://x/y_fra.pdf": _RespostaFalsa(200, PDF_FALSO)})
+    idioma, _, _ = baixador.baixar_melhor_idioma(
+        "http://x/y", sessao=ses, pausa_s=1.5)
+
+    assert idioma == "fra"
+    assert 1.5 in esperas, (
+        f"a pausa entre idiomas não aconteceu; esperas vistas: {esperas}")
+
+
 @pytest.mark.rede
 def test_ximenes_lopes_em_portugues_de_verdade():
     """Controle positivo contra a fonte real. Marcado `rede`: fora do CI."""
