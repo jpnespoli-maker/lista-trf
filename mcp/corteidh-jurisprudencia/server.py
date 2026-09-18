@@ -208,6 +208,31 @@ def _montar_resultado(linha: dict, max_tokens: int) -> BaseResultadoJuridico:
             # justo quando vale False, ficando indistinguível de "o servidor
             # não disse". `str(False)` é "False", não-vazia, sempre emitida.
             "exige_traducao": str(linha["exige_traducao"]),
+            # AVISO DE CONTAMINAÇÃO — o índice o tinha e a saída não o emitia.
+            # Medido em 18/09/2026 pela tool MCP real: 1.639 dos 30.610
+            # parágrafos (5,4%) estão marcados `suspeito=1`, e NENHUM desses
+            # avisos chegava a quem redige. A busca devolveu o par. 398 da
+            # OC-32 com nota de rodapé visivelmente colada ao texto, sem
+            # nenhum sinal.
+            #
+            # O defeito é o pior do subsistema, porque produz citação
+            # LITERALMENTE VERIFICÁVEL e SUBSTANTIVAMENTE FALSA: o trecho está
+            # mesmo naquele parágrafo daquele PDF — passa no `validar_fontes`,
+            # passa no `grep` —, mas é texto de RODAPÉ, e transcrevê-lo como
+            # fundamentação atribui à Corte o que ela citou de terceiro.
+            #
+            # Emitido SEMPRE, como string, pela mesma razão do
+            # `exige_traducao`: campo omitido quando falso é indistinguível de
+            # "o servidor não apurou", e aqui a diferença é entre "conferi e
+            # está limpo" e "não olhei".
+            "suspeito": str(bool(linha.get("suspeito"))),
+            "aviso_suspeito": (
+                "Este parágrafo pode conter nota de rodapé ou cabeçalho "
+                "colados ao texto pela extração do PDF. CONFERIR NA FONTE "
+                "antes de transcrever verbatim: o trecho existe no PDF, mas "
+                "pode não ser fundamentação da Corte."
+                if linha.get("suspeito") else ""
+            ),
             "citacao_sugerida": cit,
             "url_pdf_por": linha.get("url_por") or "",
         },

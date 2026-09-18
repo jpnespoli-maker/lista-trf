@@ -292,3 +292,56 @@ def test_max_tokens_paragrafo_e_saneado_no_TETO(tmp_path, monkeypatch):
     # teto de 4000 tokens = 16.000 caracteres, mais a margem do sufixo/corte
     # no último ponto final
     assert len(conteudo.group(1)) <= 16_100
+
+
+# --- aviso de contaminação: o índice o tinha, a saída não o emitia ---------
+#
+# Medido em 18/09/2026 pela tool MCP REAL, contra o acervo já crescido: 1.639
+# dos 30.610 parágrafos (5,4%) estão marcados `suspeito=1` no índice, e NENHUM
+# desses avisos chegava a quem redige — `_montar_resultado` não mencionava o
+# campo. A busca devolveu o par. 398 da OC-32 com nota de rodapé visivelmente
+# colada ao texto, sem nenhum sinal.
+#
+# É o pior defeito possível aqui, porque produz citação LITERALMENTE
+# VERIFICÁVEL e SUBSTANTIVAMENTE FALSA: o trecho está mesmo naquele parágrafo
+# daquele PDF, passa no `validar_fontes` e no `grep`, mas é texto de RODAPÉ.
+
+def test_paragrafo_suspeito_sai_com_AVISO(tmp_path, monkeypatch):
+    import xml.etree.ElementTree as ET
+
+    caminho = tmp_path / "corteidh.db"
+    c = indice.abrir(caminho)
+    indice.criar_schema(c)
+    doc = indice.inserir_documento(
+        c, serie="C", numero=149, tipo="CC", caso="Ximenes Lopes Vs. Brasil",
+        estado="Brasil", data="2006-07-04",
+        url_por="https://exemplo/seriec_149_por.pdf")
+    indice.inserir_paragrafos(c, doc, "por", [
+        Paragrafo(10, "Trecho limpo sobre internação psiquiátrica."),
+        Paragrafo(11, "Trecho com rodape colado sobre internação e Cf. nota 37 supra."),
+    ], suspeitos={11})
+    c.close()
+    monkeypatch.setattr(server, "CAMINHO_BANCO", caminho)
+
+    raiz = ET.fromstring(server._buscar_sync(consulta="internação",
+                                             max_resultados=10))
+    por_par = {r.findtext("paragrafo"): r for r in raiz.findall("resultado")}
+    assert {"10", "11"} <= set(por_par), "faltou resultado para medir"
+
+    # O suspeito avisa, e o aviso tem de carregar as DUAS metades:
+    #   (i) a ordem — conferir na fonte antes de transcrever;
+    #   (ii) a RAZÃO — o trecho existe no PDF e pode não ser fundamentação.
+    # Sem (ii) o leitor não entende por que conferir um texto que o `grep`
+    # confirma, e é justamente essa a armadilha: a citação é literalmente
+    # verificável e substantivamente falsa. Medido por mutação: assertar só
+    # (i) deixava passar a remoção de (ii).
+    aviso = por_par["11"].findtext("aviso_suspeito") or ""
+    assert por_par["11"].findtext("suspeito") == "True"
+    assert "CONFERIR NA FONTE" in aviso, aviso
+    assert "não ser fundamentação" in aviso, aviso
+    assert "rodapé" in aviso or "cabeçalho" in aviso, aviso
+
+    # E o LIMPO diz que é limpo — campo omitido quando falso seria
+    # indistinguível de "o servidor não apurou".
+    assert por_par["10"].findtext("suspeito") == "False"
+    assert not (por_par["10"].findtext("aviso_suspeito") or "")
