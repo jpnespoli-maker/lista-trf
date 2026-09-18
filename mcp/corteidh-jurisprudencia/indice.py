@@ -153,11 +153,35 @@ def inserir_documento(
     semântica desejada aqui. A `UNIQUE` do schema fica como rede para os casos
     com série preenchida, não como mecanismo principal.
     """
-    row = con.execute(
-        "SELECT id FROM documento WHERE tipo IS ? AND serie IS ?"
-        " AND numero IS ? AND caso IS ?",
-        (tipo, serie, numero, caso),
-    ).fetchone()
+    # SEM AUTUAÇÃO, A DATA ENTRA NA CHAVE — e isto conserta uma perda medida em
+    # 18/09/2026, de 545 documentos. Um mesmo caso tem VÁRIAS resoluções de
+    # supervisão de cumprimento ao longo dos anos (*Vicky Hernández y otras Vs.
+    # Honduras* tem 3; *Mujeres Víctimas de Tortura Sexual en Atenco Vs.
+    # México*, 4), e nenhuma delas é autuada em Série C. Sem a data na chave, a
+    # identidade cai no NOME — que é do CASO e não da RESOLUÇÃO —, e os 903
+    # registros do catálogo colapsavam em 358 linhas: cada resolução nova
+    # ATUALIZAVA a anterior em vez de entrar.
+    #
+    # A consequência não era só perder linha. A ficha do caso reporta o ESTADO
+    # DO CUMPRIMENTO a partir da série SS, e informá-lo com base numa resolução
+    # de 2013 havendo uma de 2024 é afirmação falsa sobre o presente — o tipo
+    # de erro que a peça carrega para o juízo.
+    #
+    # A data só entra quando NÃO há autuação: havendo série e número, eles são
+    # a identidade (Série C No. 318 é aquele julgado), e acrescentar a data
+    # faria uma reindexação com data ausente duplicar o documento.
+    if serie is None and numero is None:
+        row = con.execute(
+            "SELECT id FROM documento WHERE tipo IS ? AND serie IS ?"
+            " AND numero IS ? AND caso IS ? AND data IS ?",
+            (tipo, serie, numero, caso, data),
+        ).fetchone()
+    else:
+        row = con.execute(
+            "SELECT id FROM documento WHERE tipo IS ? AND serie IS ?"
+            " AND numero IS ? AND caso IS ?",
+            (tipo, serie, numero, caso),
+        ).fetchone()
 
     if row is not None:
         # COALESCE em tudo: o que a chamada NÃO trouxe, preserva-se. Medido

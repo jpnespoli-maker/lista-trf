@@ -486,11 +486,16 @@ def ja_indexado(con, registro: dict, *, com_texto: bool) -> bool:
     else:
         if registro.get("caso") is None:
             return False
+        # A DATA entra na chave, espelhando `inserir_documento`: sem ela, as
+        # 903 resoluções de supervisão colapsam em 358 (um mesmo caso tem
+        # várias, e nenhuma é autuada em Série C), e a segunda resolução de um
+        # caso sai como "já indexada" tendo ficado de fora.
         linha = con.execute(
             "SELECT n_paragrafos FROM documento"
-            " WHERE tipo IS ? AND serie IS ? AND numero IS ? AND caso IS ?",
+            " WHERE tipo IS ? AND serie IS ? AND numero IS ? AND caso IS ?"
+            "   AND data IS ?",
             (registro["tipo"], registro["serie"], registro["numero"],
-             registro["caso"]),
+             registro["caso"], registro.get("data")),
         ).fetchone()
     if linha is None:
         return False

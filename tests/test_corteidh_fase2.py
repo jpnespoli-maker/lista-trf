@@ -299,3 +299,86 @@ def test_serie_sem_numero_cai_no_nome(con):
     cc.indexar_metadado(con, reg)
     assert cc.ja_indexado(con, reg, com_texto=False)
     assert not cc.ja_indexado(con, dict(reg, caso="Z Vs. W"), com_texto=False)
+
+
+# --- SS: a RESOLUÇÃO é o documento, não o caso ----------------------------
+#
+# Perda medida em 18/09/2026, com 545 documentos: os 903 registros do catálogo
+# SS colapsam em 358 nomes de caso distintos, porque um mesmo caso tem várias
+# resoluções de supervisão ao longo dos anos. Sem a data na chave, cada
+# resolução nova ATUALIZAVA a anterior.
+#
+# A consequência não é só perder linha: a ficha reporta o estado do
+# CUMPRIMENTO a partir da série SS, e informá-lo por uma resolução de 2013
+# havendo uma de 2024 é afirmação falsa sobre o presente.
+
+
+def test_duas_resolucoes_do_MESMO_caso_sao_documentos_distintos(con):
+    """*Vicky Hernández* tem 3 resoluções; *Atenco*, 4. Todas do mesmo caso."""
+    base = {"tipo": "SS", "serie": None, "numero": None,
+            "caso": "Vicky Hernández y otras Vs. Honduras", "etapa": None,
+            "estado": None, "url": ""}
+
+    cc.indexar_metadado(con, dict(base, data="2022-11-22"))
+    cc.indexar_metadado(con, dict(base, data="2023-06-14"))
+    cc.indexar_metadado(con, dict(base, data="2024-09-03"))
+
+    linhas = con.execute(
+        "SELECT data FROM documento WHERE tipo='SS' ORDER BY data").fetchall()
+    assert [r["data"] for r in linhas] == ["2022-11-22", "2023-06-14",
+                                           "2024-09-03"], (
+        "resoluções distintas do mesmo caso têm de ser linhas distintas")
+
+
+def test_a_MESMA_resolucao_nao_duplica(con):
+    """Idempotência preservada: mesma data, mesma linha."""
+    reg = {"tipo": "SS", "serie": None, "numero": None,
+           "caso": "Baena Ricardo y otros Vs. Panamá", "etapa": None,
+           "data": "2013-03-20", "estado": None, "url": ""}
+    cc.indexar_metadado(con, reg)
+    cc.indexar_metadado(con, reg)
+    assert con.execute(
+        "SELECT COUNT(*) FROM documento WHERE tipo='SS'").fetchone()[0] == 1
+    assert cc.ja_indexado(con, reg, com_texto=False)
+
+
+def test_resolucao_de_OUTRA_data_nao_conta_como_indexada(con):
+    """O sintoma exato da perda: a segunda resolução saía como já indexada."""
+    reg = {"tipo": "SS", "serie": None, "numero": None,
+           "caso": "Jenkins Vs. Argentina", "etapa": None,
+           "data": "2020-05-12", "estado": None, "url": ""}
+    cc.indexar_metadado(con, reg)
+    assert cc.ja_indexado(con, reg, com_texto=False)
+
+    outra_data = dict(reg, data="2023-11-30")
+    assert not cc.ja_indexado(con, outra_data, com_texto=False), (
+        "resolução de outra data não está indexada")
+    cc.indexar_metadado(con, outra_data)
+    assert con.execute(
+        "SELECT COUNT(*) FROM documento WHERE tipo='SS'").fetchone()[0] == 2
+
+
+def test_a_data_NAO_entra_na_chave_quando_ha_autuacao(con):
+    """Havendo série e número, eles são a identidade.
+
+    Acrescentar a data ali faria uma reindexação com data ausente DUPLICAR o
+    julgado — o defeito inverso, e pior, porque atinge os casos contenciosos,
+    que são o acervo citável.
+    """
+    from extrator_paragrafos import Paragrafo
+    doc = indice.inserir_documento(
+        con, serie="C", numero=318, tipo="CC", caso="X Vs. Brasil",
+        estado="Brasil", data="2016-10-20")
+    indice.inserir_paragrafos(con, doc, "por", [Paragrafo(1, "t")])
+
+    # Reindexação SEM data: tem de casar a mesma linha, não criar outra.
+    mesmo = indice.inserir_documento(
+        con, serie="C", numero=318, tipo="CC", caso="X Vs. Brasil",
+        estado=None, data=None)
+    assert mesmo == doc
+    assert con.execute(
+        "SELECT COUNT(*) FROM documento WHERE tipo='CC'").fetchone()[0] == 1
+    # E a data preexistente não se perde (COALESCE).
+    assert con.execute(
+        "SELECT data FROM documento WHERE id = ?", (doc,)
+    ).fetchone()["data"] == "2016-10-20"

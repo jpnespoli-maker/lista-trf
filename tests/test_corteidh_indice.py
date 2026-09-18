@@ -472,17 +472,35 @@ def test_documento_sem_serie_e_idempotente(con):
     """`UNIQUE` não casa NULL com NULL, então o `ON CONFLICT` não disparava
     para documento sem série — resolução de supervisão, que é o que a Fase 2
     indexa. Duplicava a cada reindexação E gravava a atualização numa linha
-    órfã, com o `id` devolvido apontando para a versão velha."""
+    órfã, com o `id` devolvido apontando para a versão velha.
+
+    CENÁRIO CORRIGIDO em 18/09/2026, e a correção é de PREMISSA, não de
+    rigor. A versão original deste teste usava duas DATAS DIFERENTES e
+    afirmava que produziam UMA linha, com a segunda data sobrescrevendo. Isso
+    tratava "mesmo caso, data diferente" como o mesmo documento — e é
+    justamente essa suposição que perdia 545 resoluções: um caso tem várias
+    resoluções de supervisão ao longo dos anos (*Vicky Hernández y otras Vs.
+    Honduras* tem 3), e cada uma é documento próprio. Ver
+    `test_corteidh_fase2.py::test_duas_resolucoes_do_MESMO_caso_sao_documentos_distintos`.
+
+    O que este teste MEDIU e continua medindo é a idempotência do `NULL` na
+    chave: reindexar o MESMO documento reaproveita a linha, e a atualização
+    pousa na linha que o `id` aponta, nunca numa órfã. Só o cenário mudou,
+    para não conflar resolução com caso.
+    """
     comum = dict(serie=None, numero=None, tipo="SS",
-                 caso="Gomes Lund e outros Vs. Brasil")
-    a = indice.inserir_documento(con, estado="Brasil", data="2021-11-19", **comum)
-    b = indice.inserir_documento(con, estado="Brasil", data="2022-06-01", **comum)
+                 caso="Gomes Lund e outros Vs. Brasil", data="2021-11-19")
+    a = indice.inserir_documento(con, estado="Brasil", **comum)
+    b = indice.inserir_documento(con, estado=None, **comum)
 
     assert a == b, "a segunda chamada tem de reaproveitar a mesma linha"
     assert con.execute("SELECT COUNT(*) FROM documento").fetchone()[0] == 1
-    # e a atualização foi para a linha que o id aponta, não para uma órfã
-    assert con.execute("SELECT data FROM documento WHERE id = ?",
-                       (a,)).fetchone()["data"] == "2022-06-01"
+    # A atualização foi para a linha que o id aponta, não para uma órfã — e o
+    # `estado` preexistente sobrevive ao `None` da segunda chamada (COALESCE).
+    linha = con.execute("SELECT data, estado FROM documento WHERE id = ?",
+                        (a,)).fetchone()
+    assert linha["data"] == "2021-11-19"
+    assert linha["estado"] == "Brasil"
 
 
 def test_reindexacao_parcial_nao_some_com_os_outros_paragrafos(con):
