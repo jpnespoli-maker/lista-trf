@@ -504,3 +504,29 @@ def test_estado_com_DOIS_separadores_pega_o_ULTIMO():
     ÚLTIMO separador, não do primeiro.
     """
     assert cc.estado_do_caso("A Vs. B Vs. Chile") == "Chile"
+
+
+def test_url_sem_sufixo_e_PULADO_nao_FALHA(con, tmp_path):
+    """Decisão declarada não é erro, e o `rc` não sobe por ela.
+
+    Medido no fecho da corrida de 18/09/2026: o registro 598 do catálogo de
+    CASOS CONTENCIOSOS é *Tabares Toro y otros Vs. Colombia*, cuja URL é
+    `docs/supervisiones/...` — uma resolução de supervisão que o buscador
+    oficial classifica como CC, e que por isso não tem variantes por idioma.
+
+    Contado como FALHA, ele fazia o `rc` sair 1 numa corrida que varreu os 598
+    sem um único erro de rede. "Falha" diz que a fonte não respondeu; aqui ela
+    respondeu tudo o que tinha. E `rc` que sobe por decisão declarada treina
+    quem chama a ignorar o `rc` — que é o oposto do que ele serve.
+    """
+    reg = {"tipo": "CC", "serie": None, "numero": None,
+           "caso": "Tabares Toro y otros Vs. Colombia", "etapa": None,
+           "data": "2026-03-09", "estado": "Colombia",
+           "url": "https://corteidh.or.cr/docs/supervisiones/tabares_toro_09_03_26.pdf"}
+
+    rel = cc.indexar_do_catalogo(con, reg, pasta_texto=tmp_path)
+    assert rel["pulado"], rel
+    assert rel["erro"] is None, "decisão declarada não é erro"
+    assert "sufixo de idioma" in rel["pulado"]
+    # E nada entrou no índice: documento pela metade é pior que ausente.
+    assert con.execute("SELECT COUNT(*) FROM documento").fetchone()[0] == 0

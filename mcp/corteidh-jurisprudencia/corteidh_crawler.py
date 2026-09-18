@@ -606,6 +606,23 @@ def indexar_do_catalogo(con, registro: dict, *, pasta_texto: Path,
         idioma, corpo, url = baixar_do_catalogo(
             registro["url"], pausa_s=pausa_s)
     except baixador.PdfInvalido as e:
+        # URL SEM SUFIXO DE IDIOMA é PULADO, não FALHA — e a distinção é a
+        # mesma que o `indexar_documento` já faz para número não confirmado.
+        # "Falha" diz que a fonte não respondeu; aqui a fonte respondeu tudo o
+        # que tinha, e o documento é que não é do tipo que se baixa por idioma.
+        #
+        # Medido no fecho da corrida de 18/09/2026: o registro 598 do catálogo
+        # de CASOS CONTENCIOSOS é *Tabares Toro y otros Vs. Colombia*, cuja URL
+        # é `docs/supervisiones/tabares_toro_09_03_26.pdf` — uma resolução de
+        # supervisão que o buscador oficial classifica como CC. Contado como
+        # falha, ele fazia o `rc` sair 1 numa corrida que varreu os 598 sem um
+        # único erro de rede, e `rc` que sobe por decisão declarada treina quem
+        # chama a ignorar o `rc`.
+        if "URL sem sufixo de idioma" in str(e):
+            return {"caso": registro["caso"], "erro": None, "idioma": None,
+                    "n_paragrafos": 0, "lacunas": [],
+                    "pulado": "URL sem sufixo de idioma — o catálogo o lista "
+                              "neste tipo, mas é documento de outro"}
         return {"caso": registro["caso"], "erro": str(e), "idioma": None,
                 "n_paragrafos": 0, "lacunas": []}
 
