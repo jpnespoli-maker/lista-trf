@@ -212,6 +212,8 @@ def main(argv=None) -> int:
     p.add_argument("--pasta-texto", default=str(PASTA_TEXTO_PADRAO))
     p.add_argument("--glossario", action="store_true",
                    help="só semeia o glossário pt->es/en/fr (não vai à rede)")
+    p.add_argument("--backfill-estado", action="store_true",
+                   help="preenche `estado` do NOME nos ja indexados (sem rede)")
     p.add_argument("--fase2", action="store_true",
                    help="acervo COMPLETO pelo catálogo oficial (horas de rede)")
     p.add_argument("--tipos", default="CC,OC,SS",
@@ -222,8 +224,24 @@ def main(argv=None) -> int:
                    help="pausa entre idiomas da cascata, em segundos")
     args = p.parse_args(argv)
 
-    if not (args.semear or args.censo or args.glossario or args.fase2):
-        p.error("informe --semear, --censo, --glossario ou --fase2")
+    if not (args.semear or args.censo or args.glossario or args.fase2
+            or args.backfill_estado):
+        p.error("informe --semear, --censo, --glossario, --fase2 "
+                "ou --backfill-estado")
+
+    if args.backfill_estado:
+        con = indice.abrir(args.banco)
+        indice.criar_schema(con)
+        r = backfill_estado(con)
+        por_estado = con.execute(
+            "SELECT estado, COUNT(*) n FROM documento WHERE estado IS NOT NULL"
+            " GROUP BY estado ORDER BY n DESC LIMIT 8").fetchall()
+        con.close()
+        print(f"candidatos (estado nulo) : {r['candidatos']}")
+        print(f"preenchidos              : {r['preenchidos']}")
+        print(f"sem Estado no nome       : {r['sem_estado_no_nome']}")
+        print("maiores:", {x["estado"]: x["n"] for x in por_estado})
+        return 0
 
     if args.fase2:
         return _fase2(args)
@@ -427,8 +445,45 @@ def iso_da_data_espanhola(bruta: str | None) -> str | None:
     return f"{m.group(3)}-{mes}-{int(m.group(1)):02d}"
 
 
+def estado_do_caso(caso: str | None) -> str | None:
+    """Estado demandado, LIDO do nome do caso. None quando não há.
+
+    REVERSÃO DECLARADA de uma decisão minha de 18/09/2026. Eu havia deixado
+    `estado=None` argumentando que tirá-lo do sufixo "Vs. <país>" seria
+    INFERÊNCIA. Medindo a consequência, o enquadramento estava errado: o Estado
+    demandado **está** no nome — "Vs. Brasil" é a designação que a própria
+    Corte dá ao caso, e o `titulo_catalogo` já parseia exatamente esse trecho
+    para isolar o nome. Ler campo estruturado não é inferir.
+
+    O que a decisão errada custava, medido: o filtro `estado="Brasil"` devolvia
+    **12** documentos — só os semeados à mão — enquanto o acervo já tinha
+    outros casos brasileiros (*Comunidades Quilombolas de Alcântara*, *Muniz Da
+    Silva*). Resultado curto se lê como ausência de precedente, que é o modo de
+    falha que este subsistema inteiro existe para evitar.
+
+    Parecer consultivo não tem parte demandada e não tem `Vs.`: devolve None, e
+    `None` continua sendo ignorância declarada onde ela é real.
+    """
+    if not caso:
+        return None
+    # O ÚLTIMO `Vs.` é o que separa: nome composto pode trazer mais de um
+    # (*Manuela y otros Vs. El Salvador* é o único dos 598 com dois, e ali o
+    # segundo é a repetição do cabeçalho — mas aqui operamos sobre o nome JÁ
+    # isolado, onde só resta o separador verdadeiro).
+    partes = re.split(r"\s+Vs\.\s+", caso)
+    if len(partes) < 2:
+        return None
+    estado = partes[-1].strip().rstrip(".").strip()
+    # Um nome de país não tem dígito nem passa de ~40 caracteres; recusar o que
+    # não parece país é melhor que gravar lixo num campo de filtro, porque
+    # filtro com lixo devolve vazio e vazio se lê como ausência.
+    if not estado or len(estado) > 40 or re.search(r"[0-9]", estado):
+        return None
+    return estado
+
+
 def registro_do_catalogo(bruto: dict, tipo: str) -> dict:
-    """Registro do catálogo com nome e etapa decompostos do título."""
+    """Registro do catálogo com nome, etapa e Estado decompostos do título."""
     partes = titulo_catalogo.decompor(bruto.get("titulo", ""), tipo=tipo)
     return {
         "tipo": tipo,
@@ -437,11 +492,10 @@ def registro_do_catalogo(bruto: dict, tipo: str) -> dict:
         "serie": bruto.get("serie"),
         "numero": bruto.get("numero"),
         "data": iso_da_data_espanhola(bruto.get("data")),
-        # O catálogo NÃO devolve o Estado em coluna própria. Deixar `None` é
-        # declarar que não se sabe; extraí-lo do sufixo "Vs. <país>" do nome
-        # seria inferência, e o filtro `estado` da busca passaria a operar
-        # sobre dado inferido sem dizê-lo.
-        "estado": None,
+        # LIDO do nome, não inferido — ver `estado_do_caso`. Vem na grafia
+        # espanhola do catálogo ("Perú", "México"); o filtro da busca compara
+        # sem acento e sem caixa, justamente para que "Peru" case com "Perú".
+        "estado": estado_do_caso(partes["caso"]),
         "url": bruto.get("url", ""),
     }
 
@@ -698,6 +752,34 @@ def _fase2(args) -> int:
     # retomada funcionando. Fazer o rc subir por eles treinaria quem chama a
     # ignorar o rc.
     return 1 if total["falhas"] else 0
+
+
+def backfill_estado(con) -> dict:
+    """Preenche `estado` a partir do NOME nos documentos que o têm nulo.
+
+    Existe porque a decisão errada (`estado=None`) já gravou 567 documentos, e
+    reprocessá-los pela rede custaria horas para um dado que está no nome que
+    já temos em disco. Não vai à rede.
+
+    NÃO sobrescreve `estado` já preenchido: os 12 semeados à mão trazem o nome
+    do Estado em PORTUGUÊS ("Brasil"), e o catálogo o traz em espanhol — para
+    "Brasil" dá no mesmo, mas a regra vale por princípio: curadoria existente
+    não se troca por leitura automática.
+    """
+    alvos = con.execute(
+        "SELECT id, caso FROM documento WHERE estado IS NULL").fetchall()
+    tocados = sem_estado = 0
+    for linha in alvos:
+        estado = estado_do_caso(linha["caso"])
+        if estado is None:
+            sem_estado += 1
+            continue
+        con.execute("UPDATE documento SET estado = ? WHERE id = ?",
+                    (estado, linha["id"]))
+        tocados += 1
+    con.commit()
+    return {"candidatos": len(alvos), "preenchidos": tocados,
+            "sem_estado_no_nome": sem_estado}
 
 
 if __name__ == "__main__":

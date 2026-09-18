@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import unicodedata
 from pathlib import Path
 
 CAMINHO_PADRAO = (
@@ -105,7 +106,34 @@ def abrir(caminho: Path | str | None = None) -> sqlite3.Connection:
     con = sqlite3.connect(destino)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
+    # O Estado demandado é gravado na grafia do catálogo, que é ESPANHOLA —
+    # "Perú", "México", "Panamá". Quem consulta escreve em português e muitas
+    # vezes sem acento, e `d.estado = 'Peru'` não casaria "Perú": o filtro
+    # devolveria VAZIO, que neste subsistema se lê como ausência de precedente.
+    # Comparar sem acento e sem caixa é o que faz o filtro responder ao que se
+    # pergunta. O valor GRAVADO continua sendo o original, intocado.
+    con.create_function("SEM_ACENTO", 1, _sem_acento, deterministic=True)
     return con
+
+
+def _sem_acento(texto):
+    """Minúsculas e sem diacrítico; `None` atravessa como `None`.
+
+    Registrada como função SQL, para o filtro de Estado comparar "Peru" com
+    "Perú".
+
+    O `None` é DEFENSIVO, não sustenta comportamento — e digo isto porque a
+    versão anterior desta docstring afirmava que ele "precisa" devolver `None`
+    para que `SEM_ACENTO(NULL)` nunca case. Medido em 18/09/2026, devolvendo
+    `""` no lugar: **zero** diferenças observáveis em 13 formas de consulta. A
+    razão é que `buscar` só aplica o filtro quando `estado` é truthy, e tanto
+    `NULL = 'brasil'` quanto `'' = 'brasil'` são falsos. Mantém-se o `None` por
+    ser a semântica SQL convencional para entrada nula, não por carregar peso.
+    """
+    if texto is None:
+        return None
+    nfkd = unicodedata.normalize("NFKD", str(texto))
+    return "".join(c for c in nfkd if not unicodedata.combining(c)).lower()
 
 
 def criar_schema(con: sqlite3.Connection) -> None:
@@ -362,7 +390,8 @@ def buscar(
     ]
     args: list = [_para_fts(consulta)]
     if estado:
-        sql.append(" AND d.estado = ?"); args.append(estado)
+        sql.append(" AND SEM_ACENTO(d.estado) = SEM_ACENTO(?)")
+        args.append(estado)
     if tipo:
         sql.append(" AND d.tipo = ?"); args.append(tipo)
     if ano_de:

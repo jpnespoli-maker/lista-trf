@@ -132,18 +132,30 @@ def test_registro_compoe_do_titulo():
     assert r["tipo"] == "CC"
 
 
-def test_registro_NAO_infere_o_estado():
-    """O catálogo não devolve o Estado em coluna própria.
+def test_registro_LE_o_estado_do_nome():
+    """REVERSÃO DECLARADA, em 18/09/2026, de uma decisão minha do mesmo dia.
 
-    Extraí-lo do sufixo "Vs. <país>" seria INFERÊNCIA, e o filtro `estado` da
-    busca passaria a operar sobre dado inferido sem dizê-lo. `None` declara
-    que não se sabe.
+    A versão anterior deste teste se chamava `test_registro_NAO_infere_o_estado`
+    e exigia `estado is None`, com o argumento de que tirá-lo do sufixo
+    "Vs. <país>" seria INFERÊNCIA. O enquadramento estava errado: o Estado
+    demandado **está** no nome — "Vs. Venezuela" é a designação que a própria
+    Corte dá ao caso —, e o `titulo_catalogo` já parseia esse mesmo trecho para
+    isolar o nome. Ler campo estruturado não é inferir.
+
+    O que a decisão errada custava, MEDIDO: o filtro `estado="Brasil"` devolvia
+    **12** documentos (só os semeados à mão) com o acervo já contendo outros
+    casos brasileiros — *Comunidades Quilombolas de Alcântara*, *Muniz Da
+    Silva*. Resultado curto se lê como ausência de precedente, que é o modo de
+    falha que este subsistema existe para evitar.
+
+    O guard anterior reprovou esta mudança, e foi ele que forçou a reversão a
+    ser declarada em vez de silenciosa — que é exatamente o seu ofício.
     """
     bruto = {"titulo": "Casos Contenciosos Corte IDH. Caso X Vs. Venezuela. "
                        "Fondo. Sentencia de 1 de enero de 2020.",
              "url": "", "data": "1 de enero de 2020", "serie": "C",
              "numero": 1}
-    assert cc.registro_do_catalogo(bruto, "CC")["estado"] is None
+    assert cc.registro_do_catalogo(bruto, "CC")["estado"] == "Venezuela"
 
 
 # --- retomada --------------------------------------------------------------
@@ -382,3 +394,113 @@ def test_a_data_NAO_entra_na_chave_quando_ha_autuacao(con):
     assert con.execute(
         "SELECT data FROM documento WHERE id = ?", (doc,)
     ).fetchone()["data"] == "2016-10-20"
+
+
+# --- o Estado demandado está NO NOME, e o filtro tem de achá-lo ------------
+#
+# REVERSÃO DECLARADA de uma decisão de 18/09/2026. Eu deixara `estado=None`
+# chamando a extração de INFERÊNCIA. O enquadramento estava errado: "Vs.
+# Brasil" é a designação que a própria Corte dá ao caso, e o decompositor já
+# parseia esse mesmo trecho. Ler campo estruturado não é inferir.
+#
+# Custo medido da decisão errada: `estado="Brasil"` devolvia 12 documentos — os
+# semeados à mão — com o acervo já contendo outros casos brasileiros. Resultado
+# curto se lê como ausência de precedente.
+
+
+@pytest.mark.parametrize("caso,esperado", [
+    ("Ximenes Lopes Vs. Brasil", "Brasil"),
+    ("Velásquez Paiz y otros Vs. Guatemala", "Guatemala"),
+    ("Manuela y otros Vs. El Salvador", "El Salvador"),
+    ("Quispialaya Vilcapoma Vs. Perú", "Perú"),
+    ("Asociación Nacional de Cesantes (ANCEJUB-SUNAT) Vs. Perú", "Perú"),
+])
+def test_estado_sai_do_nome(caso, esperado):
+    assert cc.estado_do_caso(caso) == esperado
+
+
+@pytest.mark.parametrize("sem_estado", [
+    None, "", "Emergencia Climática y Derechos Humanos",
+    "Condición jurídica y derechos de los migrantes indocumentados",
+])
+def test_parecer_consultivo_NAO_tem_estado(sem_estado):
+    """Parecer não tem parte demandada e não tem `Vs.`. `None` continua sendo
+    ignorância declarada onde a ignorância é real."""
+    assert cc.estado_do_caso(sem_estado) is None
+
+
+@pytest.mark.parametrize("lixo", [
+    "X Vs. Serie C No. 441",          # autuação vazada
+    "X Vs. " + "a" * 60,              # longo demais para ser país
+])
+def test_recusa_o_que_NAO_parece_pais(lixo):
+    """Gravar lixo num campo de FILTRO é pior que deixá-lo nulo: filtro com
+    lixo devolve vazio, e vazio se lê como ausência de precedente."""
+    assert cc.estado_do_caso(lixo) is None
+
+
+def test_registro_do_catalogo_agora_traz_o_estado():
+    bruto = {"titulo": "Casos Contenciosos Corte IDH. Caso Ygarza y otros Vs. "
+                       "Venezuela. Excepciones Preliminares. Sentencia de 14 "
+                       "de mayo de 2026. Serie C No. 595.",
+             "url": "", "data": "14 de mayo de 2026", "serie": "C",
+             "numero": 595}
+    assert cc.registro_do_catalogo(bruto, "CC")["estado"] == "Venezuela"
+
+
+def test_filtro_de_estado_TOLERA_ACENTO(con):
+    """O catálogo grava "Perú"; quem consulta digita "Peru".
+
+    Sem tolerância, o filtro devolveria VAZIO — e vazio aqui se lê como
+    ausência de precedente, que é o modo de falha que o subsistema combate.
+    """
+    from extrator_paragrafos import Paragrafo
+    doc = indice.inserir_documento(
+        con, serie="C", numero=500, tipo="CC", caso="X Vs. Perú",
+        estado="Perú", data="2020-01-01")
+    indice.inserir_paragrafos(con, doc, "esp", [
+        Paragrafo(1, "El derecho a la vida es inderogable.")])
+
+    for escrito in ("Perú", "Peru", "PERU", "perú"):
+        achados = indice.buscar(con, consulta="derecho", estado=escrito)
+        assert achados, f"o filtro nao achou com estado={escrito!r}"
+
+    # E continua DISCRIMINANDO: outro país não casa.
+    assert indice.buscar(con, consulta="derecho", estado="Brasil") == []
+
+
+def test_backfill_preenche_sem_sobrescrever_curadoria(con):
+    """Não vai à rede, e não troca curadoria existente por leitura automática."""
+    a = indice.inserir_documento(
+        con, serie="C", numero=601, tipo="CC", caso="Novo Vs. Colombia",
+        estado=None, data="2024-01-01")
+    b = indice.inserir_documento(
+        con, serie="C", numero=149, tipo="CC",
+        caso="Ximenes Lopes Vs. Brasil", estado="Brasil", data="2006-07-04")
+    c_oc = indice.inserir_documento(
+        con, serie="A", numero=18, tipo="OC", caso="Condição Jurídica",
+        estado=None, data="2003-09-17")
+
+    r = cc.backfill_estado(con)
+    assert r["preenchidos"] == 1
+    assert r["sem_estado_no_nome"] == 1          # o parecer
+
+    def estado(i):
+        return con.execute("SELECT estado FROM documento WHERE id=?",
+                           (i,)).fetchone()["estado"]
+
+    assert estado(a) == "Colombia"
+    assert estado(b) == "Brasil", "curadoria existente nao se sobrescreve"
+    assert estado(c_oc) is None, "parecer continua sem Estado"
+
+
+def test_estado_com_DOIS_separadores_pega_o_ULTIMO():
+    """Especifica a escolha `partes[-1]`, que uma mutação revelou não estar
+    especificada.
+
+    Todos os nomes reais isolados têm UM `Vs.`, então `partes[1]` e
+    `partes[-1]` dão o mesmo resultado e a mutação sobrevivia — o teste não
+    discriminava. Este caso fixa a semântica: o Estado é o que vem depois do
+    ÚLTIMO separador, não do primeiro.
+    """
+    assert cc.estado_do_caso("A Vs. B Vs. Chile") == "Chile"
