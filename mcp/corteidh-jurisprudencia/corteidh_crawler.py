@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 
 import baixador
+import cadernos
 import extrator_paragrafos as ep
 import indice
 import titulo_catalogo
@@ -214,6 +215,10 @@ def main(argv=None) -> int:
                    help="só semeia o glossário pt->es/en/fr (não vai à rede)")
     p.add_argument("--backfill-estado", action="store_true",
                    help="preenche `estado` do NOME nos ja indexados (sem rede)")
+    p.add_argument("--temas", action="store_true",
+                   help="semeia o mapa tematico pelos Cadernos (vai a rede)")
+    p.add_argument("--cadernos", default=None,
+                   help="numeros de caderno a semear, separados por virgula")
     p.add_argument("--fase2", action="store_true",
                    help="acervo COMPLETO pelo catálogo oficial (horas de rede)")
     p.add_argument("--tipos", default="CC,OC,SS",
@@ -225,9 +230,25 @@ def main(argv=None) -> int:
     args = p.parse_args(argv)
 
     if not (args.semear or args.censo or args.glossario or args.fase2
-            or args.backfill_estado):
-        p.error("informe --semear, --censo, --glossario, --fase2 "
-                "ou --backfill-estado")
+            or args.backfill_estado or args.temas):
+        p.error("informe --semear, --censo, --glossario, --fase2, "
+                "--backfill-estado ou --temas")
+
+    if args.temas:
+        con = indice.abrir(args.banco)
+        indice.criar_schema(con)
+        so = None
+        if args.cadernos:
+            so = {int(x) for x in args.cadernos.split(",") if x.strip()}
+        r = semear_temas(con, so_numeros=so)
+        print()
+        for k in ("cadernos", "documentos", "paragrafos", "fora_do_indice",
+                  "pulados", "falhas"):
+            print(f"  {k:<16} {r[k]}")
+        for linha in indice.temas_disponiveis(con):
+            print(f"    {linha['tema'][:34]:<34} {linha['n_documentos']:>3} docs")
+        con.close()
+        return 1 if r["falhas"] else 0
 
     if args.backfill_estado:
         con = indice.abrir(args.banco)
@@ -797,6 +818,92 @@ def backfill_estado(con) -> dict:
     con.commit()
     return {"candidatos": len(alvos), "preenchidos": tocados,
             "sem_estado_no_nome": sem_estado}
+
+
+# ===========================================================================
+# FASE 3 — mapa temático semeado pelos CADERNOS DE JURISPRUDÊNCIA
+# ===========================================================================
+
+
+def semear_tema_de_caderno(con, caderno: dict, *, sessao=None) -> dict:
+    """Baixa UM Caderno, lê quem a Corte citou nele e semeia o eixo.
+
+    Só associa documento que JÁ ESTÁ no índice. Um Caderno cita decisões de
+    todo o acervo, inclusive as que a Fase 2 não trouxe (supervisões, medidas
+    provisórias) — criar linha de `documento` a partir de uma citação seria
+    inventar registro a partir de referência, com nome e data que ninguém
+    conferiu. O que não casa sai contado, não silenciado.
+    """
+    url = cadernos.url_do_caderno(caderno)
+    try:
+        corpo = baixador.baixar_pdf(url, sessao=sessao, tentativas=2)
+    except baixador.PdfInvalido as e:
+        return {"caderno": caderno["numero"], "erro": str(e),
+                "documentos": 0, "paragrafos": 0, "fora_do_indice": 0}
+
+    texto = ep.extrair_texto_pdf(corpo)
+    if len(texto) < 5000:
+        # PDF sem camada de texto: categoria própria, não falha de rede. As
+        # condutas são opostas — esta pediria OCR, aquela pediria repetir.
+        return {"caderno": caderno["numero"], "erro": None,
+                "documentos": 0, "paragrafos": 0, "fora_do_indice": 0,
+                "pulado": f"PDF sem camada de texto ({len(texto)} chars)"}
+
+    consolidado = cadernos.consolidar(texto)
+    fonte = cadernos.fonte_do_caderno(caderno)
+    tema = caderno["rotulo"]
+
+    docs = pars = fora = 0
+    for (serie, numero), dados in consolidado.items():
+        linha = con.execute(
+            "SELECT id FROM documento WHERE serie = ? AND numero = ?"
+            " AND n_paragrafos > 0", (serie, numero)).fetchone()
+        if linha is None:
+            fora += 1
+            continue
+        pars += indice.inserir_tema(
+            con, linha["id"], tema, fonte=fonte,
+            em=time.strftime("%Y-%m-%d"),
+            paragrafos=dict(dados["paragrafos"]),
+            n_citacoes=dados["mencoes"])
+        docs += 1
+    con.commit()
+    return {"caderno": caderno["numero"], "tema": tema, "erro": None,
+            "documentos": docs, "paragrafos": pars, "fora_do_indice": fora,
+            "citados": len(consolidado)}
+
+
+def semear_temas(con, *, so_numeros=None, pausa_s: float = 2.0) -> dict:
+    """Semeia todos os Cadernos catalogados. Vai à rede."""
+    import buscador_oficial as bo
+    ses = bo._sessao_padrao()
+    alvos = [c for c in cadernos.CADERNOS
+             if not so_numeros or c["numero"] in so_numeros]
+    total = {"cadernos": 0, "documentos": 0, "paragrafos": 0,
+             "fora_do_indice": 0, "falhas": 0, "pulados": 0}
+    for i, caderno in enumerate(alvos, 1):
+        if i > 1 and pausa_s:
+            time.sleep(pausa_s)
+        r = semear_tema_de_caderno(con, caderno, sessao=ses)
+        if r.get("pulado"):
+            total["pulados"] += 1
+            print(f"[{i}/{len(alvos)}] PULADO caderno {r['caderno']}: "
+                  f"{r['pulado']}", flush=True)
+            continue
+        if r["erro"]:
+            total["falhas"] += 1
+            print(f"[{i}/{len(alvos)}] FALHA caderno {r['caderno']}: "
+                  f"{r['erro'][:110]}", flush=True)
+            continue
+        total["cadernos"] += 1
+        total["documentos"] += r["documentos"]
+        total["paragrafos"] += r["paragrafos"]
+        total["fora_do_indice"] += r["fora_do_indice"]
+        print(f"[{i}/{len(alvos)}] caderno {r['caderno']:>2} "
+              f"({r['tema'][:30]:<30}) {r['documentos']:>3} docs, "
+              f"{r['paragrafos']:>4} pars, {r['fora_do_indice']:>3} fora",
+              flush=True)
+    return total
 
 
 if __name__ == "__main__":

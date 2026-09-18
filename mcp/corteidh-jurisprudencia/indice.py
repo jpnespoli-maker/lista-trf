@@ -68,7 +68,28 @@ CREATE TABLE IF NOT EXISTS tema (
   tema TEXT NOT NULL,
   fonte TEXT NOT NULL,        -- procedência obrigatória: nada entra sem ela
   em TEXT,
+  -- Quantas vezes o Caderno citou este documento no eixo. É medida de PESO
+  -- declarada, não ranking inventado: quem lê sabe que 23 citações e 1
+  -- citação não valem o mesmo, e sabe de onde o número veio.
+  n_citacoes INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (documento_id, tema)
+);
+-- Os parágrafos que o Caderno citou daquele documento naquele eixo.
+--
+-- Tabela PRÓPRIA, e não uma coluna `paragrafo_chave`, porque a medição de
+-- 18/09/2026 REFUTOU a suposição da spec §6.3 de que haveria um parágrafo
+-- destacado por caso: no Caderno 36 (Brasil), apenas 2 dos 11 documentos têm
+-- parágrafo dominante; o C-353 é citado 23 vezes em 20 parágrafos DISTINTOS.
+-- Eleger "o" parágrafo-chave ali seria arbítrio com aparência de curadoria —
+-- quem lesse o campo entenderia que a Corte destacou aquela passagem.
+-- Guardam-se todos, com a contagem de cada um, e a ponderação fica com quem
+-- redige.
+CREATE TABLE IF NOT EXISTS tema_paragrafo (
+  documento_id INTEGER NOT NULL REFERENCES documento(id),
+  tema TEXT NOT NULL,
+  paragrafo INTEGER NOT NULL,
+  vezes INTEGER NOT NULL DEFAULT 1,
+  PRIMARY KEY (documento_id, tema, paragrafo)
 );
 CREATE TABLE IF NOT EXISTS reparacao (
   documento_id INTEGER NOT NULL REFERENCES documento(id),
@@ -159,6 +180,11 @@ def _migrar(con: sqlite3.Connection) -> list[str]:
         con.execute("ALTER TABLE glossario ADD COLUMN fonte TEXT NOT NULL "
                     "DEFAULT 'curadoria'")
         feitas.append("glossario.fonte")
+    colunas = {r["name"] for r in con.execute("PRAGMA table_info(tema)")}
+    if colunas and "n_citacoes" not in colunas:
+        con.execute("ALTER TABLE tema ADD COLUMN n_citacoes INTEGER NOT NULL "
+                    "DEFAULT 0")
+        feitas.append("tema.n_citacoes")
     return feitas
 
 
@@ -632,3 +658,97 @@ def expandir_consulta(con: sqlite3.Connection, consulta: str) -> tuple[str, list
             i += 1
 
     return " ".join(saida), expansoes
+
+
+# ---------------------------------------------------------------------------
+# Mapa temático — semeado pelos Cadernos de Jurisprudência da Corte
+# ---------------------------------------------------------------------------
+
+
+def inserir_tema(con, documento_id: int, tema: str, *, fonte: str,
+                 em: str | None = None, paragrafos=None,
+                 n_citacoes: int = 0) -> int:
+    """Associa um documento a um eixo temático. Idempotente.
+
+    `fonte` é OBRIGATÓRIA e não tem default: o mapa temático só vale porque
+    cada linha diz de onde veio. Uma associação sem procedência é palpite com
+    aparência de curadoria, e é exatamente o que a spec §6.3 proíbe.
+
+    `paragrafos` é um mapa {numero: vezes} — todos os que o Caderno citou, e
+    não um "parágrafo-chave" eleito. Ver a docstring de `cadernos.py`: a
+    medição mostrou que em 9 de 11 documentos a distribuição é plana, e
+    escolher um seria arbítrio.
+    """
+    if not fonte or not str(fonte).strip():
+        raise ValueError("tema sem procedência: `fonte` é obrigatória")
+    con.execute(
+        "INSERT INTO tema (documento_id, tema, fonte, em, n_citacoes)"
+        " VALUES (?,?,?,?,?)"
+        " ON CONFLICT(documento_id, tema) DO UPDATE SET"
+        "   fonte=excluded.fonte, em=excluded.em,"
+        "   n_citacoes=excluded.n_citacoes",
+        (documento_id, tema, fonte, em, int(n_citacoes)))
+    n = 0
+    for par, vezes in (paragrafos or {}).items():
+        con.execute(
+            "INSERT INTO tema_paragrafo (documento_id, tema, paragrafo, vezes)"
+            " VALUES (?,?,?,?)"
+            " ON CONFLICT(documento_id, tema, paragrafo) DO UPDATE SET"
+            "   vezes=excluded.vezes",
+            (documento_id, tema, int(par), int(vezes)))
+        n += 1
+    return n
+
+
+def temas_disponiveis(con) -> list[dict]:
+    """Os eixos que existem no índice, com quantos documentos cada um tem.
+
+    Existe para que pedir um tema inexistente possa devolver a LISTA em vez de
+    resultado vazio — vazio aqui se leria como "a Corte não tratou disso".
+    """
+    return [dict(r) for r in con.execute(
+        "SELECT tema, COUNT(*) AS n_documentos,"
+        "       SUM(n_citacoes) AS n_citacoes,"
+        "       MIN(fonte) AS fonte"
+        "  FROM tema GROUP BY tema ORDER BY n_documentos DESC")]
+
+
+def mapa_tematico(con, tema: str, *, limite: int = 20) -> list[dict]:
+    """Documentos do eixo, do mais citado no Caderno ao menos.
+
+    A ordem é por `n_citacoes`, que é dado MEDIDO no Caderno — não é score
+    calculado por mim. Documento citado 23 vezes e documento citado 1 vez
+    aparecem na ordem em que a Corte os tratou naquele eixo, e o número vai
+    junto para que ninguém tome a ordem por juízo de força.
+    """
+    alvo = _sem_acento(tema)
+    linhas = con.execute(
+        "SELECT t.tema, t.fonte, t.em, t.n_citacoes, d.*"
+        "  FROM tema t JOIN documento d ON d.id = t.documento_id"
+        " WHERE SEM_ACENTO(t.tema) = ?"
+        " ORDER BY t.n_citacoes DESC, d.numero"
+        " LIMIT ?", (alvo, int(limite))).fetchall()
+
+    saida = []
+    for r in linhas:
+        pars = con.execute(
+            "SELECT paragrafo, vezes FROM tema_paragrafo"
+            " WHERE documento_id = ? AND tema = ?"
+            " ORDER BY vezes DESC, paragrafo",
+            (r["id"], r["tema"])).fetchall()
+        saida.append({
+            "documento_id": r["id"], "caso": r["caso"], "serie": r["serie"],
+            "numero": r["numero"], "tipo": r["tipo"], "data": r["data"],
+            "estado": r["estado"], "etapa": r["etapa"],
+            "tem_por": bool(r["tem_por"]),
+            "url_por": r["url_por"], "url_esp": r["url_esp"],
+            "url_ing": r["url_ing"], "url_fra": r["url_fra"],
+            "n_paragrafos": r["n_paragrafos"],
+            "tema": r["tema"], "fonte": r["fonte"], "em": r["em"],
+            "n_citacoes": r["n_citacoes"],
+            # TODOS os parágrafos citados, com a contagem — nunca um eleito.
+            "paragrafos_citados": [
+                {"paragrafo": p["paragrafo"], "vezes": p["vezes"]}
+                for p in pars],
+        })
+    return saida

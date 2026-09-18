@@ -416,6 +416,105 @@ async def ficha_caso_corteidh(caso: str) -> str:
     return _ficha_sync(caso=caso)
 
 
+def _mapa_sync(tema: str, max_casos: int = 20) -> str:
+    max_casos = max(1, min(int(max_casos), 60))
+    if not Path(CAMINHO_BANCO).exists():
+        return _erro("indice-ausente",
+                     f"O índice {CAMINHO_BANCO} não existe. Rode: python "
+                     f"mcp/corteidh-jurisprudencia/corteidh_crawler.py --fase2")
+
+    con = indice.abrir(CAMINHO_BANCO)
+    try:
+        linhas = indice.mapa_tematico(con, tema, limite=max_casos)
+        disponiveis = indice.temas_disponiveis(con)
+    finally:
+        con.close()
+
+    # Eixo inexistente devolve a LISTA, não vazio. Vazio aqui se leria como
+    # "a Corte não tratou disso", quando a verdade é "este eixo não foi
+    # compilado em Caderno" — e a diferença muda a tese da peça.
+    if not linhas:
+        nomes = ", ".join(t["tema"] for t in disponiveis) or "(nenhum semeado)"
+        return _erro(
+            "eixo-nao-compilado",
+            f"Não há Caderno de Jurisprudência da Corte IDH sobre "
+            f"'{sanitizar_comentario_xml(tema)}', e por isso este índice não "
+            f"tem mapa desse eixo. ISSO NÃO SIGNIFICA QUE A CORTE NÃO TENHA "
+            f"JULGADO O TEMA — significa que ela não publicou compilação "
+            f"temática dele. Use buscar_corteidh() com os termos do assunto. "
+            f"Eixos compilados: {nomes}.")
+
+    partes = [f'<mapa_tematico tema="{sanitizar_comentario_xml(tema)}" '
+              f'total="{len(linhas)}">']
+    for i, l in enumerate(linhas, 1):
+        url = l.get("url_por") or l.get("url_esp") or l.get("url_ing") or ""
+        cit = citacao.formatar_citacao(
+            caso=l["caso"], data=l["data"] or "", serie=l["serie"],
+            numero=l["numero"], etapa=l.get("etapa"), tipo=l["tipo"], url=url)
+        pars = ", ".join(
+            f'{p["paragrafo"]}' + (f'({p["vezes"]}x)' if p["vezes"] > 1 else "")
+            for p in l["paragrafos_citados"])
+        partes.append(
+            f'  <caso indice="{i}">\n'
+            f'    <nome>{sanitizar_comentario_xml(l["caso"])}</nome>\n'
+            f'    <serie>{l["serie"] or ""}</serie>'
+            f'<numero>{l["numero"] if l["numero"] is not None else ""}</numero>\n'
+            f'    <data>{l["data"] or ""}</data>\n'
+            f'    <estado>{sanitizar_comentario_xml(l.get("estado") or "")}</estado>\n'
+            f'    <tem_versao_portuguesa>{bool(l["tem_por"])}</tem_versao_portuguesa>\n'
+            f'    <citado_no_caderno_vezes>{l["n_citacoes"]}</citado_no_caderno_vezes>\n'
+            f'    <paragrafos_citados>{pars}</paragrafos_citados>\n'
+            f'    <procedencia>{sanitizar_comentario_xml(l["fonte"])}</procedencia>\n'
+            f'    <citacao_sugerida>{sanitizar_comentario_xml(cit)}</citacao_sugerida>\n'
+            f'  </caso>')
+    partes.append(
+        "  <nota>A ORDEM e' o numero de vezes que o Caderno citou cada caso "
+        "no eixo — dado MEDIDO na compilacao da propria Corte, nao score "
+        "calculado por este servidor. NAO ha 'paragrafo-chave': medido em "
+        "18/09/2026, so' 2 de 11 documentos tem paragrafo dominante, entao "
+        "eleger um seria arbitrio com aparencia de curadoria. Saem TODOS os "
+        "paragrafos citados, com a contagem de cada um. O texto de cada "
+        "paragrafo se obtem por buscar_corteidh().</nota>")
+    partes.append("</mapa_tematico>")
+
+    log_query(mcp="corteidh-jurisprudencia", tool="mapa_tematico_corteidh",
+              query=tema, n_resultados=len(linhas), ms=0, filtros={})
+    return "\n".join(partes)
+
+
+@mcp.tool()
+async def mapa_tematico_corteidh(tema: str, max_casos: int = 20) -> str:
+    """
+    Casos que a Corte IDH compilou num EIXO TEMÁTICO, pela curadoria dela
+    própria — os Cadernos de Jurisprudência que a Corte publica por tema.
+
+    Use para descobrir QUAIS precedentes existem num assunto antes de buscar
+    texto. Complementa buscar_corteidh(), que acha PARÁGRAFO por termo; esta
+    acha CASO por eixo.
+
+    PROCEDÊNCIA: toda associação declara o Caderno de origem. Nada aqui é
+    inferido do texto — força relativa de precedente não se extrai por regex, e
+    um mapa automático seria mapa inventado.
+
+    NÃO HÁ "parágrafo-chave": saem TODOS os parágrafos que o Caderno citou, com
+    a contagem de cada um. Medido em 18/09/2026, apenas 2 de 11 documentos têm
+    parágrafo dominante — eleger um seria arbítrio com aparência de curadoria.
+
+    Args:
+        tema: eixo ("Brasil", "povos indígenas", "mulher", "LGBTI",
+              "direito à vida", "medidas de reparação"...). Acento e caixa são
+              tolerados. Eixo não compilado devolve a LISTA dos que existem,
+              nunca resultado vazio.
+        max_casos: 1–60, padrão 20
+
+    Returns:
+        XML com nome, autuação, data, Estado, se há versão portuguesa, quantas
+        vezes o Caderno o citou, os parágrafos citados, a procedência e a
+        citação canônica com link.
+    """
+    return _mapa_sync(tema=tema, max_casos=max_casos)
+
+
 @mcp.tool()
 def ajuda_sintaxe_corteidh() -> str:
     """
