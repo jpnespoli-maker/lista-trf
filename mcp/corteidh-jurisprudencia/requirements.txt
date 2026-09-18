@@ -1,0 +1,9 @@
+# Dependências diretas do MCP corteidh-jurisprudencia
+# (venv: mcp-venvs/corteidh-jurisprudencia, Python 3.11)
+mcp==1.27.0
+requests==2.33.1
+tenacity==9.1.4
+# Casa com o PyMuPDF do Python do sistema (1.27.2, conferido em 2026-09-17):
+# venv e interpretador de teste em versões diferentes segmentariam PDF de
+# formas diferentes, e o extrator passaria verde medindo outra coisa.
+PyMuPDF==1.27.2
