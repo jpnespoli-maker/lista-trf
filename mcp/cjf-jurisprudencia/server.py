@@ -67,6 +67,15 @@ def buscar_jurisprudencia_cjf(
 
     TRIBUNAIS: STF, STJ, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6
 
+    ATENÇÃO — O NÚMERO DO PROCESSO COSTUMA VIR VAZIO NESTA BASE. O campo <numero>
+    reflete o que o portal devolve, e para acórdão de TRF ele frequentemente não
+    vem. Como precedente de 2º grau sem CNJ não se cita (regra de recuperação de
+    CNJ do projeto), a ementa volta inaproveitável e gera pendência.
+    - Acórdão do TRF1 que se pretenda CITAR: use buscar_jurisprudencia_trf1(),
+      que devolve o número em campo próprio.
+    - Demais Regiões: julia-trf5 (TRF5), trf-jurisprudencia (TRF2/TRF4/TRF6).
+    Para STF/STJ não há problema — o número do recurso basta e vem na ementa.
+
     Args:
         busca: Query com sintaxe CJF (operadores MAIÚSCULOS, campos [EMEN], etc).
                NÃO passe perguntas diretas. Use a estratégia de busca.
@@ -120,14 +129,21 @@ def buscar_jurisprudencia_cjf(
                         relaxada, lista_tribunais, max_resultados
                     )
                     busca_relaxada = relaxada if documentos else None
-            registrar_dispositivo(
-                "cjf-jurisprudencia", cache_key,
-                _json.dumps({
-                    "docs": documentos, "totais": totais,
-                    "relaxada": busca_relaxada,
-                }),
-                ttl_s=7 * 86400,
-            )
+            # Zero NÃO se cacheia (31/08/2026). Um shard de tribunal às escuras
+            # devolve 200 com "Total 0 Documento(s)", e gravar isso por 7 dias
+            # deixava o falso zero GRUDADO: a mesma busca seguia respondendo
+            # "nada encontrado" por uma semana depois de o portal voltar. O
+            # cliente já reconfere o zero uma vez; se ainda vier vazio, é barato
+            # tentar de novo na próxima chamada em vez de servir vazio da gaveta.
+            if documentos:
+                registrar_dispositivo(
+                    "cjf-jurisprudencia", cache_key,
+                    _json.dumps({
+                        "docs": documentos, "totais": totais,
+                        "relaxada": busca_relaxada,
+                    }),
+                    ttl_s=7 * 86400,
+                )
         n_docs = len(documentos)
 
         resultados: List[BaseResultadoJuridico] = []

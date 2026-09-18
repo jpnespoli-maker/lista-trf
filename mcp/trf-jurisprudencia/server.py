@@ -216,7 +216,25 @@ def buscar_jurisprudencia_trf(
 
     except Exception as e:
         erro_msg = str(e)
-        return f"<erro>Falha na busca {tribunal}: {sanitizar_comentario_xml(str(e))}</erro>"
+        # Desembrulha o RetryError do tenacity e informa o STATUS HTTP. Sem isso o
+        # portal fora do ar e a query malformada chegavam com a mesma cara
+        # ("RetryError[<Future ... raised HTTPError>]"), e o chamador gastava
+        # chamadas reformulando a busca contra um portal em HTTP 500 (12/08/2026).
+        original = e
+        ultima = getattr(e, "last_attempt", None)
+        if ultima is not None:
+            try:
+                original = ultima.exception() or e
+            except Exception:
+                original = e
+        status = getattr(getattr(original, "response", None), "status_code", None)
+        if status is not None:
+            return (
+                f"<erro>Portal de jurisprudência do {tribunal} indisponível "
+                f"(fora: HTTP {status}). Não é a query nem a sessão local — "
+                f"não reformular a busca; aguardar o portal normalizar.</erro>"
+            )
+        return f"<erro>Falha na busca {tribunal}: {sanitizar_comentario_xml(str(original))}</erro>"
     finally:
         log_query(
             mcp="trf-jurisprudencia",
