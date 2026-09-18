@@ -200,3 +200,69 @@ def test_data_presente_mas_ilegivel_passa_como_veio():
     saida = citacao.formatar_citacao(
         caso="X Vs. Brasil", data="sem data", serie="C", numero=1)
     assert "Sentença de sem data." in saida
+
+
+# --- Ruling 43: o paragrafo NAO se perde quando falta serie/numero -----------
+#
+# A cauda "Serie C No. N, par. P." era montada num unico `if serie and numero
+# is not None`, de modo que documento sem numero de serie — resolucao de
+# supervisao de cumprimento, sentenca recente antes da autuacao na Serie C —
+# derrubava o `par. P` JUNTO, em silencio. Citacao sem paragrafo e' citacao que
+# nao se confere na fonte, que e' exatamente o que o Defensor pediu que nao
+# acontecesse.
+
+
+def test_paragrafo_sobrevive_sem_serie_nem_numero():
+    """Sem série e sem número, o parágrafo sai como unidade própria.
+
+    Asserção EXATA, e não `in`: trava também a maiúscula de "Par.", que é o
+    que faz a unidade solta ler como frase entre as demais.
+    """
+    assert citacao.formatar_citacao(
+        caso="Garibaldi Vs. Brasil", data="2012-02-22",
+        serie=None, numero=None, paragrafo=17, tipo="SS",
+    ) == ("Corte IDH. Caso Garibaldi Vs. Brasil. Supervisão de Cumprimento "
+          "de Sentença. Resolução de 22 de fevereiro de 2012. Par. 17.")
+
+
+def test_paragrafo_sobrevive_sem_numero_tendo_serie():
+    """Série conhecida e número não atribuído: saem a série E o parágrafo.
+
+    A série não se descarta junto com o número — é verdade parcial, e calá-la
+    seria omitir dado que se tem.
+    """
+    saida = citacao.formatar_citacao(
+        caso="Chacina do Tapanã Vs. Brasil", data="2025-11-25",
+        serie="C", numero=None, paragrafo=93,
+    )
+    assert saida.endswith("Série C, par. 93."), saida
+    assert "No." not in saida, saida
+
+
+def test_paragrafo_sobrevive_sem_serie_tendo_numero():
+    """Número conhecido e série ausente: idem, sem inventar a série."""
+    saida = citacao.formatar_citacao(
+        caso="Barbosa de Souza e outros Vs. Brasil", data="2021-09-07",
+        serie=None, numero=435, paragrafo=120,
+    )
+    assert saida.endswith("No. 435, par. 120."), saida
+    assert "Série" not in saida, saida
+
+
+def test_sem_serie_sem_numero_e_sem_paragrafo_nao_inventa_cauda():
+    """Nada a dizer sobre serie/numero/paragrafo: nenhuma cauda solta."""
+    saida = citacao.formatar_citacao(
+        caso="Garibaldi Vs. Brasil", data="2012-02-22",
+        serie=None, numero=None, tipo="SS",
+    )
+    assert "par." not in saida, saida
+    assert "Série" not in saida, saida
+    assert saida.rstrip().endswith("."), saida
+
+
+def test_cauda_completa_nao_regride():
+    """A forma canonica com serie+numero+paragrafo segue intacta."""
+    assert citacao.formatar_citacao(
+        caso="Vélez Loor Vs. Panamá", data="2010-11-23",
+        serie="C", numero=218, paragrafo=97,
+    ).endswith("Série C No. 218, par. 97.")

@@ -97,10 +97,40 @@ def formatar_citacao(
         partes.append(_com_data("Decisão"))
         partes.append(f"[tipo {tipo} — rótulo canônico não definido]")
 
+    # A cauda tem DUAS informações independentes — a autuação (série/número) e
+    # o parágrafo —, e o `if serie and numero is not None` que as montava junto
+    # derrubava o parágrafo sempre que faltasse a autuação. Perder o `par. N` é
+    # perder o que o Defensor confere na fonte: a citação continua verdadeira e
+    # deixa de ser verificável, que é o defeito que este módulo existe para
+    # evitar. Documento sem número de série existe — resolução de supervisão de
+    # cumprimento não é autuada na Série C, e sentença recente pode ainda não
+    # ter número atribuído. Cada informação sai se houver, e nenhuma arrasta a
+    # outra.
+    #
+    # Série conhecida sem número sai como "Série C" em vez de nada: é verdade
+    # parcial, e descartá-la junto com o número seria calar dado que se tem.
     if serie and numero is not None:
-        cauda = f"Série {serie} No. {numero}"
-        cauda += f", par. {paragrafo}." if paragrafo is not None else "."
-        partes.append(cauda)
+        autuacao = f"Série {serie} No. {numero}"
+    elif serie:
+        autuacao = f"Série {serie}"
+    elif numero is not None:
+        autuacao = f"No. {numero}"
+    else:
+        autuacao = ""
+
+    if autuacao:
+        autuacao += f", par. {paragrafo}." if paragrafo is not None else "."
+        partes.append(autuacao)
+    elif paragrafo is not None:
+        # Unidade solta: as demais partes são frases terminadas em ponto, então
+        # esta também começa com maiúscula.
+        #
+        # Limite declarado: a Corte IDH cita os parágrafos numerados das
+        # resoluções de supervisão por "Considerando", não por "par.". Não
+        # encodo a distinção porque não a conferi em fonte primária, e porque a
+        # Fase 2 indexa SS apenas por metadado — sem texto, não há parágrafo de
+        # SS a citar a partir do índice.
+        partes.append(f"Par. {paragrafo}.")
 
     if url and url.strip():
         partes.append(f"Disponível em: {url.strip()}")
