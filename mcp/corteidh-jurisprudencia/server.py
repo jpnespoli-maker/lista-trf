@@ -65,6 +65,106 @@ def _erro(tipo: str, mensagem: str) -> str:
     return (f'<erro tipo="{tipo}">{sanitizar_comentario_xml(mensagem)}</erro>')
 
 
+def _cobertura_de_idioma(con, *, estado=None, tipo=None) -> dict:
+    """Quantos documentos do recorte têm versão portuguesa, e quantos não.
+
+    Lê-se do índice, não da rede. Serve ao `<aviso_idioma>`: sem este número,
+    um resultado pequeno é indistinguível de acervo pequeno, e o Defensor não
+    saberia que a barreira foi de LÍNGUA e não de precedente.
+    """
+    sql = ["SELECT COUNT(*) AS n,",
+           "       SUM(CASE WHEN tem_por = 1 THEN 1 ELSE 0 END) AS com_por",
+           "  FROM documento WHERE n_paragrafos > 0"]
+    args: list = []
+    if estado:
+        sql.append(" AND estado = ?"); args.append(estado)
+    if tipo:
+        sql.append(" AND tipo = ?"); args.append(tipo.upper())
+    r = con.execute("\n".join(sql), args).fetchone()
+    total = int(r["n"] or 0)
+    com_por = int(r["com_por"] or 0)
+    return {"total": total, "com_por": com_por, "sem_por": total - com_por}
+
+
+def _com_avisos(xml: str, *, consulta: str, expansoes: list, linhas: list,
+                cobertura: dict) -> str:
+    """Anexa `<expansao_consulta>` e `<aviso_idioma>` ao XML dos resultados.
+
+    Duas declarações que a spec §6.1.1 exige, e as duas existem para que zero
+    resultado nunca saia ambíguo:
+
+    - `<expansao_consulta>` diz o que a busca DE FATO procurou. A expansão é
+      assistência heurística, não garantia; busca que procurou outra coisa que
+      não o pedido tem de dizê-lo, senão o Defensor lê os resultados como se
+      fossem do termo que digitou.
+    - `<aviso_idioma>` diz quantos documentos do recorte não têm versão
+      portuguesa. Sem ele, "nada encontrado" se lê como ausência de
+      precedente, quando pode ser barreira de língua — e essa confusão muda a
+      tese da peça.
+
+    Os blocos entram DENTRO de `<resultados>`, não depois dele.
+    `formatar_resultados_xml` devolve raiz única, e anexá-los como irmãos
+    produziria documento com duas raízes — malformado, ainda que legível. O
+    contrato desta ferramenta diz XML, e XML tem uma raiz.
+    """
+    partes: list[str] = []
+
+    if expansoes:
+        linhas_exp = []
+        for e in expansoes:
+            alternativas = ", ".join(
+                f"{lang}={sanitizar_comentario_xml(str(e[lang]))}"
+                for lang in ("es", "en", "fr") if e.get(lang))
+            linhas_exp.append(
+                f'  <termo pt="{sanitizar_comentario_xml(e["termo"])}" '
+                f'fonte="{sanitizar_comentario_xml(e["fonte"])}">'
+                f'{alternativas}</termo>')
+        partes.append(
+            "<expansao_consulta>\n"
+            + "\n".join(linhas_exp)
+            + "\n  <nota>A busca procurou TAMBEM os termos acima em espanhol, "
+              "ingles e frances, porque o acervo e majoritariamente espanhol. "
+              "Expansao e assistencia, nao garantia: o glossario tem 161 "
+              "entradas e nao cobre todo o vocabulario. Termo com "
+              "fonte=curadoria nao foi confirmado no texto oficial da "
+              "Convencao — o par e curadoria deste projeto.</nota>\n"
+            "</expansao_consulta>")
+
+    sem_por = cobertura.get("sem_por", 0)
+    total = cobertura.get("total", 0)
+    if total and sem_por:
+        pct = 100.0 * sem_por / total
+        urgencia = "critico" if not linhas else "informativo"
+        partes.append(
+            f'<aviso_idioma nivel="{urgencia}" '
+            f'documentos_no_recorte="{total}" '
+            f'sem_versao_portuguesa="{sem_por}">'
+            f"{sem_por} de {total} documentos deste recorte ({pct:.0f}%) NAO "
+            f"tem versao em portugues no acervo da Corte. Consulta em "
+            f"portugues nao casa com texto em espanhol no indice; a expansao "
+            f"por glossario reduz o problema e nao o elimina. "
+            + ("RESULTADO VAZIO AQUI NAO SIGNIFICA AUSENCIA DE PRECEDENTE: "
+               "tente o termo em espanhol, ou os filtros que nao dependem de "
+               "lingua (tema, artigo_cadh). "
+               if not linhas else "")
+            + "Citando-se decisao sem versao portuguesa, a peca leva a "
+              "traducao ao lado, marcada 'traducao livre'."
+            "</aviso_idioma>")
+
+    if not partes:
+        return xml
+
+    bloco = "\n".join("  " + p if not p.startswith(" ") else p
+                      for p in "\n".join(partes).splitlines())
+    fecho = "</resultados>"
+    pos = xml.rfind(fecho)
+    if pos == -1:
+        # Raiz inesperada: devolve intacto em vez de montar XML quebrado.
+        # Prefere-se perder o aviso a corromper a saída.
+        return xml
+    return xml[:pos] + bloco + "\n" + xml[pos:]
+
+
 def _url_do_idioma(linha: dict) -> str:
     """URL do PDF no MESMO idioma do parágrafo devolvido.
 
@@ -152,16 +252,24 @@ def _buscar_sync(
 
     con = indice.abrir(CAMINHO_BANCO)
     try:
+        # Expansão pelo glossário ANTES do FTS. O acervo é esmagadoramente
+        # espanhol e consulta em português não casa com texto em espanhol —
+        # sem isto, pesquisar "saúde" não acha "salud", e os dois leading
+        # cases do eixo (Poblete Vilches, Cuscul Pivaral) ficariam invisíveis.
+        expandida, expansoes = indice.expandir_consulta(con, consulta)
         linhas = indice.buscar(
-            con, consulta=consulta, estado=estado, tipo=tipo,
+            con, consulta=expandida, estado=estado, tipo=tipo,
             artigo_cadh=artigo_cadh, ano_de=ano_de, ano_ate=ano_ate,
             idioma_preferido=idioma_preferido, limite=max_resultados,
         )
+        cobertura = _cobertura_de_idioma(con, estado=estado, tipo=tipo)
     finally:
         con.close()
 
     xml = formatar_resultados_xml(
         [_montar_resultado(l, max_tokens_paragrafo) for l in linhas])
+    xml = _com_avisos(xml, consulta=consulta, expansoes=expansoes,
+                      linhas=linhas, cobertura=cobertura)
     log_query(mcp="corteidh-jurisprudencia", tool="buscar_corteidh",
               query=consulta, n_resultados=len(linhas),
               ms=int((time.perf_counter() - t0) * 1000),

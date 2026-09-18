@@ -208,10 +208,29 @@ def main(argv=None) -> int:
                    help="só descobre o que existe para o TIPO (CC, OC, SS...)")
     p.add_argument("--banco", default=None)
     p.add_argument("--pasta-texto", default=str(PASTA_TEXTO_PADRAO))
+    p.add_argument("--glossario", action="store_true",
+                   help="só semeia o glossário pt->es/en/fr (não vai à rede)")
     args = p.parse_args(argv)
 
-    if not args.semear and not args.censo:
-        p.error("informe --semear ou --censo")
+    if not args.semear and not args.censo and not args.glossario:
+        p.error("informe --semear, --censo ou --glossario")
+
+    if args.glossario:
+        # Separado do `--semear` de propósito: semear o glossário não toca a
+        # rede e leva milissegundos, então quem só precisa dele (banco já
+        # povoado, glossário atualizado) não paga o crawl inteiro.
+        con = indice.abrir(args.banco)
+        indice.criar_schema(con)
+        n = indice.semear_glossario(con)
+        por_fonte = dict(con.execute(
+            "SELECT CASE WHEN fonte = 'curadoria' THEN 'curadoria'"
+            "            ELSE 'CADH' END AS f, COUNT(*)"
+            " FROM glossario GROUP BY f").fetchall())
+        con.close()
+        print(f"glossário semeado: {n} termos "
+              f"(CADH medido: {por_fonte.get('CADH', 0)}; "
+              f"curadoria: {por_fonte.get('curadoria', 0)})")
+        return 0
 
     if args.censo:
         import buscador_oficial as bo
@@ -223,6 +242,11 @@ def main(argv=None) -> int:
 
     con = indice.abrir(args.banco)
     indice.criar_schema(con)
+    # O glossário entra junto do acervo: índice povoado sem ele responde em
+    # silêncio pior — consulta em português não casa com texto em espanhol, e
+    # 597 dos 598 casos contenciosos só têm espanhol linkado.
+    n_glos = indice.semear_glossario(con)
+    print(f"glossário: {n_glos} termos")
     pasta = Path(args.pasta_texto)
 
     ok = falhas = pulados = 0

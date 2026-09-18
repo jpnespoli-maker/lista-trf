@@ -81,7 +81,15 @@ CREATE TABLE IF NOT EXISTS recepcao (
   PRIMARY KEY (documento_id, tribunal, processo)
 );
 CREATE TABLE IF NOT EXISTS glossario (
-  pt TEXT PRIMARY KEY, es TEXT, en TEXT, fr TEXT
+  pt TEXT PRIMARY KEY, es TEXT, en TEXT, fr TEXT,
+  -- Procedência, no mesmo regime de `tema.fonte`: nada entra sem ela. Aqui,
+  -- porém, ela é MEDIDA e não escrita à mão — `verificar_glossario_cadh.py`
+  -- confronta cada termo com o texto oficial da Convenção nas quatro línguas
+  -- e grava quais confirmaram (`CADH:pt,es,en,fr`). O que nenhuma confirma sai
+  -- `curadoria`, que é ignorância declarada: 60% das linhas, porque a
+  -- Convenção é curta e o vocabulário de saúde, migração e prisão é
+  -- jurisprudencial, não convencional.
+  fonte TEXT NOT NULL DEFAULT 'curadoria'
 );
 CREATE INDEX IF NOT EXISTS ix_doc_estado ON documento(estado);
 CREATE INDEX IF NOT EXISTS ix_doc_tipo   ON documento(tipo);
@@ -102,7 +110,28 @@ def abrir(caminho: Path | str | None = None) -> sqlite3.Connection:
 
 def criar_schema(con: sqlite3.Connection) -> None:
     con.executescript(_SCHEMA)
+    _migrar(con)
     con.commit()
+
+
+def _migrar(con: sqlite3.Connection) -> list[str]:
+    """Acrescenta coluna nova a banco que já existe; devolve o que mudou.
+
+    `CREATE TABLE IF NOT EXISTS` não altera tabela existente — ele NÃO falha e
+    NÃO avisa, apenas mantém o esquema antigo. Num banco criado antes de
+    `glossario.fonte`, o `INSERT` com `fonte` morreria com `no such column`, e
+    num `SELECT` a coluna simplesmente não existiria. Este banco é derivado e
+    reconstruível (SETUP §4.1), mas reconstruir é minutos e a migração é
+    milissegundos — e, sobretudo, o caminho sem migração falha de um modo que
+    se lê como defeito de código.
+    """
+    feitas: list[str] = []
+    colunas = {r["name"] for r in con.execute("PRAGMA table_info(glossario)")}
+    if colunas and "fonte" not in colunas:
+        con.execute("ALTER TABLE glossario ADD COLUMN fonte TEXT NOT NULL "
+                    "DEFAULT 'curadoria'")
+        feitas.append("glossario.fonte")
+    return feitas
 
 
 def inserir_documento(
@@ -426,3 +455,127 @@ def ficha(con, *, caso: str) -> dict | None:
         # Resolver em silêncio faria a peça citar o caso errado sem aviso.
         "outros_candidatos": outros,
     }
+
+
+# ---------------------------------------------------------------------------
+# Glossário: expansão de consulta pt -> es/en/fr
+#
+# O acervo é esmagadoramente espanhol (medido em 18/09/2026: o buscador oficial
+# linka versão espanhola em 597/598 casos contenciosos e portuguesa em ZERO
+# deles), e consulta em português não casa com texto em espanhol no FTS —
+# "saúde" não encontra "salud". Sem expansão, pesquisar em português sobre saúde
+# acharia justamente o que menos importa: os dois leading cases do eixo,
+# Poblete Vilches e Cuscul Pivaral, só existem em espanhol.
+#
+# ASSISTÊNCIA, NÃO GARANTIA — e é por isso que `expandir_consulta` devolve o
+# mapa do que expandiu. Busca que procurou outra coisa que não o pedido tem de
+# dizer o que procurou; sem isso, zero resultado é indistinguível de ausência
+# de precedente, e o Defensor não tem como saber que a barreira era de língua.
+# ---------------------------------------------------------------------------
+
+
+def _normalizar_termo(termo: str) -> str:
+    """Minúsculas e sem acento, para que 'SAÚDE' e 'saude' achem 'saúde'.
+
+    O FTS já indexa com `remove_diacritics 2`; a chave do glossário é acentuada
+    e canônica, então a comparação se faz sobre a forma normalizada dos dois
+    lados. Sem isto, quem digita sem acento — o caso comum — não expande nada.
+    """
+    import unicodedata
+    nfkd = unicodedata.normalize("NFKD", termo.strip().lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def semear_glossario(con: sqlite3.Connection, *, dados=None, fontes=None) -> int:
+    """Povoa `glossario`. Idempotente: re-semear atualiza, não duplica.
+
+    `fontes` é o mapa pt -> procedência MEDIDA por `verificar_glossario_cadh.py`
+    e versionado em `glossario_fonte.json`. Faltando a entrada, a linha entra
+    como `curadoria` — nunca como `CADH`, porque afirmar procedência não medida
+    é exatamente o que o campo existe para impedir.
+    """
+    if dados is None:
+        import glossario_dados
+        dados = glossario_dados.TERMOS
+    if fontes is None:
+        import json
+        arq = Path(__file__).resolve().parent / "glossario_fonte.json"
+        try:
+            fontes = json.loads(arq.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            fontes = {}
+
+    n = 0
+    for pt, es, en, fr in dados:
+        con.execute(
+            "INSERT INTO glossario (pt, es, en, fr, fonte) VALUES (?,?,?,?,?)"
+            " ON CONFLICT(pt) DO UPDATE SET es=excluded.es, en=excluded.en,"
+            " fr=excluded.fr, fonte=excluded.fonte",
+            (pt, es, en, fr, fontes.get(pt, "curadoria")))
+        n += 1
+    con.commit()
+    return n
+
+
+def expandir_consulta(con: sqlite3.Connection, consulta: str) -> tuple[str, list[dict]]:
+    """(consulta expandida, o que foi expandido).
+
+    Expande por FRASE antes de por palavra: "acesso à justiça" casa a entrada
+    inteira do glossário, e só o que não casou como frase é tentado palavra a
+    palavra. Na ordem inversa, "acesso" e "justiça" expandiriam soltos e a
+    frase nunca seria consultada.
+
+    A saída é entregue a `_para_fts`, que põe cada termo entre aspas — de modo
+    que nada aqui precisa escapar sintaxe do FTS5.
+    """
+    if not consulta or not consulta.strip():
+        return consulta, []
+
+    linhas = {
+        _normalizar_termo(r["pt"]): r
+        for r in con.execute("SELECT pt, es, en, fr, fonte FROM glossario")
+    }
+    if not linhas:
+        return consulta, []
+
+    # Operadores do usuário passam intactos; não são termo de busca.
+    palavras = consulta.split()
+    expansoes: list[dict] = []
+    saida: list[str] = []
+    i = 0
+    # Frase mais longa primeiro: o glossário tem entradas de até 6 palavras
+    # ("pessoa em situação migratória irregular"), e casar a maior evita que
+    # uma entrada curta contida nela roube o casamento.
+    maior = max((len(p["pt"].split()) for p in linhas.values()), default=1)
+
+    while i < len(palavras):
+        casou = False
+        for tamanho in range(min(maior, len(palavras) - i), 0, -1):
+            trecho = " ".join(palavras[i:i + tamanho])
+            linha = linhas.get(_normalizar_termo(trecho))
+            if linha is None:
+                continue
+            alternativas = [trecho]
+            for lang in ("es", "en", "fr"):
+                valor = linha[lang]
+                if valor and _normalizar_termo(valor) != _normalizar_termo(trecho):
+                    alternativas.append(valor)
+            if len(alternativas) > 1:
+                saida.append("( " + " OR ".join(alternativas) + " )")
+                expansoes.append({
+                    "termo": trecho, "es": linha["es"], "en": linha["en"],
+                    "fr": linha["fr"], "fonte": linha["fonte"],
+                })
+            else:
+                # Entrada cujo par é idêntico em todas as línguas ("tortura",
+                # "migrante"): nada a expandir, e declarar expansão vazia
+                # sugeriria que a busca fez algo que não fez.
+                saida.append(trecho)
+            i += tamanho
+            casou = True
+            break
+        if not casou:
+            saida.append(palavras[i])
+            i += 1
+
+    return " ".join(saida), expansoes
