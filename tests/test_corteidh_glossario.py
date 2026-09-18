@@ -395,3 +395,53 @@ def test_sem_expansao_nao_emite_bloco(semeado):
         server.formatar_resultados_xml([]), consulta="xyzabc", expansoes=[],
         linhas=[], cobertura={"total": 0, "com_por": 0, "sem_por": 0})
     assert ET.fromstring(final).find("expansao_consulta") is None
+
+
+# --- a LIGAÇÃO no servidor, não só a composição das funções ----------------
+#
+# Refinamento vindo de sessão par (claude-d7) em 18/09/2026, e que se aplica
+# aqui: importar a produção NÃO basta quando se importa uma camada INTERNA cuja
+# pré-condição vive no chamador. Os testes acima exercitam
+# `expandir_consulta` + `indice.buscar` em sequência, o que prova que as duas
+# funções COMPÕEM — e não prova que o servidor as chame. Parasse
+# `_buscar_sync` de expandir, todos eles seguiriam verdes e a busca voltaria a
+# não achar texto em espanhol, em silêncio.
+
+
+def test_o_SERVIDOR_expande_de_fato(semeado, tmp_path, monkeypatch):
+    """Pela porta do servidor (`_buscar_sync`), não pelas funções soltas."""
+    from extrator_paragrafos import Paragrafo
+
+    caminho = tmp_path / "corteidh.db"
+    c = indice.abrir(caminho)
+    indice.criar_schema(c)
+    indice.semear_glossario(c)
+    doc = indice.inserir_documento(
+        c, serie="C", numero=349, tipo="CC",
+        caso="Poblete Vilches y otros Vs. Chile", estado="Chile",
+        data="2018-03-08", url_esp="https://exemplo/seriec_349_esp.pdf")
+    indice.inserir_paragrafos(c, doc, "esp", [
+        Paragrafo(118, "El derecho a la salud es protegido por el artículo 26"
+                       " de la Convención Americana."),
+    ])
+    c.close()
+
+    monkeypatch.setattr(server, "CAMINHO_BANCO", caminho)
+
+    # Consulta em PORTUGUÊS sobre documento em ESPANHOL, pela porta real.
+    xml = server._buscar_sync(consulta="saúde", max_resultados=5)
+    raiz = ET.fromstring(xml)
+    assert int(raiz.get("total")) >= 1, (
+        "o servidor não expandiu: busca em português não achou texto espanhol")
+    assert raiz.find("expansao_consulta") is not None, (
+        "expandiu sem DECLARAR — busca que procurou outra coisa tem de dizê-lo")
+
+    # Controle da premissa: sem expansão, a mesma consulta não acharia nada.
+    # Sem este controle o teste passaria também num índice que casasse
+    # "saúde" com "salud" por outro mecanismo, e não mediria a expansão.
+    c2 = indice.abrir(caminho)
+    try:
+        assert indice.buscar(c2, consulta="saúde") == [], (
+            "o controle falhou: a busca CRUA já achava, o teste não mede")
+    finally:
+        c2.close()
