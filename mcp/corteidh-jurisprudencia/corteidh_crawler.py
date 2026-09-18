@@ -158,7 +158,15 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
         sha256_por=baixador.sha256(corpo) if idioma == "por" else None,
         sha256_esp=baixador.sha256(corpo) if idioma == "esp" else None,
     )
+    # Dois sinais independentes de contaminação (Round 6): a assinatura
+    # "Cf."/"Cfr." (nota de rodapé vazada) e o TAMANHO anômalo em relação à
+    # mediana do próprio documento (cabeçalho, voto ou anexo engolidos por
+    # falta de fechamento — ver a docstring de `extrator_paragrafos`). O
+    # segundo é mais forte para o pior defeito medido nesta tarefa: um
+    # parágrafo pode ter engolido cem nomes de vítimas sem conter "Cf."
+    # nenhum.
     suspeitos = {p.numero for p in paragrafos if _SUSPEITO.search(p.texto)}
+    suspeitos |= ep.detectar_paragrafos_grandes_demais(paragrafos)
     indice.inserir_paragrafos(con, doc_id, idioma, paragrafos, suspeitos=suspeitos)
 
     return {"caso": registro["caso"], "erro": None, "idioma": idioma,

@@ -155,6 +155,42 @@ def test_sha256_do_PDF_descartado_fica_no_indice(con, tmp_path, monkeypatch):
     assert linha["sha256_por"] == baixador.sha256(corpo)
 
 
+def test_main_devolve_rc_zero_com_sucesso_e_pulado_sem_falha(tmp_path, monkeypatch):
+    """Buraco de mutação: nenhum teste chamava `main()`, então mutar "contar
+    `pulado` como falha no `rc`" não derrubava teste nenhum. `pulado` é
+    decisão declarada (número de série não confirmado), não erro — o `rc`
+    tem de continuar 0 quando só há sucesso e pulado, sem falha real."""
+    monkeypatch.setattr(cc, "SEMENTE_CNJ", [cc.SEMENTE_CNJ[0]])
+    monkeypatch.setattr(cc, "SEMENTE_OC", [dict(
+        serie="C", numero=None, tipo="CC", estado="Panamá",
+        data="2010-11-23", caso="Pulado de teste",
+    )])
+    monkeypatch.setattr(baixador, "baixar_melhor_idioma",
+                        lambda base, **kw: ("por", b"%PDF-falso", base + "_por.pdf"))
+    monkeypatch.setattr(cc.ep, "extrair_texto_pdf", lambda _b: TEXTO)
+
+    banco = str(tmp_path / "corteidh.db")
+    rc = cc.main(["--semear", "--banco", banco, "--pasta-texto", str(tmp_path)])
+    assert rc == 0
+
+
+def test_main_devolve_rc_diferente_de_zero_com_falha_real(tmp_path, monkeypatch):
+    """O contraponto do teste acima: falha de download DE VERDADE tem de
+    subir o `rc`, para quem chama o crawler não ignorar um documento que
+    entrou pela metade (ou não entrou) no índice."""
+    monkeypatch.setattr(cc, "SEMENTE_CNJ", [cc.SEMENTE_CNJ[0]])
+    monkeypatch.setattr(cc, "SEMENTE_OC", [])
+
+    def _explode(base, **kw):
+        raise baixador.PdfInvalido("nenhum idioma")
+
+    monkeypatch.setattr(baixador, "baixar_melhor_idioma", _explode)
+
+    banco = str(tmp_path / "corteidh.db")
+    rc = cc.main(["--semear", "--banco", banco, "--pasta-texto", str(tmp_path)])
+    assert rc != 0
+
+
 def test_reindexar_o_mesmo_documento_nao_duplica(con, tmp_path, monkeypatch):
     monkeypatch.setattr(baixador, "baixar_melhor_idioma",
                         lambda base, **kw: ("por", b"%PDF-falso", base + "_por.pdf"))

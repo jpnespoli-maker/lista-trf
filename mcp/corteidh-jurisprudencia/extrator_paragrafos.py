@@ -209,11 +209,86 @@ porque notas de 3+ linhas agora só têm a primeira removida. `http` em
 texto de parágrafo continua em 0 nos dois documentos, porque
 `_remover_url_absoluta` roda por cima do resultado final e limpa URL que
 vaze por transbordo, independente do mecanismo que a deixou passar.
+
+**Round 6 — a acreção medida sobre os 14 documentos reais da semente**
+(2026-09-18): 12 de 14 tinham parágrafo com razão tamanho/mediana de até
+514×. A hipótese de entrada era "o segmentador perde o fio ao topar seção
+sem parágrafo numerado e cola tudo até reencontrar o número esperado" —
+medida DIRETAMENTE (instrumentando a busca por todo número que `_INICIO`
+reconheceria dentro do trecho inflado, não por diff de texto), essa
+hipótese só se confirma em 2 dos 7 casos "do MEIO" auditados: A-18
+(OC-18/03) par. 47 e C-161 (Nogueira de Carvalho) par. 67 realmente
+terminam colando um CABEÇALHO DE SEÇÃO — "III COMPETÊNCIA", "VIII ARTIGOS
+8.1 E 25.1 DA CONVENÇÃO AMERICANA (...)" — sem que nenhum parágrafo real
+tenha sido perdido no meio (o próprio parágrafo, no documento oficial, é
+mesmo um resumo de manifestações de dezenas de participantes sem
+renumeração interna; só o título da seção seguinte, sintaticamente
+indistinguível de continuação de frase, vazava para dentro dele). Nos
+outros 3 casos do meio (C-353 Herzog par. 240, A-21 OC-21/14 par. 207,
+C-435 Barbosa de Souza par. 106) o tamanho vem de outra causa já
+DECLARADA e ACEITA por este módulo — nota que não começa por "Cf."/"Cfr."
+(sétima armadilha, acima) e citação de artigo com numeração própria — e
+não da perda de monotonicidade; tentar "consertar" isso aqui reabriria um
+gate que já tem preço medido e aceito, sem relação com este round.
+
+Nos documentos em que o parágrafo inflado é o ÚLTIMO (9 dos 14 — inclusive
+C-407 e C-318 da tabela, e outros 5 fora dela), o mecanismo É o mesmo
+CABEÇALHO GRUDADO, só que repetido várias vezes: depois do último parágrafo
+numerado da Sentença (o "dispositivo", que legitimamente contém sua PRÓPRIA
+lista numerada 1..N de pontos resolutivos — isso NÃO é defeito, é assim que
+a Corte redige o dispositivo), vêm o encerramento, as assinaturas e então,
+sem que `esperado` jamais volte a ser encontrado (a Sentença acabou — não
+há "próximo parágrafo"), um ou mais blocos "VOTO CONCORDANTE / JUIZ X /
+CASO Y / SENTENÇA DE Z" e, quando há, um "ANEXO N. TÍTULO" com lista de
+vítimas — cada bloco reinicia sua PRÓPRIA numeração interna (1, 2, 3...),
+que nunca bate com o `esperado` do documento principal e por isso nunca
+fecha o parágrafo. Mesmo mecanismo de acreção do caso do meio (texto que
+não é parágrafo grudando por falta de fechamento), tratado pela MESMA regra
+abaixo — mas com um limite diferente e DECLARADO: os CABEÇALHOS de cada
+voto/anexo são removidos (a regra roda por igual, em qualquer ponto da
+acreção, não só no fechamento), mas o CORPO de cada voto (o parecer do
+Juiz, página após página) e a lista de nomes do anexo são texto real, sem
+número de parágrafo correspondente no documento oficial — não há "parágrafo
+319" para devolver esse corpo, e inventar um fabricaria uma citação que a
+fonte não sustenta. Isso não sai do parágrafo que o engoliu; sai marcado
+`suspeito` por TAMANHO (ver `detectar_paragrafos_grandes_demais`), que é o
+sinal que sobra quando dividir seria mentir.
+
+**A regra adotada, e por que não é "todo texto em CAIXA ALTA":** uma linha
+sozinha em maiúsculas NÃO basta — o artigo "II" de "os artigos II da
+Declaração Americana" (medido em A-18, dentro do próprio par. 47) também
+sai isolado em sua própria linha pela extração do PyMuPDF, e removê-lo
+apagaria corpo real (violaria a restrição que não se negocia). O sinal
+adotado é a SEQUÊNCIA: 2 ou mais linhas SEGUIDAS, cada uma sem nenhuma
+letra minúscula (`_eh_linha_titulo`), formam cabeçalho; 1 linha isolada é
+sempre tratada como falso alarme e devolvida ao corpo, palavra por palavra,
+na ordem em que apareceu — nunca descartada. A decisão só é tomada quando a
+sequência TERMINA (por linha em branco, por linha comum, ou pelo próximo
+parágrafo numerado sendo reconhecido) — nunca no meio, o que mantém a
+mesma filosofia de "janela fechada por condição observável, nunca por
+busca aberta" do round 5. Medido nos 2 casos reais: A-18 par. 47 fecha com
+exatamente 2 linhas ("III", "COMPETÊNCIA"); C-161 par. 67 fecha com 5
+("VIII", "ARTIGOS 8.1 E 25.1 DA CONVENÇÃO AMERICANA", e mais 3 linhas de
+parêntese). Preço aceito, medido em C-161: a sub-legenda "Alegações da
+Comissão" que vem LOGO DEPOIS do cabeçalho de 5 linhas (título e
+maiúsculo-misto, não maiúsculo puro) não é capturada por esta regra e
+continua colada ao final do par. 67 — pequena, e um cabeçalho não pode
+"adivinhar" onde termina uma legenda de caixa mista sem arriscar prosa
+real.
+
+O destino do cabeçalho removido (restrição de não fazê-lo desaparecer):
+um novo campo `Paragrafo.titulos_removidos` — tupla de string, uma por
+bloco removido, na ordem em que ocorreram dentro do parágrafo. Não um
+"parágrafo 0" nem descarte: fica no próprio objeto, disponível para quem
+quiser inspecionar ou logar, sem inventar numeração que a fonte não tem e
+sem tocar no formato "N. texto" do `.txt` gravado (mudar esse contrato é
+decisão de outra tarefa, não deste round).
 """
 
 from __future__ import annotations
 
 import re
+import statistics
 from dataclasses import dataclass
 
 # Início de parágrafo: número de 1 a 3 dígitos, ponto, espaço, no começo da
@@ -247,10 +322,29 @@ _CITACAO = re.compile(r"^(?:Cf\.|Cfr\.)")
 _URL_ABSOLUTA = re.compile(r"(?:Disponível em:\s*)?https?://\S+")
 
 
+def _eh_linha_titulo(linha: str) -> bool:
+    """Uma linha é CANDIDATA a cabeçalho de seção/voto/anexo quando não tem
+    nenhuma letra minúscula e tem ao menos uma letra (a segunda exigência
+    exclui linha só de dígitos/pontuação, já tratada por outra regra).
+
+    NUNCA decide sozinha — precisa de outra linha adjacente que também
+    qualifique (ver `_fechar_titulo_pendente`, dentro de `segmentar`) para
+    não confundir um numeral romano solto no MEIO de uma frase (medido em
+    documento real: "os artigos II da Declaração Americana", onde "II"
+    sai isolado em sua própria linha pela extração do PyMuPDF) com um
+    cabeçalho de verdade — ver "Round 6" na docstring do módulo.
+    """
+    return any(c.isalpha() for c in linha) and linha == linha.upper()
+
+
 @dataclass(frozen=True)
 class Paragrafo:
     numero: int
     texto: str
+    # Cabeçalhos de seção/voto/anexo removidos de DENTRO deste parágrafo
+    # (round 6) — nunca descartados, ver a docstring do módulo. Tupla, não
+    # lista: `Paragrafo` é `frozen`, e um campo mutável quebraria isso.
+    titulos_removidos: tuple[str, ...] = ()
 
 
 def extrair_texto_pdf(pdf_bytes: bytes) -> str:
@@ -285,6 +379,59 @@ def segmentar(texto: str) -> list[Paragrafo]:
     corrente: list[str] | None = None
     linha_anterior_em_branco = True
 
+    # Round 6: cabeçalho de seção/voto/anexo grudado no parágrafo corrente
+    # (ver docstring do módulo). `titulo_pendente` guarda linhas candidatas
+    # (cada uma sem letra minúscula) até decidir o destino delas;
+    # `cabecalho_atual` acumula os blocos JÁ DECIDIDOS como cabeçalho
+    # (2+ linhas seguidas) enquanto o parágrafo corrente segue aberto —
+    # pode haver mais de um bloco (um por voto anexado, por exemplo).
+    # `cabecalhos_por_numero` é o que sobra para anexar ao `Paragrafo` no
+    # fechamento de cada número.
+    titulo_pendente: list[str] = []
+    cabecalho_atual: list[str] = []
+    cabecalhos_por_numero: dict[int, tuple[str, ...]] = {}
+
+    def _fechar_titulo_pendente(confirmado: bool) -> None:
+        """Decide o destino do que está em `titulo_pendente`.
+
+        Vira cabeçalho de verdade só quando as DUAS condições se cumprem:
+        2+ linhas seguidas em CAIXA ALTA, E o encerramento veio de algo que
+        NÃO é prosa comum — linha em branco, nota de rodapé reconhecida, ou
+        o próximo parágrafo numerado (`confirmado=True` nesses casos). Sem
+        a segunda condição, "318. Portanto, A CORTE DECIDE, por
+        unanimidade: 1. ..." — medido em C-407 E em C-318, a MESMA fórmula
+        de abertura do dispositivo em dois documentos — perderia "A CORTE
+        DECIDE," do corpo: são 3 linhas em CAIXA ALTA ("A", "CORTE",
+        "DECIDE,"), mas encerradas por "por unanimidade: " (prosa comum,
+        minúscula, colada sem linha em branco) — ênfase tipográfica NO
+        MEIO de uma frase, não cabeçalho de seção. Nenhum cabeçalho real
+        observado nos 14 documentos é seguido de prosa colada sem
+        separador; todos fecham em linha em branco, nota ou próximo
+        parágrafo. Por isso `confirmado=False` (a linha comum do laço
+        principal) NUNCA vira cabeçalho, não importa quantas linhas — e
+        volta ao corpo, palavra por palavra, na ordem em que apareceu.
+        Nunca se perde texto aqui: ou vira cabeçalho declarado, ou volta
+        ao corpo.
+        """
+        if not titulo_pendente:
+            return
+        if confirmado and len(titulo_pendente) >= 2:
+            cabecalho_atual.append(" ".join(titulo_pendente))
+        elif corrente is not None:
+            corrente.extend(titulo_pendente)
+        titulo_pendente.clear()
+
+    def _fechar_paragrafo_corrente(numero_fechado: int | None) -> None:
+        """Comita `cabecalho_atual` (se houver) para o número que está
+        FECHANDO — chamado tanto ao abrir o próximo parágrafo quanto ao
+        fim do texto, para o último parágrafo não perder os cabeçalhos que
+        engoliu (o caso do dispositivo + votos anexados, que nunca reabre
+        `esperado`)."""
+        nonlocal cabecalho_atual
+        if numero_fechado is not None and cabecalho_atual:
+            cabecalhos_por_numero[numero_fechado] = tuple(cabecalho_atual)
+        cabecalho_atual = []
+
     i = 0
     while i < total:
         linha = linhas[i]
@@ -297,6 +444,8 @@ def segmentar(texto: str) -> list[Paragrafo]:
 
         m = _INICIO.match(linha)
         if m and int(m.group(1)) == esperado:
+            _fechar_titulo_pendente(confirmado=True)
+            _fechar_paragrafo_corrente(achados[-1][0] if achados else None)
             achados.append((esperado, [m.group(2)]))
             corrente = achados[-1][1]
             esperado += 1
@@ -315,6 +464,7 @@ def segmentar(texto: str) -> list[Paragrafo]:
                 # seu conteúdo (ver "oitava armadilha" na docstring do
                 # módulo; consumir mais do que isto perdeu corpo real de
                 # parágrafo num caso medido).
+                _fechar_titulo_pendente(confirmado=True)
                 linha_anterior_em_branco = em_branco
                 i += 1
                 continue
@@ -326,6 +476,7 @@ def segmentar(texto: str) -> list[Paragrafo]:
                 # seguinte: janela fixa de EXATAMENTE 2 linhas (o marcador
                 # e a linha que já inspecionamos para decidir entrar — não
                 # é uma terceira linha "adivinhada"). Nunca mais que isso.
+                _fechar_titulo_pendente(confirmado=True)
                 i += 2
                 linha_anterior_em_branco = False
                 continue
@@ -333,17 +484,44 @@ def segmentar(texto: str) -> list[Paragrafo]:
             # descarta só esta linha (número de página plausível, ou nota
             # cujo corpo não foi possível confirmar) — nunca o que vem
             # depois, que pode ser corpo legítimo (ver docstring do módulo).
+            _fechar_titulo_pendente(confirmado=True)
             linha_anterior_em_branco = em_branco
             i += 1
             continue
 
+        if em_branco:
+            # linha em branco fecha um cabeçalho em curso (é assim que os
+            # dois casos reais medidos — A-18 par. 47, C-161 par. 67 —
+            # separam o bloco do que vem depois); não é corpo, então nunca
+            # é ela mesma candidata a título.
+            _fechar_titulo_pendente(confirmado=True)
+            linha_anterior_em_branco = em_branco
+            i += 1
+            continue
+
+        despido = linha.strip()
+        if _eh_linha_titulo(despido):
+            # candidata a cabeçalho — decisão adiada até a sequência
+            # terminar (ver `_fechar_titulo_pendente`).
+            titulo_pendente.append(despido)
+            linha_anterior_em_branco = em_branco
+            i += 1
+            continue
+
+        # linha comum (prosa): NUNCA confirma cabeçalho, por maior que seja
+        # o que estava pendente — "A CORTE DECIDE," (3 linhas em CAIXA
+        # ALTA) seguido sem separador de "por unanimidade: " é ênfase
+        # tipográfica no meio de uma frase, não título de seção (ver
+        # `_fechar_titulo_pendente`). Volta ao corpo antes desta linha.
+        _fechar_titulo_pendente(confirmado=False)
         if corrente is not None:
-            despido = linha.strip()
-            if despido:
-                corrente.append(despido)
+            corrente.append(despido)
 
         linha_anterior_em_branco = em_branco
         i += 1
+
+    _fechar_titulo_pendente(confirmado=True)
+    _fechar_paragrafo_corrente(achados[-1][0] if achados else None)
 
     return [
         Paragrafo(
@@ -351,6 +529,7 @@ def segmentar(texto: str) -> list[Paragrafo]:
             texto=_remover_url_absoluta(
                 re.sub(r"\s+", " ", " ".join(partes)).strip()
             ),
+            titulos_removidos=cabecalhos_por_numero.get(n, ()),
         )
         for n, partes in achados
     ]
@@ -377,3 +556,40 @@ def relatorio_lacunas(paragrafos: list[Paragrafo]) -> list[int]:
         return []
     numeros = {p.numero for p in paragrafos}
     return [n for n in range(min(numeros), max(numeros) + 1) if n not in numeros]
+
+
+def detectar_paragrafos_grandes_demais(
+    paragrafos: list[Paragrafo], *, razao_minima: float = 10.0
+) -> set[int]:
+    """Números de parágrafo cujo tamanho estoura a mediana do documento.
+
+    Sinal de `suspeito` independente da assinatura "Cf."/"Cfr." que o
+    crawler já usa (medida em produção: 3,42% dos parágrafos, precisão
+    5/5 numa amostra lida à mão) — e mais forte para o pior defeito deste
+    projeto: um parágrafo que engoliu cabeçalho, voto anexado ou lista de
+    vítimas por falta de fechamento (ver "Round 6" na docstring do módulo)
+    não necessariamente contém "Cf."/"Cfr.", mas SEMPRE destoa em tamanho
+    do resto do mesmo documento — o corpo de um voto individual ou uma
+    lista de 100 nomes não têm como caber no tamanho normal de um
+    parágrafo de sentença.
+
+    A COMPARAÇÃO é sempre contra a MEDIANA DO PRÓPRIO documento, nunca um
+    limiar absoluto de caracteres — a Corte tem parágrafo curto de decisão
+    interlocutória e parágrafo longo de resumo de manifestações (medido:
+    A-18 par. 47 tem 189 mil caracteres e é, ele próprio, um parágrafo
+    real e íntegro da fonte oficial), e um limiar absoluto confundiria os
+    dois. `razao_minima=10.0` replica o corte usado para identificar os
+    documentos desta tarefa; documento com menos de 3 parágrafos não tem
+    mediana informativa e não é avaliado (devolve conjunto vazio).
+
+    Marcar como `suspeito` não é dizer que o parágrafo está ERRADO — pode
+    ser genuinamente grande (ver A-18 acima). É dizer que ele não deve ser
+    transcrito verbatim numa peça sem conferência na fonte, que é
+    precisamente a decisão que caberia ao Defensor, não a este módulo.
+    """
+    if len(paragrafos) < 3:
+        return set()
+    mediana = statistics.median(len(p.texto) for p in paragrafos)
+    if mediana <= 0:
+        return set()
+    return {p.numero for p in paragrafos if len(p.texto) >= razao_minima * mediana}

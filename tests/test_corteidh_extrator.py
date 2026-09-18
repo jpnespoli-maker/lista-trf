@@ -510,6 +510,197 @@ def test_url_nua_sem_disponivel_em_e_removida_do_meio_da_frase():
     )
 
 
+# --- Round 6: cabeçalho de seção/voto/anexo grudado por falta de
+# fechamento (o pior defeito medido no acervo real — ver a docstring do
+# módulo, "Round 6"). Os cenários abaixo reproduzem, em miniatura, os
+# padrões medidos em PDF real: A-18 (OC-18/03) par. 47 termina em
+# "III COMPETÊNCIA"; C-407 (Fábrica de Fogos) par. 318 (o último, cuja
+# numeração NUNCA reabre) engole cabeçalhos de vários votos anexados; e o
+# falso alarme "os artigos II da Declaração Americana" (A-18, dentro do
+# próprio par. 47) e a fórmula "A CORTE DECIDE," (C-407 E C-318, ambos)
+# quase foram removidos por engano antes de medir contra o texto real.
+
+
+def test_cabecalho_de_secao_e_removido_do_corpo_e_preservado():
+    """Reprodução do padrão medido em A-18 (OC-18/03) par. 47: um cabeçalho
+    de seção (numeral romano + título em caixa alta, cada um em sua própria
+    linha — forma real da extração do PyMuPDF) fica colado ao final do
+    parágrafo anterior por falta de parágrafo numerado que o anteceda. Tem
+    de sair do texto do parágrafo E não pode desaparecer — vai para
+    `titulos_removidos`."""
+    texto = (
+        "1. Primeiro paragrafo do documento, que fala sobre os fatos.\n"
+        "\n"
+        "III\n"
+        "COMPETENCIA\n"
+        "\n"
+        "2. Segundo paragrafo, ja na secao seguinte.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1, 2]
+    p1 = next(p for p in pars if p.numero == 1)
+    assert "COMPETENCIA" not in p1.texto
+    assert p1.titulos_removidos == ("III COMPETENCIA",)
+    assert ep.relatorio_lacunas(pars) == []
+
+
+def test_numeral_romano_isolado_no_meio_de_frase_sobrevive():
+    """A restrição que não se negocia: uma linha isolada em caixa alta,
+    SEM outra linha de título adjacente, é falso alarme — medido em A-18,
+    dentro do próprio par. 47 ("os artigos II da Declaração Americana"),
+    onde "II" sai em sua própria linha pela extração do PyMuPDF mas é
+    apenas o numeral do artigo, não um cabeçalho de seção. Tem de
+    permanecer no corpo, palavra por palavra."""
+    texto = (
+        "1. O relatorio cita os artigos\n"
+        "II\n"
+        "da Declaracao Americana em sua fundamentacao.\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == (
+        "O relatorio cita os artigos II da Declaracao Americana em sua "
+        "fundamentacao."
+    )
+    assert p1.titulos_removidos == ()
+
+
+def test_uma_unica_linha_em_caixa_alta_nao_vira_cabecalho_mesmo_confirmada():
+    """O limiar de 2+ linhas (não 1) é deliberado, e é um eixo diferente do
+    "confirmado por linha em branco" testado acima: um acrônimo isolado no
+    fim do parágrafo, mesmo seguido de linha em branco (fechamento
+    reconhecido, não prosa colada), não é cabeçalho de seção sozinho —
+    nenhum cabeçalho real medido nos 14 documentos tem uma única linha."""
+    texto = (
+        "1. O tratado foi negociado no ambito da\n"
+        "OEA\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == "O tratado foi negociado no ambito da OEA"
+    assert p1.titulos_removidos == ()
+
+
+def test_enfase_tipografica_dentro_da_frase_nao_vira_cabecalho():
+    """Achado da própria medição deste round: "318. Portanto, A CORTE
+    DECIDE, por unanimidade: 1. ..." — medido em C-407 E em C-318, a
+    MESMA fórmula de abertura do dispositivo em dois documentos — tem "A",
+    "CORTE" e "DECIDE," cada um em sua própria linha (3 linhas em caixa
+    alta, que bateria a regra de 2+), mas encerradas por "por unanimidade"
+    (prosa comum, colada sem linha em branco) — ênfase tipográfica NO MEIO
+    de uma frase, não cabeçalho de seção. A primeira versão desta regra
+    removia "A CORTE DECIDE," do corpo por engano; o gate que corrige isso
+    é exigir que o cabeçalho termine em algo que NÃO é prosa comum (linha
+    em branco, nota reconhecida ou o próximo parágrafo) — nunca em prosa
+    colada."""
+    texto = (
+        "1. Portanto,\n"
+        "A\n"
+        "CORTE\n"
+        "DECIDE,\n"
+        "por unanimidade que o Estado e responsavel.\n"
+        "\n"
+        "2. Segundo paragrafo.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = next(p for p in pars if p.numero == 1)
+    assert p1.texto == (
+        "Portanto, A CORTE DECIDE, por unanimidade que o Estado e responsavel."
+    )
+    assert p1.titulos_removidos == ()
+
+
+def test_cabecalho_no_ultimo_paragrafo_e_removido_mesmo_sem_fechar_esperado():
+    """O caso "esponja": reprodução do padrão medido em C-407 par. 318 — a
+    Sentença acaba, `esperado` nunca mais é encontrado (não há "parágrafo
+    seguinte"), e um voto anexado com numeração PRÓPRIA (que reinicia em
+    1) fica colado ao último parágrafo para sempre. O cabeçalho do voto
+    ("VOTO CONCORDANTE DO JUIZ...") tem de sair mesmo sem um fechamento
+    por `_INICIO` — só o fim do texto confirma."""
+    texto = (
+        "1. Primeiro e unico paragrafo numerado do dispositivo.\n"
+        "\n"
+        "VOTO CONCORDANTE\n"
+        "DO JUIZ FULANO\n"
+        "\n"
+        "Texto do voto que continua indefinidamente sem retomar a "
+        "numeracao principal.\n"
+    )
+    pars = ep.segmentar(texto)
+    assert [p.numero for p in pars] == [1]
+    p1 = pars[0]
+    assert "VOTO CONCORDANTE" not in p1.texto
+    assert "Texto do voto que continua" in p1.texto
+    assert p1.titulos_removidos == ("VOTO CONCORDANTE DO JUIZ FULANO",)
+
+
+def test_multiplos_cabecalhos_no_mesmo_paragrafo_ficam_todos_preservados():
+    """Generaliza o caso anterior: C-407 tem 5 votos anexados e C-318 tem
+    4 — cada um com seu próprio bloco "VOTO.../CASO.../SENTENÇA DE...".
+    Nenhum pode apagar o anterior; todos ficam, na ordem em que ocorreram."""
+    texto = (
+        "1. Paragrafo unico do dispositivo.\n"
+        "\n"
+        "VOTO CONCORDANTE\n"
+        "DO JUIZ FULANO\n"
+        "\n"
+        "Texto do primeiro voto.\n"
+        "\n"
+        "VOTO DISSIDENTE\n"
+        "DO JUIZ BELTRANO\n"
+        "\n"
+        "Texto do segundo voto.\n"
+    )
+    pars = ep.segmentar(texto)
+    p1 = pars[0]
+    assert p1.titulos_removidos == (
+        "VOTO CONCORDANTE DO JUIZ FULANO",
+        "VOTO DISSIDENTE DO JUIZ BELTRANO",
+    )
+    assert "Texto do primeiro voto." in p1.texto
+    assert "Texto do segundo voto." in p1.texto
+    assert "VOTO" not in p1.texto.replace("do primeiro voto", "").replace(
+        "do segundo voto", ""
+    )
+
+
+def test_detectar_paragrafos_grandes_demais_marca_o_desproporcional():
+    """Sinal de `suspeito` por TAMANHO (Round 6, item A da tarefa) —
+    independente da assinatura "Cf."/"Cfr." que o crawler já usa. Um
+    parágrafo 30x maior que os outros dois do mesmo documento tem de sair
+    marcado."""
+    pars = [
+        ep.Paragrafo(1, "a" * 100),
+        ep.Paragrafo(2, "b" * 100),
+        ep.Paragrafo(3, "c" * 3000),
+    ]
+    assert ep.detectar_paragrafos_grandes_demais(pars) == {3}
+
+
+def test_detectar_paragrafos_grandes_demais_nao_marca_tamanhos_uniformes():
+    """A restrição que não se negocia: parágrafo genuinamente longo (ex.:
+    A-18 par. 47, real e íntegro, 189 mil caracteres) só é anômalo em
+    RELAÇÃO ao próprio documento — tamanhos parecidos não acionam nada."""
+    pars = [
+        ep.Paragrafo(1, "a" * 100),
+        ep.Paragrafo(2, "b" * 110),
+        ep.Paragrafo(3, "c" * 95),
+    ]
+    assert ep.detectar_paragrafos_grandes_demais(pars) == set()
+
+
+def test_detectar_paragrafos_grandes_demais_exige_ao_menos_tres_paragrafos():
+    """Documento com menos de 3 parágrafos não tem mediana informativa —
+    devolve vazio em vez de arriscar um falso positivo sobre amostra
+    minúscula."""
+    pars = [ep.Paragrafo(1, "a" * 10), ep.Paragrafo(2, "b" * 10000)]
+    assert ep.detectar_paragrafos_grandes_demais(pars) == set()
+
+
 def test_disponivel_em_sem_url_sobrevive():
     """A restrição que não se negocia: se o parágrafo genuinamente disser
     "Disponível em" sem URL nenhuma depois, isso não pode ser removido —
