@@ -457,15 +457,41 @@ def ja_indexado(con, registro: dict, *, com_texto: bool) -> bool:
     `n_paragrafos > 0`, porque documento com linha e sem parágrafo não serve e
     precisa ser tentado de novo; para SS basta a linha existir, porque metadado
     é tudo o que ele vai ter.
+
+    A IDENTIDADE É A AUTUAÇÃO, NÃO O NOME — e isto é o conserto de um defeito
+    medido em 18/09/2026, com a colheita já em curso. *Série C No. 318* É
+    aquele julgado, em qualquer língua em que se escreva o título dele. Casando
+    por nome, os 14 documentos da Fase 1 — cujos nomes vieram dos PDFs
+    portugueses OFICIAIS da própria Corte — não casariam com o nome espanhol do
+    catálogo, e **10 dos 16** entrariam DE NOVO como linha nova. A busca
+    devolveria o mesmo julgado duas vezes, sob dois nomes, como se fossem
+    precedentes distintos:
+
+        C-318  "Trabalhadores da Fazenda Brasil Verde Vs. Brasil"
+               "Trabajadores de la Hacienda Brasil Verde Vs. Brasil"
+
+    ARMADILHA da correção, e ela é pior que o defeito: para as 903 resoluções
+    de supervisão o `numero` é NULO, então casar só por `(tipo, serie, numero)`
+    trataria TODAS como o mesmo documento e a colheita indexaria uma. Por isso
+    a autuação só é chave quando `serie` E `numero` existem; sem eles, o nome
+    volta a ser a chave, que é o que há.
     """
-    if registro.get("caso") is None:
-        return False
-    linha = con.execute(
-        "SELECT n_paragrafos FROM documento"
-        " WHERE tipo IS ? AND serie IS ? AND numero IS ? AND caso IS ?",
-        (registro["tipo"], registro["serie"], registro["numero"],
-         registro["caso"]),
-    ).fetchone()
+    tem_autuacao = registro.get("serie") and registro.get("numero") is not None
+    if tem_autuacao:
+        linha = con.execute(
+            "SELECT n_paragrafos FROM documento"
+            " WHERE tipo IS ? AND serie IS ? AND numero IS ?",
+            (registro["tipo"], registro["serie"], registro["numero"]),
+        ).fetchone()
+    else:
+        if registro.get("caso") is None:
+            return False
+        linha = con.execute(
+            "SELECT n_paragrafos FROM documento"
+            " WHERE tipo IS ? AND serie IS ? AND numero IS ? AND caso IS ?",
+            (registro["tipo"], registro["serie"], registro["numero"],
+             registro["caso"]),
+        ).fetchone()
     if linha is None:
         return False
     return (linha["n_paragrafos"] or 0) > 0 if com_texto else True

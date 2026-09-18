@@ -217,3 +217,85 @@ def test_tipos_com_texto_sao_so_CC_e_OC():
     """Decisão do Defensor de 2026-09-17. Travada por teste porque acrescentar
     um tipo aqui multiplica o armazenamento sem decisão."""
     assert set(cc.TIPOS_COM_TEXTO_FASE2) == {"CC", "OC"}
+
+
+# --- identidade: AUTUAÇÃO, não nome ---------------------------------------
+#
+# Defeito medido em 18/09/2026, com a colheita já em curso: a dedup casava pelo
+# NOME, e os 14 documentos da Fase 1 têm título em português — vindo dos PDFs
+# `_por` OFICIAIS da Corte, não de tradução — contra o título espanhol do
+# catálogo. Dez dos dezesseis entrariam de novo, e a busca devolveria o mesmo
+# julgado duas vezes, sob dois nomes, como se fossem precedentes distintos.
+
+
+def test_mesma_autuacao_com_NOME_EM_OUTRA_LINGUA_ja_esta_indexada(con):
+    """`Série C No. 318` É aquele julgado, em qualquer língua do título."""
+    from extrator_paragrafos import Paragrafo
+    doc = indice.inserir_documento(
+        con, serie="C", numero=318, tipo="CC",
+        caso="Trabalhadores da Fazenda Brasil Verde Vs. Brasil",
+        estado="Brasil", data="2016-10-20")
+    indice.inserir_paragrafos(con, doc, "por", [Paragrafo(1, "texto")])
+
+    # O catálogo dá o MESMO julgado com o nome em espanhol.
+    do_catalogo = {"tipo": "CC", "serie": "C", "numero": 318,
+                   "caso": "Trabajadores de la Hacienda Brasil Verde Vs. Brasil"}
+    assert cc.ja_indexado(con, do_catalogo, com_texto=True), (
+        "nome em outra língua tem de casar pela autuação, senão duplica")
+
+    # E o nome curado NÃO se perde: quem já está, fica.
+    assert con.execute(
+        "SELECT caso FROM documento WHERE serie='C' AND numero=318"
+    ).fetchone()["caso"] == "Trabalhadores da Fazenda Brasil Verde Vs. Brasil"
+
+
+def test_autuacoes_DIFERENTES_do_mesmo_caso_sao_documentos_distintos(con):
+    """Sentença de mérito e sentença de interpretação têm números próprios.
+
+    *Manuela y otros Vs. El Salvador* é C-441 no mérito e C-461 na
+    interpretação. Casar pelo caso, e não pela autuação, faria a segunda
+    parecer já indexada — e a interpretação nunca entraria.
+    """
+    from extrator_paragrafos import Paragrafo
+    doc = indice.inserir_documento(
+        con, serie="C", numero=441, tipo="CC",
+        caso="Manuela y otros Vs. El Salvador", estado=None,
+        data="2021-11-02")
+    indice.inserir_paragrafos(con, doc, "esp", [Paragrafo(1, "t")])
+
+    interpretacao = {"tipo": "CC", "serie": "C", "numero": 461,
+                     "caso": "Manuela y otros Vs. El Salvador"}
+    assert not cc.ja_indexado(con, interpretacao, com_texto=True)
+
+
+def test_SS_sem_numero_NAO_colapsam_num_documento_so(con):
+    """A armadilha da correção, e ela é pior que o defeito que corrige.
+
+    As 903 resoluções de supervisão têm `numero` NULO. Casando só por
+    `(tipo, serie, numero)`, a primeira indexada faria todas as outras 902
+    parecerem já presentes, e a colheita gravaria UMA. Por isso a autuação só
+    é chave quando série E número existem.
+    """
+    primeira = {"tipo": "SS", "serie": None, "numero": None,
+                "caso": "Baena Ricardo y otros Vs. Panamá", "etapa": None,
+                "data": "2013-03-20", "estado": None, "url": ""}
+    cc.indexar_metadado(con, primeira)
+    assert cc.ja_indexado(con, primeira, com_texto=False)
+
+    outra = dict(primeira, caso="Cantoral Benavides Vs. Perú")
+    assert not cc.ja_indexado(con, outra, com_texto=False), (
+        "SS distinta não pode contar como já indexada")
+
+    cc.indexar_metadado(con, outra)
+    assert con.execute(
+        "SELECT COUNT(*) FROM documento WHERE tipo='SS'").fetchone()[0] == 2
+
+
+def test_serie_sem_numero_cai_no_nome(con):
+    """Autuação incompleta não serve de chave; o nome volta a ser o que há."""
+    reg = {"tipo": "CC", "serie": "C", "numero": None, "caso": "X Vs. Y",
+           "etapa": None, "data": None, "estado": None, "url": ""}
+    assert not cc.ja_indexado(con, reg, com_texto=False)
+    cc.indexar_metadado(con, reg)
+    assert cc.ja_indexado(con, reg, com_texto=False)
+    assert not cc.ja_indexado(con, dict(reg, caso="Z Vs. W"), com_texto=False)
