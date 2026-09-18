@@ -129,14 +129,21 @@ def buscar_jurisprudencia_cjf(
                         relaxada, lista_tribunais, max_resultados
                     )
                     busca_relaxada = relaxada if documentos else None
-            registrar_dispositivo(
-                "cjf-jurisprudencia", cache_key,
-                _json.dumps({
-                    "docs": documentos, "totais": totais,
-                    "relaxada": busca_relaxada,
-                }),
-                ttl_s=7 * 86400,
-            )
+            # Zero NÃO se cacheia (31/08/2026). Um shard de tribunal às escuras
+            # devolve 200 com "Total 0 Documento(s)", e gravar isso por 7 dias
+            # deixava o falso zero GRUDADO: a mesma busca seguia respondendo
+            # "nada encontrado" por uma semana depois de o portal voltar. O
+            # cliente já reconfere o zero uma vez; se ainda vier vazio, é barato
+            # tentar de novo na próxima chamada em vez de servir vazio da gaveta.
+            if documentos:
+                registrar_dispositivo(
+                    "cjf-jurisprudencia", cache_key,
+                    _json.dumps({
+                        "docs": documentos, "totais": totais,
+                        "relaxada": busca_relaxada,
+                    }),
+                    ttl_s=7 * 86400,
+                )
         n_docs = len(documentos)
 
         resultados: List[BaseResultadoJuridico] = []

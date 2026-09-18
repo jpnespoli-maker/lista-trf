@@ -20,6 +20,10 @@ Características:
 - Canário estrutural: se o portal reporta total > 0 e o parser extrai 0
   documentos, levanta ``RuntimeError`` (falha LOUD) em vez de devolver vazio
   silencioso — indistinguível de "nada encontrado".
+- Zero reconferido: ``total == 0`` é reexecutado UMA vez, com ViewState novo,
+  antes de ser aceito. O shard de um tribunal pode ficar às escuras e o portal
+  responde 200 com "Total 0 Documento(s)", sem erro — o canário acima cobre só
+  o caso inverso, e o retry do ``@retry`` só dispara em exceção.
 - Paginação best-effort via AJAX do datatable PrimeFaces
   (``formulario:tabelaDocumentos_first``), limitada a ``_MAX_PAGINAS``.
 """
@@ -56,6 +60,9 @@ _CHECKBOX_TRIBUNAL_FALLBACK = "formulario:j_idt51"
 # Guarda da paginação: no máximo 5 páginas por busca (~50 documentos).
 _MAX_PAGINAS = 5
 _DOCS_POR_PAGINA = 10
+
+# Pausa antes de reconferir um total=0 (ver reconferir_zero em buscar_documentos).
+_PAUSA_RECONFERIR_ZERO_S = 1.5
 
 
 class CJFSession:
@@ -288,6 +295,31 @@ def buscar_documentos(
 
     totais = extrair_totais(html_resultado)
     docs = extrair_documentos(html_resultado)
+
+    # Zero NÃO se aceita de primeira (medido em 31/08/2026). O shard de um
+    # tribunal pode ficar às escuras no portal: a resposta vem HTTP 200, sem erro
+    # algum, dizendo "Total TRF2 0 Documento(s) encontrado(s)" — zero
+    # indistinguível de ausência de jurisprudência. Naquela sessão o TRF2
+    # respondeu 704 para `medicamento E União` e, dez minutos depois, passou a
+    # devolver 0 para QUALQUER termo, inclusive `medicamento`, enquanto TRF1 e STJ
+    # respondiam normais. O retry de cima não alcança este caso porque só dispara
+    # em EXCEÇÃO, e 200-com-zero não levanta nada.
+    #
+    # Custa uma requisição a mais só quando o zero aparece, e converte o falso
+    # zero em resultado ou em zero CONFIRMADO por repetição.
+    if not docs and sum(totais.values()) == 0:
+        time.sleep(_PAUSA_RECONFERIR_ZERO_S)
+        sess.viewstate = None
+        sess._fetched_at = 0.0
+        try:
+            html_2 = sess.buscar(termo, tribunais)
+        except Exception:
+            html_2 = None
+        if html_2 is not None:
+            totais_2 = extrair_totais(html_2)
+            docs_2 = extrair_documentos(html_2)
+            if docs_2 or sum(totais_2.values()) > 0:
+                html_resultado, totais, docs = html_2, totais_2, docs_2
 
     # Canário estrutural: se o portal reporta documentos mas o parser extraiu
     # zero, o HTML/JSF do CJF provavelmente mudou (ex.: id autogerado do

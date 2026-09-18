@@ -596,6 +596,12 @@ def buscar_jurisprudencia_stj(
             return payload["xml"]
 
         def _guardar(saida: str, n: int) -> str:
+            # Resultado vazio NÃO se cacheia (31/08/2026): a rota do CJF pode
+            # devolver 0 por shard do tribunal às escuras — 200, sem erro, "Total
+            # 0 Documento(s)" — e gravar isso servia o falso zero pelo TTL inteiro,
+            # muito depois de o portal ter voltado.
+            if n <= 0:
+                return saida
             try:
                 import json as _json
                 registrar_dispositivo(
