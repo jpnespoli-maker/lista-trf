@@ -28,6 +28,18 @@ TEXTO = (
     "2. Segundo paragrafo, que fala de vulnerabilidade.\n"
 )
 
+# Mesma estrutura de TEXTO, mas com um cabeçalho de secao real (2+ linhas
+# seguidas em CAIXA ALTA, fechado por linha em branco) grudado ao final do
+# paragrafo 1 -- o padrao que extrator_paragrafos.segmentar (round 6) separa
+# em Paragrafo.titulos_removidos em vez de deixar vazar para o corpo.
+TEXTO_COM_TITULO = (
+    "CORTE INTERAMERICANA\n\n"
+    "1. Primeiro paragrafo, antes do titulo de secao.\n\n"
+    "III\n"
+    "COMPETENCIA\n\n"
+    "2. Segundo paragrafo, depois do titulo removido.\n"
+)
+
 
 @pytest.fixture()
 def con():
@@ -137,6 +149,56 @@ def test_o_texto_gravado_preserva_o_NUMERO_do_paragrafo(con, tmp_path, monkeypat
     assert "\n\n2. " in conteudo, "os blocos se separam por linha em branco"
     # e o texto do parágrafo sobrevive íntegro
     assert "vulnerabilidade" in conteudo
+
+
+def test_titulo_removido_sobrevive_no_txt_e_e_distinguivel_do_texto(
+    con, tmp_path, monkeypatch,
+):
+    """O cabecalho de secao que o extrator separa em `titulos_removidos`
+    (round 6) nao pode desaparecer no artefato durável: se ele vive só no
+    objeto em memória, o `.txt` grava texto sabidamente incompleto, e a
+    aposta do projeto (§4.2 -- o índice se reconstrói OFFLINE a partir do
+    `.txt`, sem voltar ao PDF) fica mais fraca em silêncio."""
+    monkeypatch.setattr(baixador, "baixar_melhor_idioma",
+                        lambda base, **kw: ("por", b"%PDF-falso", base + "_por.pdf"))
+    monkeypatch.setattr(cc.ep, "extrair_texto_pdf", lambda _b: TEXTO_COM_TITULO)
+
+    cc.indexar_documento(con, cc.SEMENTE_CNJ[0], pasta_texto=tmp_path)
+    conteudo = (tmp_path / "seriec_149_por.txt").read_text(encoding="utf-8")
+    linhas = conteudo.splitlines()
+
+    assert "[titulo removido] III COMPETENCIA" in conteudo, \
+        "o cabecalho tem de estar gravado no .txt, não só no objeto"
+    # imediatamente ANTES do bloco do paragrafo a que pertencia
+    idx = linhas.index("[titulo removido] III COMPETENCIA")
+    assert linhas[idx + 1] == "1. Primeiro paragrafo, antes do titulo de secao."
+    # inequivocamente DISTINTO do texto do paragrafo: nunca comeca por
+    # "N. " (o contrato de numero do paragrafo) nem é o próprio texto
+    assert not linhas[idx].startswith("1. ")
+    assert "III COMPETENCIA" not in (
+        "1. Primeiro paragrafo, antes do titulo de secao."
+    )
+    # o contrato do NÚMERO do parágrafo, travado no teste-irmão, sobrevive
+    assert conteudo.startswith("[titulo removido] "), \
+        "a marca abre o arquivo porque pertence ao paragrafo 1, mas o " \
+        "bloco do paragrafo 1 em si continua abrindo com '1. '"
+    assert "\n2. Segundo paragrafo" in conteudo
+
+
+def test_documento_sem_titulo_removido_nao_grava_marcador(con, tmp_path, monkeypatch):
+    """O negativo do teste acima: documento cujo extrator não separou
+    cabeçalho nenhum não pode ganhar marcador vazio no `.txt` -- um
+    marcador sem conteúdo seria informação inventada, não ausência
+    declarada."""
+    monkeypatch.setattr(baixador, "baixar_melhor_idioma",
+                        lambda base, **kw: ("por", b"%PDF-falso", base + "_por.pdf"))
+    monkeypatch.setattr(cc.ep, "extrair_texto_pdf", lambda _b: TEXTO)
+
+    cc.indexar_documento(con, cc.SEMENTE_CNJ[0], pasta_texto=tmp_path)
+    conteudo = (tmp_path / "seriec_149_por.txt").read_text(encoding="utf-8")
+
+    assert "[titulo removido" not in conteudo, \
+        "nenhuma linha de marca sem titulo real por tras dela"
 
 
 def test_sha256_do_PDF_descartado_fica_no_indice(con, tmp_path, monkeypatch):

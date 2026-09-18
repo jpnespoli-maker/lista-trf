@@ -209,3 +209,86 @@ def test_link_nunca_cai_para_outro_idioma_quando_falta(banco, tmp_path, monkeypa
 def test_ficha_tambem_traz_o_link(banco):
     xml = server._ficha_sync(caso="Ximenes Lopes")
     assert "seriec_149_por.pdf" in xml
+
+
+# --- TRUNCAGEM do conteudo (medida: acervo real tem paragrafo de 189 KB e --
+# 358 KB, texto legitimo sem numero de paragrafo correspondente na fonte,
+# marcado `suspeito` em vez de dividido -- ver extrator_paragrafos, round 6).
+# `truncar_por_tokens` e a UNICA guarda entre o indice e uma resposta gigante
+# despejada no contexto de quem redige a peca; mutá-lo matava ZERO testes
+# antes deste bloco (Tarefa 7, item 4 da prova por mutação).
+
+def _banco_com_paragrafo_longo(tmp_path, n_caracteres):
+    """Documento com um único parágrafo de `n_caracteres`, para os testes de
+    truncagem abaixo."""
+    caminho = tmp_path / "corteidh.db"
+    con = indice.abrir(caminho)
+    indice.criar_schema(con)
+    doc = indice.inserir_documento(
+        con, serie="C", numero=407, tipo="CC",
+        caso="Empregados da Fabrica de Fogos Vs. Brasil", estado="Brasil",
+        data="2020-07-15",
+        url_por="https://www.corteidh.or.cr/docs/casos/articulos/seriec_407_por.pdf")
+    frase = "vulnerabilidade estrutural. "
+    texto_longo = frase * (n_caracteres // len(frase) + 1)
+    indice.inserir_paragrafos(con, doc, "por", [Paragrafo(318, texto_longo)])
+    con.close()
+    return caminho, texto_longo
+
+
+def test_paragrafo_longo_sai_truncado_no_conteudo(tmp_path, monkeypatch):
+    import re as _re
+
+    caminho, texto_longo = _banco_com_paragrafo_longo(tmp_path, 20_000)
+    monkeypatch.setattr(server, "CAMINHO_BANCO", caminho)
+
+    xml = server._buscar_sync(consulta="vulnerabilidade", max_tokens_paragrafo=50)
+
+    conteudo = _re.search(r"<conteudo>(.*?)</conteudo>", xml, _re.S)
+    assert conteudo, "o resultado tem de trazer <conteudo>"
+    # 50 tokens ~ 200 caracteres; bem menor que os ~20.000 do original
+    assert len(conteudo.group(1)) < len(texto_longo) / 10
+    # a referência não pode ser vítima do corte: par. e numero de série
+    # continuam inteiros no XML
+    assert "par. 318" in xml
+    assert "Série C No. 407" in xml
+    # e a citação sugerida, dentro de <extra>, carrega o endereço completo
+    cit = _re.search(r"<citacao_sugerida>(.*?)</citacao_sugerida>", xml, _re.S)
+    assert cit and "seriec_407_por.pdf" in cit.group(1)
+
+
+def test_max_tokens_paragrafo_e_saneado_no_PISO(tmp_path, monkeypatch):
+    """O brief fixa o piso em 50 tokens (~200 caracteres). Pedindo um valor
+    abaixo disso (inclusive negativo), o servidor não pode aceitar
+    literalmente -- teria de truncar quase tudo, ou nada, dependendo do
+    sinal -- e sim aplicar o piso."""
+    import re as _re
+
+    caminho, texto_longo = _banco_com_paragrafo_longo(tmp_path, 20_000)
+    monkeypatch.setattr(server, "CAMINHO_BANCO", caminho)
+
+    xml = server._buscar_sync(consulta="vulnerabilidade", max_tokens_paragrafo=-100)
+    conteudo = _re.search(r"<conteudo>(.*?)</conteudo>", xml, _re.S)
+    assert conteudo
+    # piso de 50 tokens = 200 caracteres, mais o sufixo " [...]" do corte
+    assert len(conteudo.group(1)) <= 210
+
+
+def test_max_tokens_paragrafo_e_saneado_no_TETO(tmp_path, monkeypatch):
+    """O teto é 4000 tokens (~16.000 caracteres). Pedindo um valor
+    astronômico, o servidor não pode devolver o parágrafo inteiro (30.000
+    caracteres) -- o teto tem de valer mesmo sem limite pedido pelo
+    chamador."""
+    import re as _re
+
+    caminho, texto_longo = _banco_com_paragrafo_longo(tmp_path, 30_000)
+    monkeypatch.setattr(server, "CAMINHO_BANCO", caminho)
+
+    xml = server._buscar_sync(consulta="vulnerabilidade", max_tokens_paragrafo=10**9)
+    conteudo = _re.search(r"<conteudo>(.*?)</conteudo>", xml, _re.S)
+    assert conteudo
+    assert len(conteudo.group(1)) < len(texto_longo), \
+        "o teto de 4000 tokens tem de cortar, mesmo pedindo um valor gigante"
+    # teto de 4000 tokens = 16.000 caracteres, mais a margem do sufixo/corte
+    # no último ponto final
+    assert len(conteudo.group(1)) <= 16_100

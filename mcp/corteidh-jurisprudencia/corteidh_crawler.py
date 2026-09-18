@@ -91,6 +91,32 @@ def _base_url(registro: dict) -> str:
     return molde.format(n=registro["numero"])
 
 
+# Marcador do cabeçalho removido (round 6 do extrator, ver
+# `extrator_paragrafos.Paragrafo.titulos_removidos`) dentro do `.txt`
+# gravado. Duas exigências: (a) sobreviver ao PDF descartado — sem isto, o
+# cabeçalho existe só no objeto em memória e desaparece do artefato durável,
+# que é a aposta inteira do projeto (§4.2: o texto é reconstruído OFFLINE a
+# partir do `.txt`, nunca de volta ao PDF); (b) ser INEQUIVOCAMENTE distinto
+# do texto do parágrafo, para que ninguém o transcreva como se fosse fonte —
+# nenhum texto de parágrafo real começa por "[", e a palavra "removido" não
+# tem como aparecer por acidente na abertura de uma linha de corpo.
+_MARCADOR_TITULO_REMOVIDO = "[titulo removido] "
+
+
+def _bloco_txt(p: "ep.Paragrafo") -> str:
+    """Um parágrafo como bloco gravável no `.txt`.
+
+    Os cabeçalhos removidos (se houver) vão numa linha própria IMEDIATAMENTE
+    ANTES do bloco `N. texto` a que pertenciam — é o mesmo parágrafo que os
+    engoliu (ver "Round 6" na docstring de `extrator_paragrafos`), então a
+    marca fica colada a ele, não a outro. Documento sem título removido
+    (`titulos_removidos == ()`) não grava linha de marca nenhuma: um
+    marcador vazio seria informação inventada, não uma ausência declarada.
+    """
+    marcas = "".join(f"{_MARCADOR_TITULO_REMOVIDO}{t}\n" for t in p.titulos_removidos)
+    return f"{marcas}{p.numero}. {p.texto}"
+
+
 def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
     """Baixa, extrai, segmenta e indexa UM documento.
 
@@ -141,7 +167,7 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
     # reflow destrói a fronteira de parágrafo, que é a unidade de citação
     # deste projeto inteiro.
     (pasta_texto / nome).write_text(
-        "\n\n".join(f"{p.numero}. {p.texto}" for p in paragrafos),
+        "\n\n".join(_bloco_txt(p) for p in paragrafos),
         encoding="utf-8",
     )
 
