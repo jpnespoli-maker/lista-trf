@@ -14,11 +14,13 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import time
 from pathlib import Path
 
 import baixador
 import extrator_paragrafos as ep
 import indice
+import titulo_catalogo
 
 PASTA_TEXTO_PADRAO = (
     Path.home() / ".claude" / "DPU" / "conhecimento" / "corteidh" / "texto"
@@ -210,10 +212,21 @@ def main(argv=None) -> int:
     p.add_argument("--pasta-texto", default=str(PASTA_TEXTO_PADRAO))
     p.add_argument("--glossario", action="store_true",
                    help="só semeia o glossário pt->es/en/fr (não vai à rede)")
+    p.add_argument("--fase2", action="store_true",
+                   help="acervo COMPLETO pelo catálogo oficial (horas de rede)")
+    p.add_argument("--tipos", default="CC,OC,SS",
+                   help="tipos a colher na fase 2 (padrão CC,OC,SS)")
+    p.add_argument("--limite", type=int, default=None,
+                   help="para a fase 2 depois de N documentos POR TIPO")
+    p.add_argument("--pausa", type=float, default=2.0,
+                   help="pausa entre idiomas da cascata, em segundos")
     args = p.parse_args(argv)
 
-    if not args.semear and not args.censo and not args.glossario:
-        p.error("informe --semear, --censo ou --glossario")
+    if not (args.semear or args.censo or args.glossario or args.fase2):
+        p.error("informe --semear, --censo, --glossario ou --fase2")
+
+    if args.fase2:
+        return _fase2(args)
 
     if args.glossario:
         # Separado do `--semear` de propósito: semear o glossário não toca a
@@ -274,6 +287,386 @@ def main(argv=None) -> int:
     # subir por ele treinaria quem chama a ignorar o rc.
     con.close()
     return 0 if falhas == 0 else 1
+
+
+# ===========================================================================
+# FASE 2 — acervo completo, dirigido pelo CATÁLOGO OFICIAL
+#
+# A Fase 1 indexou 14 documentos a partir de uma semente escrita à mão, e o
+# `_base_url` acima monta a URL por molde fixo a partir de `serie`/`numero`.
+# Isso NÃO escala, e a razão é medida: as URLs do catálogo têm SETE formas
+# distintas só nos casos contenciosos — `http` e `https`, com e sem `www`, e
+# 44 delas com `Seriec_` de S MAIÚSCULO, que o servidor distingue. Nos
+# pareceres há ainda sufixo numérico (`_esp1.pdf`, 4 casos) e a forma curta
+# `_es.pdf` (2 casos). Molde fixo produziria 404 em dezenas de documentos, e
+# 404 aqui se lê como "documento inexistente" — diagnóstico errado.
+#
+# Portanto a Fase 2 parte da URL QUE O CATÁLOGO DEU e apenas SUBSTITUI o
+# sufixo de idioma, preservando caixa, host e sufixo numérico.
+#
+# Volume medido em 18/09/2026, numa requisição por tipo (o formulário já traz
+# `page_rows=3000` e não tem campo de página): CC 598, OC 33, SS 903 = 1.534,
+# conferindo com o censo independente por `recordcount`.
+# ===========================================================================
+
+_SUFIXO_IDIOMA = re.compile(r"_(por|esp|es|ing|eng|fra|fre)([0-9]*)\.pdf$", re.I)
+
+# Normaliza para HTTPS, e a razão é de SEGURANÇA, não de desempenho: 521 das
+# 598 URLs do catálogo são `http://`, isto é, texto claro.
+#
+# NÃO se afirma ganho de velocidade. A latência do servidor foi medida como
+# ERRÁTICA — 0,16 s e 55 s na mesma URL, em corridas diferentes — e a causa
+# NÃO FOI APURADA; a suspeita é estrangulamento. Uma hipótese anterior
+# atribuiu a lentidão ao host sem `www` e foi FALSEADA pela medição seguinte,
+# que inverteu o resultado. Fica registrado como não apurado, e não arredondado
+# para a hipótese mais próxima.
+_HOST = re.compile(r"^https?://(?:www\.)?corteidh\.or\.cr", re.I)
+
+# Tipos que entram COM TEXTO. O resto entra por metadado — decisão do Defensor
+# de 2026-09-17: "guardar texto só dos casos contenciosos e pareceres".
+TIPOS_COM_TEXTO_FASE2 = ("CC", "OC")
+
+_MESES_ES = {
+    "enero": "01", "febrero": "02", "marzo": "03", "abril": "04",
+    "mayo": "05", "junio": "06", "julio": "07", "agosto": "08",
+    "septiembre": "09", "setiembre": "09", "octubre": "10",
+    "noviembre": "11", "diciembre": "12",
+}
+
+
+def normalizar_host(url: str) -> str:
+    return _HOST.sub("https://www.corteidh.or.cr", url, count=1)
+
+
+# GRAFIAS do sufixo, por idioma. Não é zelo: o servidor usa DUAS grafias para
+# o espanhol e a cascata só conhecia uma. Medido na prova de 18/09/2026 — o
+# parecer `seriea_30_es.pdf` falhou em TODOS os quatro idiomas porque a
+# substituição produzia `_esp.pdf` e o arquivo existente é `_es.pdf`. São 2
+# pareceres e 2 supervisões nessa forma; sem as variantes, ficariam
+# inalcançáveis e o relatório diria "nenhum idioma devolveu PDF", que se lê
+# como documento ausente do servidor.
+_GRAFIAS = {
+    "por": ("por",),
+    "esp": ("esp", "es"),
+    "ing": ("ing", "eng"),
+    "fra": ("fra", "fre"),
+}
+
+
+def url_do_idioma(url_catalogo: str, idioma: str) -> str | None:
+    """URL do mesmo documento noutro idioma, ou None se não houver sufixo.
+
+    `None` é RESPOSTA e não falha: 891 das 903 resoluções de supervisão têm URL
+    sem sufixo de idioma (`docs/supervisiones/baena_09_03_26.pdf`), e para elas
+    não existe "a versão portuguesa" a construir. Devolver a própria URL nesse
+    caso seria pior que devolver nada — a sonda testaria o arquivo original e
+    reportaria que o idioma pedido existe.
+    """
+    url = normalizar_host(url_catalogo)
+    if not _SUFIXO_IDIOMA.search(url):
+        return None
+    return _SUFIXO_IDIOMA.sub(lambda m: f"_{idioma}{m.group(2)}.pdf", url)
+
+
+def baixar_do_catalogo(url_catalogo: str, *, sessao=None, pausa_s: float = 2.0):
+    """Cascata `por → esp → ing → fra` sobre a URL do catálogo.
+
+    Difere de `baixador.baixar_melhor_idioma` num ponto que decide: aquele
+    monta `f"{base}_{idioma}.pdf"` a partir de uma base sem sufixo, o que PERDE
+    o sufixo numérico e impõe a caixa do molde. Aqui a URL do catálogo é a
+    origem e só o idioma muda.
+
+    Devolve `(idioma, corpo, url)`; levanta `baixador.PdfInvalido` com a causa
+    de CADA idioma, para que o relatório distinga "não há tradução" de "o site
+    piscou" — condutas opostas.
+    """
+    ses = sessao or baixador._sessao_padrao()
+    primeira = url_do_idioma(url_catalogo, baixador.CASCATA[0])
+    if primeira is None:
+        raise baixador.PdfInvalido(
+            f"{url_catalogo}: URL sem sufixo de idioma — não é documento com "
+            f"versões por idioma (típico de supervisão de cumprimento)")
+
+    causas: list[str] = []
+    for i, idioma in enumerate(baixador.CASCATA):
+        for grafia in _GRAFIAS.get(idioma, (idioma,)):
+            url = url_do_idioma(url_catalogo, grafia)
+            try:
+                corpo = baixador.baixar_pdf(url, sessao=ses, tentativas=2)
+            except baixador.PdfInvalido as e:
+                causas.append(f"{grafia}: {e}")
+                continue
+            # O idioma devolvido é o CANÔNICO, não a grafia do arquivo: o
+            # índice tem colunas `url_esp`/`sha256_esp`, e gravar "es" faria
+            # `_url_do_idioma` no servidor procurar `url_es`, que não existe —
+            # a citação sairia sem link, em silêncio.
+            return idioma, corpo, url
+        if i < len(baixador.CASCATA) - 1 and pausa_s:
+            time.sleep(pausa_s)
+    raise baixador.PdfInvalido(
+        f"{url_catalogo}: nenhum de {baixador.CASCATA} devolveu PDF — "
+        + " | ".join(causas))
+
+
+def iso_da_data_espanhola(bruta: str | None) -> str | None:
+    """"14 de mayo de 2026" -> "2026-05-14"; None se não casar.
+
+    `None` é declaração de ignorância, e ela sobrevive até a citação: o
+    `citacao.data_por_extenso` trata data ausente devolvendo "Sentença." em
+    vez de "Sentença de None." — inventar data seria pior que omiti-la.
+    """
+    if not bruta:
+        return None
+    m = re.search(r"([0-9]{1,2})\s+de\s+([a-zA-Zçéíóú]+)\s+de\s+([0-9]{4})",
+                  bruta)
+    if not m:
+        return None
+    mes = _MESES_ES.get(m.group(2).lower())
+    if not mes:
+        return None
+    return f"{m.group(3)}-{mes}-{int(m.group(1)):02d}"
+
+
+def registro_do_catalogo(bruto: dict, tipo: str) -> dict:
+    """Registro do catálogo com nome e etapa decompostos do título."""
+    partes = titulo_catalogo.decompor(bruto.get("titulo", ""), tipo=tipo)
+    return {
+        "tipo": tipo,
+        "caso": partes["caso"],
+        "etapa": partes["etapa"],
+        "serie": bruto.get("serie"),
+        "numero": bruto.get("numero"),
+        "data": iso_da_data_espanhola(bruto.get("data")),
+        # O catálogo NÃO devolve o Estado em coluna própria. Deixar `None` é
+        # declarar que não se sabe; extraí-lo do sufixo "Vs. <país>" do nome
+        # seria inferência, e o filtro `estado` da busca passaria a operar
+        # sobre dado inferido sem dizê-lo.
+        "estado": None,
+        "url": bruto.get("url", ""),
+    }
+
+
+def ja_indexado(con, registro: dict, *, com_texto: bool) -> bool:
+    """Já está no índice de forma UTILIZÁVEL?
+
+    Existe para a corrida ser RETOMÁVEL. O harness ceifa tarefa longa quando a
+    memória aperta, e a colheita de 631 documentos leva horas — sem retomada,
+    um kill aos 70% custaria a corrida inteira.
+
+    O critério difere por tipo, e a diferença importa: para CC/OC exige
+    `n_paragrafos > 0`, porque documento com linha e sem parágrafo não serve e
+    precisa ser tentado de novo; para SS basta a linha existir, porque metadado
+    é tudo o que ele vai ter.
+    """
+    if registro.get("caso") is None:
+        return False
+    linha = con.execute(
+        "SELECT n_paragrafos FROM documento"
+        " WHERE tipo IS ? AND serie IS ? AND numero IS ? AND caso IS ?",
+        (registro["tipo"], registro["serie"], registro["numero"],
+         registro["caso"]),
+    ).fetchone()
+    if linha is None:
+        return False
+    return (linha["n_paragrafos"] or 0) > 0 if com_texto else True
+
+
+def indexar_metadado(con, registro: dict) -> dict:
+    """Indexa SEM texto — o caso das resoluções de supervisão.
+
+    Não é meia indexação: é a decisão do Defensor de guardar texto só de casos
+    contenciosos e pareceres. O `server.py` recusa busca textual em tipo fora
+    de `TIPOS_COM_TEXTO` com aviso EXPLÍCITO, justamente para que um resultado
+    vazio aqui nunca se leia como ausência de precedente.
+    """
+    if registro["caso"] is None:
+        return {"caso": None, "erro": None, "idioma": None, "n_paragrafos": 0,
+                "lacunas": [],
+                "pulado": "nome do caso não isolado do título do catálogo"}
+    url = normalizar_host(registro["url"]) if registro["url"] else None
+    indice.inserir_documento(
+        con, serie=registro["serie"], numero=registro["numero"],
+        tipo=registro["tipo"], caso=registro["caso"],
+        estado=registro.get("estado"), data=registro["data"],
+        etapa=registro.get("etapa"),
+        # O catálogo linka o espanhol; é o que se SABE. Não se grava `url_por`
+        # por não ter sido sondada — endereço não conferido no índice viraria
+        # link na citação, e link que não abre destrói a conferência na fonte.
+        url_esp=url,
+    )
+    con.commit()
+    return {"caso": registro["caso"], "erro": None, "idioma": None,
+            "n_paragrafos": 0, "lacunas": [], "metadado": True}
+
+
+def indexar_do_catalogo(con, registro: dict, *, pasta_texto: Path,
+                        pausa_s: float = 2.0) -> dict:
+    """Baixa pela URL do catálogo, extrai, segmenta e indexa UM documento.
+
+    Gêmeo de `indexar_documento`, com uma diferença: a URL vem do catálogo em
+    vez de ser montada por molde. Falhando o download, NADA entra no índice —
+    documento pela metade é pior que ausente, porque a busca o acha e o
+    parágrafo não existe.
+    """
+    if registro["caso"] is None:
+        return {"caso": None, "erro": None, "idioma": None, "n_paragrafos": 0,
+                "lacunas": [],
+                "pulado": "nome do caso não isolado do título do catálogo"}
+    if not registro["url"]:
+        return {"caso": registro["caso"], "erro": None, "idioma": None,
+                "n_paragrafos": 0, "lacunas": [],
+                "pulado": "catálogo não trouxe URL"}
+
+    try:
+        idioma, corpo, url = baixar_do_catalogo(
+            registro["url"], pausa_s=pausa_s)
+    except baixador.PdfInvalido as e:
+        return {"caso": registro["caso"], "erro": str(e), "idioma": None,
+                "n_paragrafos": 0, "lacunas": []}
+
+    texto = ep.extrair_texto_pdf(corpo)
+    paragrafos = ep.segmentar(texto)
+    lacunas = ep.relatorio_lacunas(paragrafos)
+    if not paragrafos:
+        # PDF real que não rendeu parágrafo numerado: acontece com documento
+        # digitalizado sem camada de texto. Categoria PRÓPRIA, não falha de
+        # rede — as condutas são opostas (esta pede OCR, aquela pede repetir).
+        return {"caso": registro["caso"], "erro": None, "idioma": idioma,
+                "n_paragrafos": 0, "lacunas": [],
+                "pulado": f"PDF em {idioma} sem parágrafo numerado "
+                          f"(provável digitalização sem camada de texto)"}
+
+    pasta_texto.mkdir(parents=True, exist_ok=True)
+    nome = url.rsplit("/", 1)[-1].replace(".pdf", ".txt")
+    (pasta_texto / nome).write_text(
+        "\n\n".join(_bloco_txt(p) for p in paragrafos), encoding="utf-8")
+
+    doc_id = indice.inserir_documento(
+        con, serie=registro["serie"], numero=registro["numero"],
+        tipo=registro["tipo"], caso=registro["caso"],
+        estado=registro.get("estado"), data=registro["data"],
+        etapa=registro.get("etapa"),
+        url_por=url if idioma == "por" else None,
+        url_esp=url if idioma == "esp" else None,
+        url_ing=url if idioma == "ing" else None,
+        url_fra=url if idioma == "fra" else None,
+        sha256_por=baixador.sha256(corpo) if idioma == "por" else None,
+        sha256_esp=baixador.sha256(corpo) if idioma == "esp" else None,
+    )
+    # Mesmos DOIS sinais de contaminação do `indexar_documento`, e pela mesma
+    # razão: "Cf."/"Cfr." acha nota de rodapé vazada, e o tamanho anômalo acha
+    # cabeçalho, voto ou anexo engolido — um parágrafo pode ter engolido cem
+    # nomes de vítimas sem conter "Cf." nenhum. `suspeitos` é o conjunto dos
+    # NÚMEROS de parágrafo, que é o que `inserir_paragrafos` espera.
+    suspeitos = {p.numero for p in paragrafos if _SUSPEITO.search(p.texto)}
+    suspeitos |= ep.detectar_paragrafos_grandes_demais(paragrafos)
+    indice.inserir_paragrafos(con, doc_id, idioma, paragrafos,
+                              suspeitos=suspeitos)
+    con.commit()
+    return {"caso": registro["caso"], "erro": None, "idioma": idioma,
+            "n_paragrafos": len(paragrafos), "lacunas": lacunas,
+            "documento_id": doc_id, "texto": str(pasta_texto / nome),
+            "suspeitos": len(suspeitos)}
+
+
+def _fase2(args) -> int:
+    """Colhe o acervo COMPLETO pelo catálogo oficial.
+
+    CC e OC entram com texto; SS entra por metadado — decisão do Defensor. A
+    corrida leva horas e é RETOMÁVEL: cada documento é commitado sozinho, e
+    `ja_indexado` pula o que já está utilizável. Relançar depois de um kill
+    continua de onde parou, e é por isso que o harness ceifar a tarefa não
+    custa a corrida inteira.
+
+    O progresso vai para a SAÍDA a cada documento, com `flush`. Sem isso, um
+    `.output` vazio é indistinguível de processo travado, e quem acompanha não
+    sabe se espera ou se investiga.
+    """
+    import buscador_oficial as bo
+
+    tipos = [t.strip().upper() for t in args.tipos.split(",") if t.strip()]
+    con = indice.abrir(args.banco)
+    indice.criar_schema(con)
+    indice.semear_glossario(con)
+    pasta = Path(args.pasta_texto)
+    ses = bo._sessao_padrao()
+
+    total = {"ok": 0, "falhas": 0, "pulados": 0, "ja": 0, "metadado": 0}
+    por_idioma: dict[str, int] = {}
+    t0 = time.perf_counter()
+
+    for tipo in tipos:
+        com_texto = tipo in TIPOS_COM_TEXTO_FASE2
+        print(f"\n=== {tipo} ({'texto' if com_texto else 'metadado'}) ===",
+              flush=True)
+        try:
+            brutos = bo.buscar(tipo=tipo, pagina_linhas=3000, sessao=ses)
+        except Exception as e:  # noqa: BLE001
+            # Falha do CATÁLOGO é diferente de falha de documento: sem o
+            # catálogo não há o que colher, e continuar para o tipo seguinte
+            # com zero documentos escreveria "0 colhidos" como se o acervo
+            # estivesse vazio. Declara-se e segue para o próximo tipo.
+            print(f"[CATALOGO FALHOU] {tipo}: {type(e).__name__}: {e}",
+                  flush=True)
+            total["falhas"] += 1
+            continue
+
+        print(f"catálogo: {len(brutos)} documentos", flush=True)
+        if args.limite:
+            brutos = brutos[: args.limite]
+            print(f"limitado a {len(brutos)}", flush=True)
+
+        for i, bruto in enumerate(brutos, 1):
+            reg = registro_do_catalogo(bruto, tipo)
+
+            if ja_indexado(con, reg, com_texto=com_texto):
+                total["ja"] += 1
+                if i % 50 == 0:
+                    print(f"[{tipo} {i}/{len(brutos)}] ja indexados: "
+                          f"{total['ja']}", flush=True)
+                continue
+
+            if not com_texto:
+                rel = indexar_metadado(con, reg)
+            else:
+                rel = indexar_do_catalogo(con, reg, pasta_texto=pasta,
+                                          pausa_s=args.pausa)
+
+            if rel.get("pulado"):
+                total["pulados"] += 1
+                print(f"[{tipo} {i}] PULADO {(reg['caso'] or '?')[:48]}: "
+                      f"{rel['pulado'][:90]}", flush=True)
+            elif rel["erro"]:
+                total["falhas"] += 1
+                print(f"[{tipo} {i}] FALHA {(reg['caso'] or '?')[:48]}: "
+                      f"{rel['erro'][:130]}", flush=True)
+            elif rel.get("metadado"):
+                total["metadado"] += 1
+                if i % 50 == 0:
+                    print(f"[{tipo} {i}/{len(brutos)}] metadados: "
+                          f"{total['metadado']}", flush=True)
+            else:
+                total["ok"] += 1
+                por_idioma[rel["idioma"]] = por_idioma.get(rel["idioma"], 0) + 1
+                marca = f" LACUNAS={rel['lacunas'][:6]}" if rel["lacunas"] else ""
+                print(f"[{tipo} {i}/{len(brutos)}] ok {rel['idioma']} "
+                      f"{rel['n_paragrafos']:>4} par  "
+                      f"{(reg['caso'] or '?')[:44]}{marca}", flush=True)
+
+    con.close()
+    dt = time.perf_counter() - t0
+    print(f"\n=== FASE 2 — {dt / 60:.1f} min ===", flush=True)
+    for k in ("ok", "metadado", "ja", "pulados", "falhas"):
+        print(f"  {k:<10} {total[k]}")
+    print(f"  idiomas    {por_idioma}")
+    if por_idioma:
+        pt = por_idioma.get("por", 0)
+        n = sum(por_idioma.values())
+        print(f"  cobertura em PORTUGUES: {pt}/{n} ({100 * pt / n:.1f}%)")
+    # rc != 0 SÓ por falha. Pulado é decisão declarada; "já indexado" é a
+    # retomada funcionando. Fazer o rc subir por eles treinaria quem chama a
+    # ignorar o rc.
+    return 1 if total["falhas"] else 0
 
 
 if __name__ == "__main__":
