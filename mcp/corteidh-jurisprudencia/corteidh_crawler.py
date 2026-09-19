@@ -1,12 +1,25 @@
-"""Aquisição e indexação do acervo da Corte IDH — script de MANUTENÇÃO.
+"""Aquisição e manutenção do acervo da Corte IDH — script de MANUTENÇÃO.
 
-Vai à rede. O `server.py` NÃO. Essa separação é o que garante que uma consulta
-durante a redação de uma peça não dependa da disponibilidade do site.
+A AQUISIÇÃO vai à rede; o `server.py` NUNCA vai. Essa separação é o que garante
+que uma consulta durante a redação de uma peça não dependa da disponibilidade
+do site. Metade dos comandos aqui também não vai à rede, e isso está dito em
+cada um — porque quem recupera um acervo perdido precisa saber, antes de
+digitar, se depende de terceiro.
 
-Uso:
-  python corteidh_crawler.py --semear          # 11 casos BR + OCs em português
-  python corteidh_crawler.py --censo CC        # descobre o que existe
-  python corteidh_crawler.py --semear --banco <caminho> --pasta-texto <dir>
+Aquisição (REDE):
+  --semear            recorte em português: 11 casos BR + pareceres
+  --fase2             acervo completo pelo catálogo oficial (horas)
+  --censo TIPO        só descobre o que existe
+  --temas             mapa temático pelos Cadernos
+
+Manutenção (OFFLINE):
+  --reindexar-do-texto   refaz o índice a partir do texto guardado (~20s)
+  --exportar-metadados   grava o `_metadados.jsonl` ao lado do texto
+  --migrar-fts           converte índice antigo em FTS5 external-content
+  --glossario            semeia o glossário pt->es/en/fr
+  --backfill-estado      preenche `estado` a partir do nome do caso
+
+Comuns a todos: `--banco <caminho>` e `--pasta-texto <dir>`.
 """
 
 from __future__ import annotations
@@ -503,7 +516,13 @@ def _migrar_fts(args) -> int:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description=__doc__)
+    # `RawDescriptionHelpFormatter` porque o docstring separa comandos de REDE
+    # dos OFFLINE em lista, e o formatter padrão re-quebra tudo num parágrafo
+    # corrido — justamente a distinção que quem recupera um acervo precisa ler
+    # de relance vira um muro de texto.
+    p = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--semear", action="store_true",
                    help="indexa o recorte em português (11 casos BR + OCs)")
     p.add_argument("--censo", metavar="TIPO",
