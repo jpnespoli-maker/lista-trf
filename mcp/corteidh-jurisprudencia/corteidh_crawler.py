@@ -12,6 +12,7 @@ Uso:
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import time
@@ -121,6 +122,217 @@ def _bloco_txt(p: "ep.Paragrafo") -> str:
     return f"{marcas}{p.numero}. {p.texto}"
 
 
+NOME_METADADOS = "_metadados.jsonl"
+
+# Tudo o que o `.txt` NÃO carrega. `paragrafo` fica de fora de propósito: o
+# texto já está nos arquivos, e duplicá-lo aqui desfaria a economia que
+# justifica o desenho e criaria duas fontes da mesma verdade. A ordem importa
+# — `documento` primeiro, porque as demais têm chave estrangeira para ela.
+_TABELAS_DE_METADADOS = (
+    "documento", "artigo_cadh", "tema", "tema_paragrafo", "reparacao",
+    "recepcao", "glossario",
+)
+
+
+def exportar_metadados(con, destino: Path) -> dict:
+    """Grava ao lado do texto o que o texto não sabe. Devolve a contagem.
+
+    JSONL, e não SQL nem binário, pelas mesmas razões que fizeram o acervo ser
+    `.txt`: é grepável, diffável e o git versiona linha a linha. Junto dos
+    `.txt`, é o retrato completo — em formato de texto — de um banco que o
+    `.gitignore` descarta.
+
+    A ordem de saída é determinística (tabela, depois `rowid`) para que duas
+    exportações do mesmo banco gerem arquivos idênticos: exportação que
+    embaralha linhas produz diff gigante a cada corrida e o artefato deixa de
+    ser versionável na prática.
+    """
+    destino = Path(destino)
+    destino.parent.mkdir(parents=True, exist_ok=True)
+    contagem: dict[str, int] = {}
+    with destino.open("w", encoding="utf-8", newline="\n") as saida:
+        for tabela in _TABELAS_DE_METADADOS:
+            colunas = [r[1] for r in con.execute(f'PRAGMA table_info("{tabela}")')]
+            if not colunas:
+                continue
+            n = 0
+            for linha in con.execute(f'SELECT * FROM "{tabela}" ORDER BY rowid'):
+                registro = {"_tabela": tabela}
+                registro.update({c: linha[c] for c in colunas})
+                saida.write(json.dumps(registro, ensure_ascii=False) + "\n")
+                n += 1
+            contagem[tabela] = n
+    return contagem
+
+
+def importar_metadados(con, origem: Path) -> dict:
+    """Repõe as tabelas de metadados. Idempotente. Devolve a contagem.
+
+    `INSERT OR REPLACE` e o **id preservado**: o `.txt` se amarra ao documento
+    pela URL, mas `paragrafo.documento_id` é o id numérico. Deixar o SQLite
+    reatribuir ids reataria os parágrafos ao documento errado, e a peça citaria
+    outro caso — plausível, numerado e falso.
+    """
+    contagem: dict[str, int] = {}
+    with Path(origem).open(encoding="utf-8") as entrada:
+        for linha in entrada:
+            linha = linha.strip()
+            if not linha:
+                continue
+            registro = json.loads(linha)
+            tabela = registro.pop("_tabela")
+            campos = list(registro)
+            con.execute(
+                'INSERT OR REPLACE INTO "%s" (%s) VALUES (%s)' % (
+                    tabela, ", ".join('"%s"' % c for c in campos),
+                    ", ".join("?" * len(campos))),
+                [registro[c] for c in campos],
+            )
+            contagem[tabela] = contagem.get(tabela, 0) + 1
+    con.commit()
+    return contagem
+
+
+def nome_txt_da_url(url: str) -> str:
+    """`.../seriec_149_por.pdf` -> `seriec_149_por.txt`.
+
+    É o par que amarra o texto ao documento: o `.txt` não guarda o id, então a
+    ligação de volta se faz casando este nome com a coluna `url_<idioma>` dos
+    metadados. Uma função só, usada pela escrita e pela leitura, para que as
+    duas não possam divergir.
+    """
+    return url.rsplit("/", 1)[-1].replace(".pdf", ".txt")
+
+
+def gravar_paragrafos_txt(pasta_texto: Path, url: str, paragrafos) -> Path:
+    """Grava o artefato durável de UM documento. Inverso de `ler_paragrafos_do_txt`.
+
+    `.txt` e não `.md` de propósito — Markdown convida a reflow, e reflow
+    destrói a fronteira de parágrafo, que é a unidade de citação deste projeto
+    inteiro.
+    """
+    pasta_texto = Path(pasta_texto)
+    pasta_texto.mkdir(parents=True, exist_ok=True)
+    destino = pasta_texto / nome_txt_da_url(url)
+    destino.write_text(
+        "\n\n".join(_bloco_txt(p) for p in paragrafos), encoding="utf-8")
+    return destino
+
+
+def reindexar_do_texto(con, pasta_texto: Path) -> dict:
+    """Refaz o índice a partir do texto guardado. NÃO vai à rede.
+
+    É a rota que a spec §4.2 anunciava desde 17/09/2026 e que não existia em
+    código até 19/09/2026: o crawler escrevia os `.txt` e nunca os relia, de
+    modo que a única via para um banco povoado era o crawl de horas — o
+    oposto do que a decisão de guardar o texto queria comprar.
+
+    Duas pernas, porque o texto sozinho não basta: o `_metadados.jsonl` repõe
+    caso, Estado, data, etapa e URL, e os `.txt` repõem os parágrafos. Faltando
+    o primeiro, a função RECUSA em vez de produzir um acervo sem citação — um
+    banco só com parágrafos responde busca com caso vazio, e isso se lê como
+    dado corrompido tarde demais.
+
+    Devolve o relatório, e nele `sem_documento` é o que mais importa: arquivo
+    de texto sem documento declarado seria omissão silenciosa, então ele é
+    NOMEADO em vez de pulado.
+
+    **O que NÃO se preserva, e é inócuo:** a ordem entre resultados de score
+    bm25 EMPATADO. O desempate cai no rowid interno, que difere entre um banco
+    montado na ordem do crawl e outro na ordem da varredura de pasta — medido
+    em 19/09/2026 sobre o acervo real, na consulta "reparação integral", onde
+    dois parágrafos empatam em -13.143994 e trocam de posição. O conjunto
+    devolvido é o mesmo; ordem entre empatados nunca foi contrato do SQLite.
+    Conferido no resto: 108.893 parágrafos idênticos campo a campo, 1.481
+    documentos idênticos, mesmas contagens em todas as tabelas.
+    """
+    pasta_texto = Path(pasta_texto)
+    metadados = pasta_texto / NOME_METADADOS
+    if not metadados.exists():
+        raise FileNotFoundError(
+            f"{NOME_METADADOS} ausente em {pasta_texto}. Sem ele não há caso, "
+            f"Estado nem URL, e o índice sairia sem citação. Gere-o com "
+            f"`--exportar-metadados` enquanto o banco ainda existir."
+        )
+    importar_metadados(con, metadados)
+
+    # Mapa nome-do-arquivo -> (documento_id, idioma), montado de uma vez.
+    por_arquivo: dict[str, tuple[int, str]] = {}
+    for linha in con.execute(
+            "SELECT id, url_por, url_esp, url_ing, url_fra FROM documento"):
+        for idi in ("por", "esp", "ing", "fra"):
+            url = linha["url_" + idi]
+            if url:
+                por_arquivo[nome_txt_da_url(url)] = (linha["id"], idi)
+
+    docs: set[int] = set()
+    n_par = 0
+    orfaos: list[str] = []
+    arquivos = sorted(p for p in pasta_texto.glob("*.txt"))
+    for arq in arquivos:
+        alvo = por_arquivo.get(arq.name)
+        if alvo is None:
+            orfaos.append(arq.name)
+            continue
+        doc_id, idioma = alvo
+        paragrafos = ler_paragrafos_do_txt(arq.read_text(encoding="utf-8"))
+        if not paragrafos:
+            continue
+        suspeitos = {p.numero for p in paragrafos if _SUSPEITO.search(p.texto)}
+        suspeitos |= ep.detectar_paragrafos_grandes_demais(paragrafos)
+        indice.inserir_paragrafos(con, doc_id, idioma, paragrafos,
+                                  suspeitos=suspeitos)
+        docs.add(doc_id)
+        n_par += len(paragrafos)
+
+    return {
+        "arquivos": len(arquivos) - len(orfaos),
+        "documentos": len(docs),
+        "paragrafos": n_par,
+        "sem_documento": orfaos,
+    }
+
+
+_INICIO_DE_BLOCO = re.compile(r"^(\d+)\.[ ]")
+
+
+def ler_paragrafos_do_txt(bruto: str) -> list["ep.Paragrafo"]:
+    """Inverso de `_bloco_txt`: relê o artefato durável de volta em objetos.
+
+    **Separar por linha em branco é medição, não convenção.** Aferido em
+    19/09/2026 contra o acervo inteiro antes de existir este parser: os 627
+    arquivos têm 108.893 blocos numerados para 108.893 parágrafos no banco,
+    **zero** blocos órfãos e **zero** parágrafos cujo texto contenha linha em
+    branco. Não fosse assim, o separador seria ambíguo e a releitura perderia
+    trecho em silêncio — que é a família de defeito que este subsistema mais
+    teme, porque um parágrafo a menos não se anuncia.
+
+    Dentro do bloco, só a PRIMEIRA linha pode abrir a numeração. Linha
+    posterior iniciada por "N. " é corpo, não parágrafo novo — a Corte cita
+    artigo assim o tempo todo ("Conforme o artigo 8.\\n2. O Estado alegou"), e
+    um parser que abrisse bloco ali partiria o parágrafo em dois, com o
+    segundo pedaço ganhando número alheio.
+    """
+    saida: list[ep.Paragrafo] = []
+    for bloco in bruto.split("\n\n"):
+        if not bloco.strip():
+            continue
+        linhas = bloco.split("\n")
+        titulos: list[str] = []
+        while linhas and linhas[0].startswith(_MARCADOR_TITULO_REMOVIDO):
+            titulos.append(linhas.pop(0)[len(_MARCADOR_TITULO_REMOVIDO):])
+        if not linhas:
+            continue
+        casou = _INICIO_DE_BLOCO.match(linhas[0])
+        if not casou:
+            continue
+        corpo = "\n".join(linhas)[casou.end():]
+        saida.append(ep.Paragrafo(
+            numero=int(casou.group(1)), texto=corpo,
+            titulos_removidos=tuple(titulos)))
+    return saida
+
+
 def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
     """Baixa, extrai, segmenta e indexa UM documento.
 
@@ -164,16 +376,11 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
     # deslocada por ordem de leitura, medida em 2 parágrafos de C-435 — não
     # são atacáveis a partir do texto, e a reaquisição precisa ser
     # recuperação verificável, não aposta.
-    pasta_texto.mkdir(parents=True, exist_ok=True)
-    nome = url.rsplit("/", 1)[-1].replace(".pdf", ".txt")
     # Formato: um bloco por parágrafo, número explícito, linha em branco entre
-    # blocos. `.txt` e não `.md` de propósito — Markdown convida a reflow, e
-    # reflow destrói a fronteira de parágrafo, que é a unidade de citação
-    # deste projeto inteiro.
-    (pasta_texto / nome).write_text(
-        "\n\n".join(_bloco_txt(p) for p in paragrafos),
-        encoding="utf-8",
-    )
+    # blocos. Uma função só para escrever e outra para ler (`gravar_paragrafos_txt`
+    # / `ler_paragrafos_do_txt`), de modo que o formato não possa divergir entre
+    # quem grava e quem reconstrói.
+    nome = gravar_paragrafos_txt(pasta_texto, url, paragrafos).name
 
     doc_id = indice.inserir_documento(
         con, serie=registro["serie"], numero=registro["numero"],
@@ -202,6 +409,58 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
     return {"caso": registro["caso"], "erro": None, "idioma": idioma,
             "n_paragrafos": len(paragrafos), "lacunas": lacunas,
             "documento_id": doc_id, "texto": str(pasta_texto / nome)}
+
+
+def _exportar_ao_fim_do_crawl(con, pasta_texto: Path) -> None:
+    """Deixa os metadados frescos ao lado do texto, sempre que o acervo muda.
+
+    Exportar é passo do CRAWL, e não tarefa que alguém precise lembrar: o
+    JSONL só serve se estiver atualizado no momento em que o banco se perde, e
+    pedi-lo depois da perda seria tarde. Falha aqui não derruba o crawl, que já
+    gravou o que importa — mas é DITA, porque exportação que falha em silêncio
+    é a insegurança que este arquivo existe para eliminar.
+    """
+    try:
+        contagem = exportar_metadados(con, Path(pasta_texto) / NOME_METADADOS)
+    except Exception as erro:  # noqa: BLE001
+        print(f"AVISO: metadados NÃO exportados ({erro}). O texto sozinho não "
+              f"reconstrói o índice — rode `--exportar-metadados`.")
+        return
+    print(f"metadados: {sum(contagem.values())} linhas em {NOME_METADADOS}")
+
+
+def _reindexar_do_texto_cli(args) -> int:
+    """Recuperação pela linha de comando. Falta previsível vira `rc`, não
+    traceback: quem digita isto está recuperando acervo perdido, e stack trace
+    é a pior forma de dizer o que fazer em seguida."""
+    pasta = Path(args.pasta_texto)
+    if not pasta.is_dir():
+        print(f"pasta de texto inexistente: {pasta}")
+        return 1
+
+    con = indice.abrir(args.banco)
+    indice.criar_schema(con)
+    t0 = time.time()
+    try:
+        rel = reindexar_do_texto(con, pasta)
+    except FileNotFoundError as erro:
+        print(str(erro))
+        return 1
+    finally:
+        con.close()
+
+    print(f"arquivos reindexados : {rel['arquivos']}")
+    print(f"documentos           : {rel['documentos']}")
+    print(f"parágrafos           : {rel['paragrafos']}")
+    print(f"tempo                : {time.time() - t0:.0f}s")
+    if rel["sem_documento"]:
+        # Declarado, nunca omitido: texto sem documento sai do acervo, e sair
+        # em silêncio é o defeito que este projeto mais combate.
+        print(f"SEM DOCUMENTO nos metadados ({len(rel['sem_documento'])}) — "
+              f"estes NÃO entraram no índice:")
+        for nome in rel["sem_documento"][:20]:
+            print(f"  {nome}")
+    return 0
 
 
 def _migrar_fts(args) -> int:
@@ -270,15 +529,36 @@ def main(argv=None) -> int:
     p.add_argument("--migrar-fts", action="store_true",
                    help="converte o indice antigo em FTS5 external-content e "
                         "compacta o banco; nao vai a rede")
+    p.add_argument("--reindexar-do-texto", action="store_true",
+                   help="refaz o indice a partir do texto guardado; NAO vai a "
+                        "rede. E a rota de recuperacao quando o banco se perde")
+    p.add_argument("--exportar-metadados", action="store_true",
+                   help="grava o _metadados.jsonl ao lado do texto (o que o "
+                        "texto nao carrega: caso, Estado, data, etapa, URL)")
     args = p.parse_args(argv)
 
     if not (args.semear or args.censo or args.glossario or args.fase2
-            or args.backfill_estado or args.temas or args.migrar_fts):
+            or args.backfill_estado or args.temas or args.migrar_fts
+            or args.reindexar_do_texto or args.exportar_metadados):
         p.error("informe --semear, --censo, --glossario, --fase2, "
-                "--backfill-estado, --temas ou --migrar-fts")
+                "--backfill-estado, --temas, --migrar-fts, "
+                "--reindexar-do-texto ou --exportar-metadados")
 
     if args.migrar_fts:
         return _migrar_fts(args)
+
+    if args.exportar_metadados:
+        con = indice.abrir(args.banco)
+        indice.criar_schema(con)
+        contagem = exportar_metadados(con, Path(args.pasta_texto) / NOME_METADADOS)
+        con.close()
+        print(f"metadados em {Path(args.pasta_texto) / NOME_METADADOS}")
+        for tabela, n in contagem.items():
+            print(f"  {tabela:<16} {n}")
+        return 0
+
+    if args.reindexar_do_texto:
+        return _reindexar_do_texto_cli(args)
 
     if args.temas:
         con = indice.abrir(args.banco)
@@ -368,6 +648,7 @@ def main(argv=None) -> int:
 
     total = ok + falhas + pulados
     print(f"\nindexados {ok}/{total}; falhas {falhas}; pulados {pulados}")
+    _exportar_ao_fim_do_crawl(con, pasta)
     # rc != 0 SÓ por falha. Pulado é decisão declarada, não erro — e fazer o rc
     # subir por ele treinaria quem chama a ignorar o rc.
     con.close()
@@ -705,10 +986,7 @@ def indexar_do_catalogo(con, registro: dict, *, pasta_texto: Path,
                 "pulado": f"PDF em {idioma} sem parágrafo numerado "
                           f"(provável digitalização sem camada de texto)"}
 
-    pasta_texto.mkdir(parents=True, exist_ok=True)
-    nome = url.rsplit("/", 1)[-1].replace(".pdf", ".txt")
-    (pasta_texto / nome).write_text(
-        "\n\n".join(_bloco_txt(p) for p in paragrafos), encoding="utf-8")
+    nome = gravar_paragrafos_txt(pasta_texto, url, paragrafos).name
 
     doc_id = indice.inserir_documento(
         con, serie=registro["serie"], numero=registro["numero"],
@@ -822,6 +1100,7 @@ def _fase2(args) -> int:
                       f"{rel['n_paragrafos']:>4} par  "
                       f"{(reg['caso'] or '?')[:44]}{marca}", flush=True)
 
+    _exportar_ao_fim_do_crawl(con, pasta)
     con.close()
     dt = time.perf_counter() - t0
     print(f"\n=== FASE 2 — {dt / 60:.1f} min ===", flush=True)
