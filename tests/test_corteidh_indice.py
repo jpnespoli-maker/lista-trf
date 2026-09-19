@@ -749,3 +749,38 @@ def test_migrar_fts_externo_converte_preserva_a_busca_e_e_idempotente(tmp_path):
             f"{esperado}"
         )
     con.close()
+
+
+def test_caminho_do_banco_sai_da_variavel_de_ambiente(tmp_path, monkeypatch):
+    """`CORTEIDH_DB` desamarra o acervo de `~/.claude`, que é a árvore desta
+    máquina e não requisito do MCP — é o que permite instalar o servidor em
+    outro projeto, ou em macOS e Linux."""
+    import importlib
+
+    alvo = tmp_path / "outro-lugar" / "corteidh.db"
+    monkeypatch.setenv("CORTEIDH_DB", str(alvo))
+    recarregado = importlib.reload(indice)
+    try:
+        assert recarregado.CAMINHO_PADRAO == alvo
+        # E a pasta de texto do crawler acompanha, em vez de ficar órfã na
+        # árvore de origem.
+        import corteidh_crawler
+        assert (importlib.reload(corteidh_crawler).PASTA_TEXTO_PADRAO
+                == alvo.parent / "texto")
+    finally:
+        monkeypatch.delenv("CORTEIDH_DB")
+        importlib.reload(indice)
+        importlib.reload(importlib.import_module("corteidh_crawler"))
+
+
+def test_sem_a_variavel_o_caminho_continua_o_de_sempre(monkeypatch):
+    """A variável é uma saída, não uma troca de padrão: quem não a define tem
+    de continuar achando o acervo onde ele sempre esteve."""
+    import importlib
+    from pathlib import Path as _Path
+
+    monkeypatch.delenv("CORTEIDH_DB", raising=False)
+    recarregado = importlib.reload(indice)
+    assert recarregado.CAMINHO_PADRAO == (
+        _Path.home() / ".claude" / "DPU" / "conhecimento" / "corteidh"
+        / "corteidh.db")

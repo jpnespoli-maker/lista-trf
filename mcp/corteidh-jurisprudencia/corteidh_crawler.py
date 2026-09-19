@@ -23,9 +23,10 @@ import extrator_paragrafos as ep
 import indice
 import titulo_catalogo
 
-PASTA_TEXTO_PADRAO = (
-    Path.home() / ".claude" / "DPU" / "conhecimento" / "corteidh" / "texto"
-)
+# Irmã do banco, e derivada dele de propósito: apontando `CORTEIDH_DB` para
+# outro lugar, o texto extraído acompanha em vez de ficar órfão na árvore de
+# origem. Hoje resolve para o mesmo caminho de sempre.
+PASTA_TEXTO_PADRAO = indice.CAMINHO_PADRAO.parent / "texto"
 
 _BASE_CASOS = "https://www.corteidh.or.cr/docs/casos/articulos/seriec_{n}"
 _BASE_OPINIOES = "https://www.corteidh.or.cr/docs/opiniones/seriea_{n}"

@@ -10,14 +10,22 @@ portuguesa tem de aparecer, marcado com `exige_traducao`, e não desaparecer.
 
 from __future__ import annotations
 
+import os
 import re
 import sqlite3
 import unicodedata
 from pathlib import Path
 
-CAMINHO_PADRAO = (
+_PADRAO_NO_DISCO = (
     Path.home() / ".claude" / "DPU" / "conhecimento" / "corteidh" / "corteidh.db"
 )
+
+# `CORTEIDH_DB` existe para o acervo poder morar fora de `~/.claude`, que é a
+# árvore desta máquina e não um requisito do MCP. Quem instala o servidor em
+# outro projeto — ou em macOS e Linux, onde `~/.claude/DPU` não existe — aponta
+# a variável e nada mais muda. Lida na importação: é processo de servidor, que
+# nasce com o ambiente já definido.
+CAMINHO_PADRAO = Path(os.environ.get("CORTEIDH_DB") or _PADRAO_NO_DISCO)
 
 _CASCATA = ("por", "esp", "ing", "fra")
 
