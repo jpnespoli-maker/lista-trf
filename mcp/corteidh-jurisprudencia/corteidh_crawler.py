@@ -427,11 +427,21 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
 def _exportar_ao_fim_do_crawl(con, pasta_texto: Path) -> None:
     """Deixa os metadados frescos ao lado do texto, sempre que o acervo muda.
 
-    Exportar é passo do CRAWL, e não tarefa que alguém precise lembrar: o
+    Exportar é passo do COMANDO, e não tarefa que alguém precise lembrar: o
     JSONL só serve se estiver atualizado no momento em que o banco se perde, e
-    pedi-lo depois da perda seria tarde. Falha aqui não derruba o crawl, que já
-    gravou o que importa — mas é DITA, porque exportação que falha em silêncio
-    é a insegurança que este arquivo existe para eliminar.
+    pedi-lo depois da perda seria tarde. Falha aqui não derruba o comando, que
+    já gravou o que importa — mas é DITA, porque exportação que falha em
+    silêncio é a insegurança que este arquivo existe para eliminar.
+
+    **Chamam-na TODOS os fluxos que escrevem tabela de metadados**, e não só os
+    que vão à rede — `--semear`, `--fase2`, `--temas`, `--glossario` e
+    `--backfill-estado`. A primeira versão, de 19/09/2026, cobria apenas os
+    dois primeiros: os outros três escrevem em `tema`, `tema_paragrafo`,
+    `glossario` e `documento.estado`, todas listadas em
+    `_TABELAS_DE_METADADOS`, e deixavam o JSONL velho. A reconstrução seguinte
+    restauraria o estado ANTERIOR daquelas tabelas — banco completo, plausível
+    e desatualizado, sem erro nenhum. Medido na retro do mesmo dia; trava em
+    `test_o_ciclo_INTEIRO_sobrevive_a_um_fluxo_de_metadados`.
     """
     try:
         contagem = exportar_metadados(con, Path(pasta_texto) / NOME_METADADOS)
@@ -592,6 +602,7 @@ def main(argv=None) -> int:
             print(f"  {k:<16} {r[k]}")
         for linha in indice.temas_disponiveis(con):
             print(f"    {linha['tema'][:34]:<34} {linha['n_documentos']:>3} docs")
+        _exportar_ao_fim_do_crawl(con, Path(args.pasta_texto))
         con.close()
         return 1 if r["falhas"] else 0
 
@@ -602,6 +613,7 @@ def main(argv=None) -> int:
         por_estado = con.execute(
             "SELECT estado, COUNT(*) n FROM documento WHERE estado IS NOT NULL"
             " GROUP BY estado ORDER BY n DESC LIMIT 8").fetchall()
+        _exportar_ao_fim_do_crawl(con, Path(args.pasta_texto))
         con.close()
         print(f"candidatos (estado nulo) : {r['candidatos']}")
         print(f"preenchidos              : {r['preenchidos']}")
@@ -623,6 +635,7 @@ def main(argv=None) -> int:
             "SELECT CASE WHEN fonte = 'curadoria' THEN 'curadoria'"
             "            ELSE 'CADH' END AS f, COUNT(*)"
             " FROM glossario GROUP BY f").fetchall())
+        _exportar_ao_fim_do_crawl(con, Path(args.pasta_texto))
         con.close()
         print(f"glossário semeado: {n} termos "
               f"(CADH medido: {por_fonte.get('CADH', 0)}; "

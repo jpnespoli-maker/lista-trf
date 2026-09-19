@@ -386,3 +386,126 @@ def test_semear_deixa_os_metadados_gravados(tmp_path, monkeypatch):
     assert rel["paragrafos"] == 2
     assert indice.buscar(con, consulta="vulnerabilidade")[0]["caso"] == \
         "Ximenes Lopes Vs. Brasil"
+
+
+# --- a reexportação tem de cobrir TODO fluxo que escreve metadados ---------
+# Achado na retro de 19/09/2026, no mesmo dia em que a rota nasceu: a
+# reexportação só estava em `--semear` e `--fase2`. Mas `--temas`,
+# `--glossario` e `--backfill-estado` escrevem em `tema`, `tema_paragrafo`,
+# `glossario` e `documento.estado` — todas em `_TABELAS_DE_METADADOS`. Depois
+# de qualquer um deles o JSONL ficava velho, e a reconstrução seguinte
+# restauraria o estado ANTERIOR sem dizer nada: o banco voltaria completo,
+# plausível e desatualizado, que é o modo de falha que esta rota veio evitar.
+
+def _acervo_com_metadados_velhos(tmp_path):
+    """Acervo válido cujo JSONL foi exportado ANTES da escrita que vem a seguir."""
+    pasta, banco = _acervo_em_disco(tmp_path)
+    antes = (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+    return pasta, banco, antes
+
+
+def _linhas_da_tabela(jsonl: str, tabela: str) -> int:
+    return sum(1 for linha in jsonl.splitlines()
+               if linha.strip() and json.loads(linha)["_tabela"] == tabela)
+
+
+def _reexportar_fechando(banco, destino):
+    """Exporta e FECHA. No Windows, conexão viva trava o arquivo e o
+    `unlink` do teste de ciclo morre com `PermissionError` — que se lê como
+    defeito da produção quando é vazamento do teste."""
+    con = indice.abrir(banco)
+    try:
+        cc.exportar_metadados(con, destino)
+    finally:
+        con.close()
+
+
+def test_glossario_reexporta_os_metadados(tmp_path):
+    """`--glossario` escreve na tabela `glossario`, que está no JSONL."""
+    pasta, banco, antes = _acervo_com_metadados_velhos(tmp_path)
+    # Zera o glossário para que a corrida tenha o que escrever.
+    con = indice.abrir(banco)
+    con.execute("DELETE FROM glossario")
+    con.commit()
+    con.close()
+    _reexportar_fechando(banco, pasta / cc.NOME_METADADOS)
+    vazio = (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+    assert _linhas_da_tabela(vazio, "glossario") == 0
+
+    rc = cc.main(["--glossario", "--banco", str(banco),
+                  "--pasta-texto", str(pasta)])
+    assert rc == 0
+    depois = (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+    assert _linhas_da_tabela(depois, "glossario") > 0, (
+        "o `--glossario` semeou o banco e deixou o JSONL velho — a "
+        "reconstrução seguinte traria o glossário vazio de volta")
+
+
+def test_backfill_estado_reexporta_os_metadados(tmp_path):
+    """`--backfill-estado` escreve em `documento.estado`, que está no JSONL."""
+    pasta, banco, _ = _acervo_com_metadados_velhos(tmp_path)
+    con = indice.abrir(banco)
+    con.execute("UPDATE documento SET estado = NULL")
+    con.commit()
+    con.close()
+    _reexportar_fechando(banco, pasta / cc.NOME_METADADOS)
+    assert '"estado": null' in (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+
+    rc = cc.main(["--backfill-estado", "--banco", str(banco),
+                  "--pasta-texto", str(pasta)])
+    assert rc == 0
+    depois = (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+    assert '"estado": "Brasil"' in depois, (
+        "o `--backfill-estado` preencheu o banco e deixou o JSONL com o NULL")
+
+
+def test_temas_reexporta_os_metadados(tmp_path, monkeypatch):
+    """`--temas` escreve em `tema` e `tema_paragrafo`, ambas no JSONL."""
+    pasta, banco, _ = _acervo_com_metadados_velhos(tmp_path)
+    con = indice.abrir(banco)
+    con.execute("DELETE FROM tema")
+    con.commit()
+    con.close()
+    _reexportar_fechando(banco, pasta / cc.NOME_METADADOS)
+    assert _linhas_da_tabela(
+        (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8"), "tema") == 0
+
+    def _semear_falso(con, **_kw):
+        doc = con.execute("SELECT id FROM documento").fetchone()["id"]
+        indice.inserir_tema(con, doc, "saúde mental", fonte="Caderno 12")
+        return {"cadernos": 1, "documentos": 1, "paragrafos": 0,
+                "fora_do_indice": 0, "pulados": 0, "falhas": 0}
+
+    monkeypatch.setattr(cc, "semear_temas", _semear_falso)
+    rc = cc.main(["--temas", "--banco", str(banco), "--pasta-texto", str(pasta)])
+    assert rc == 0
+    depois = (pasta / cc.NOME_METADADOS).read_text(encoding="utf-8")
+    assert _linhas_da_tabela(depois, "tema") > 0, (
+        "o `--temas` semeou o banco e deixou o JSONL velho")
+
+
+def test_o_ciclo_INTEIRO_sobrevive_a_um_fluxo_de_metadados(tmp_path):
+    """O caso que prova a consequência, e não só a chamada.
+
+    Escreve pelo `--backfill-estado`, apaga o banco e reconstrói do texto. Sem
+    a reexportação, o Estado voltaria NULL — banco completo, plausível e
+    desatualizado, sem erro nenhum.
+    """
+    pasta, banco, _ = _acervo_com_metadados_velhos(tmp_path)
+    con = indice.abrir(banco)
+    con.execute("UPDATE documento SET estado = NULL")
+    con.commit()
+    con.close()
+    _reexportar_fechando(banco, pasta / cc.NOME_METADADOS)
+
+    assert cc.main(["--backfill-estado", "--banco", str(banco),
+                    "--pasta-texto", str(pasta)]) == 0
+    banco.unlink()
+    con = indice.abrir(banco)
+    indice.criar_schema(con)
+    cc.reindexar_do_texto(con, pasta)
+
+    estado = con.execute("SELECT estado FROM documento").fetchone()["estado"]
+    assert estado == "Brasil", (
+        f"a reconstrução trouxe estado={estado!r} — o JSONL estava velho e o "
+        f"backfill se perdeu em silêncio")
