@@ -203,6 +203,45 @@ def indexar_documento(con, registro: dict, *, pasta_texto: Path) -> dict:
             "documento_id": doc_id, "texto": str(pasta_texto / nome)}
 
 
+def _migrar_fts(args) -> int:
+    """Converte o índice para external-content e compacta. Não vai à rede.
+
+    Abre com `permitir_legado=True` porque a guarda de `indice.abrir` recusa
+    justamente o banco que este comando existe para consertar.
+
+    O `VACUUM` vem DEPOIS e fora de transação, que é exigência do SQLite, e é
+    ele que devolve o espaço ao sistema de arquivos: a conversão sozinha apenas
+    move as páginas da cópia para a lista livre, e o arquivo continua do mesmo
+    tamanho. Ele pede espaço livre igual ao do banco enquanto roda.
+    """
+    caminho = Path(args.banco) if args.banco else indice.CAMINHO_PADRAO
+    if not Path(caminho).exists():
+        print(f"banco inexistente: {caminho}")
+        return 1
+
+    antes = Path(caminho).stat().st_size
+    con = indice.abrir(caminho, permitir_legado=True)
+    n_par = con.execute("SELECT COUNT(*) FROM paragrafo").fetchone()[0]
+    t0 = time.time()
+    converteu = indice.migrar_fts_externo(con)
+    if not converteu:
+        con.close()
+        print(f"já estava em external-content: {caminho}")
+        return 0
+    con.execute("VACUUM")
+    con.close()
+
+    depois = Path(caminho).stat().st_size
+    mb = 1024 * 1024
+    print(f"parágrafos reindexados : {n_par}")
+    print(f"antes                  : {antes / mb:8.1f} MB")
+    print(f"depois                 : {depois / mb:8.1f} MB")
+    print(f"redução                : {(antes - depois) / mb:8.1f} MB "
+          f"({100 * (antes - depois) / antes:.0f}%)")
+    print(f"tempo                  : {time.time() - t0:.0f}s")
+    return 0
+
+
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--semear", action="store_true",
@@ -227,12 +266,18 @@ def main(argv=None) -> int:
                    help="para a fase 2 depois de N documentos POR TIPO")
     p.add_argument("--pausa", type=float, default=2.0,
                    help="pausa entre idiomas da cascata, em segundos")
+    p.add_argument("--migrar-fts", action="store_true",
+                   help="converte o indice antigo em FTS5 external-content e "
+                        "compacta o banco; nao vai a rede")
     args = p.parse_args(argv)
 
     if not (args.semear or args.censo or args.glossario or args.fase2
-            or args.backfill_estado or args.temas):
+            or args.backfill_estado or args.temas or args.migrar_fts):
         p.error("informe --semear, --censo, --glossario, --fase2, "
-                "--backfill-estado ou --temas")
+                "--backfill-estado, --temas ou --migrar-fts")
+
+    if args.migrar_fts:
+        return _migrar_fts(args)
 
     if args.temas:
         con = indice.abrir(args.banco)

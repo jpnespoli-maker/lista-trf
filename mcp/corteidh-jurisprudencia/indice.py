@@ -54,8 +54,16 @@ CREATE TABLE IF NOT EXISTS paragrafo (
   suspeito INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (documento_id, numero, idioma)
 );
+-- `content='paragrafo'` é EXTERNAL CONTENT, e não é afinação: sem ele o FTS5
+-- guarda exemplar PRÓPRIO do texto, e os 108.893 parágrafos ficam no arquivo
+-- duas vezes. Medido em 19/09/2026 sobre o acervo inteiro: `paragrafo.texto`
+-- 137,5 MB e `paragrafo_fts_content` 138,1 MB — a cópia sozinha respondia por
+-- 36% do banco, que caiu de 387,8 MB para 222,6 MB (-43%) com a troca, sem
+-- diferença em nenhuma das buscas de controle. O preço é que o FTS deixa de
+-- saber o texto: quem apaga entrada tem de devolver-lhe o texto ANTIGO
+-- (ver `inserir_paragrafos`) e quem lê junta por `rowid` (ver `buscar`).
 CREATE VIRTUAL TABLE IF NOT EXISTS paragrafo_fts USING fts5(
-  texto, documento_id UNINDEXED, numero UNINDEXED, idioma UNINDEXED,
+  texto, content='paragrafo', content_rowid='rowid',
   tokenize='unicode61 remove_diacritics 2'
 );
 CREATE TABLE IF NOT EXISTS artigo_cadh (
@@ -119,7 +127,9 @@ CREATE INDEX IF NOT EXISTS ix_doc_data   ON documento(data);
 """
 
 
-def abrir(caminho: Path | str | None = None) -> sqlite3.Connection:
+def abrir(
+    caminho: Path | str | None = None, *, permitir_legado: bool = False,
+) -> sqlite3.Connection:
     destino = ":memory:" if caminho == ":memory:" else Path(caminho or CAMINHO_PADRAO)
     if destino != ":memory:":
         destino.parent.mkdir(parents=True, exist_ok=True)
@@ -127,6 +137,8 @@ def abrir(caminho: Path | str | None = None) -> sqlite3.Connection:
     con = sqlite3.connect(destino)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
+    if not permitir_legado:
+        _barrar_fts_legado(con)
     # O Estado demandado é gravado na grafia do catálogo, que é ESPANHOLA —
     # "Perú", "México", "Panamá". Quem consulta escreve em português e muitas
     # vezes sem acento, e `d.estado = 'Peru'` não casaria "Perú": o filtro
@@ -135,6 +147,47 @@ def abrir(caminho: Path | str | None = None) -> sqlite3.Connection:
     # pergunta. O valor GRAVADO continua sendo o original, intocado.
     con.create_function("SEM_ACENTO", 1, _sem_acento, deterministic=True)
     return con
+
+
+def fts_e_legado(con: sqlite3.Connection) -> bool:
+    """Diz se o banco tem o `paragrafo_fts` na forma ANTIGA, de conteúdo próprio.
+
+    O sinal é a shadow table `paragrafo_fts_content`, que o FTS5 cria para
+    guardar a cópia do texto e que **não existe** quando a tabela é declarada
+    com `content=`. É sinal estrutural, não heurística.
+    """
+    return con.execute(
+        "SELECT 1 FROM sqlite_master"
+        " WHERE type = 'table' AND name = 'paragrafo_fts_content'"
+    ).fetchone() is not None
+
+
+def _barrar_fts_legado(con: sqlite3.Connection) -> None:
+    """Recusa abrir banco antigo, porque o erro dele seria SILENCIOSO.
+
+    Até 19/09/2026 o `paragrafo_fts` guardava cópia própria do texto e trazia
+    `documento_id`, `numero` e `idioma` como colunas UNINDEXED — o `buscar` lia
+    a identificação do parágrafo do próprio FTS. Com `content='paragrafo'`
+    essas colunas deixam de existir e a identificação passa a vir da junção
+    `p.rowid = f.rowid`. No banco antigo esse rowid é o da ordem de inserção no
+    FTS, que **não** corresponde ao da tabela `paragrafo`: a junção casaria
+    linha com linha errada e devolveria parágrafo trocado, com citação e
+    número plausíveis, sem erro nenhum.
+
+    Por isso barra em vez de tentar adivinhar. Peça que cita parágrafo errado
+    da Corte IDH é pior que peça que não cita, e falha que se lê é mais barata
+    que resultado que não se confere.
+    """
+    if not fts_e_legado(con):
+        return
+    raise RuntimeError(
+        "Índice da Corte IDH no formato ANTIGO (paragrafo_fts com conteúdo "
+        "próprio). Este código lê o índice por `rowid`, e no formato antigo "
+        "isso devolveria PARÁGRAFO TROCADO em silêncio — por isso a abertura "
+        "é recusada. Converta uma vez com:\n"
+        "  python mcp/corteidh-jurisprudencia/corteidh_crawler.py --migrar-fts\n"
+        "A conversão não vai à rede, preserva o acervo e reduz o banco em ~43%."
+    )
 
 
 def _sem_acento(texto):
@@ -186,6 +239,34 @@ def _migrar(con: sqlite3.Connection) -> list[str]:
                     "DEFAULT 0")
         feitas.append("tema.n_citacoes")
     return feitas
+
+
+_DDL_FTS_EXTERNO = (
+    "CREATE VIRTUAL TABLE paragrafo_fts USING fts5("
+    " texto, content='paragrafo', content_rowid='rowid',"
+    " tokenize='unicode61 remove_diacritics 2')"
+)
+
+
+def migrar_fts_externo(con: sqlite3.Connection) -> bool:
+    """Converte o `paragrafo_fts` antigo em external-content. Idempotente.
+
+    Devolve `True` se converteu e `False` se o banco já estava na forma nova.
+    NÃO faz `VACUUM`: o espaço da cópia apagada vai para a lista livre do
+    arquivo, que continua do mesmo tamanho até compactar. Quem compacta é o
+    `--migrar-fts` do crawler, porque `VACUUM` não roda dentro de transação e
+    precisa de espaço em disco igual ao do banco.
+
+    O texto NÃO é tocado — sai inteiro da tabela `paragrafo`, que é a fonte. O
+    que se joga fora é só o índice invertido e a cópia, ambos derivados.
+    """
+    if not fts_e_legado(con):
+        return False
+    con.execute("DROP TABLE paragrafo_fts")
+    con.execute(_DDL_FTS_EXTERNO)
+    con.execute("INSERT INTO paragrafo_fts (paragrafo_fts) VALUES ('rebuild')")
+    con.commit()
+    return True
 
 
 def inserir_documento(
@@ -293,6 +374,15 @@ def inserir_paragrafos(
     `suspeitos` são os NÚMEROS de parágrafo a marcar com o aviso de possível
     contaminação (ver o comentário da coluna `suspeito` no schema). Quem decide
     é a Tarefa 6; aqui só se grava o que ela mandar.
+
+    O par retirada-mais-reinserção abaixo opera SÓ sobre os parágrafos
+    passados, e isso é requisito medido, não zelo. A versão de antes de
+    17/09/2026 apagava o par (documento, idioma) inteiro, então uma chamada com
+    SUBCONJUNTO — a Tarefa 6 reprocessando apenas os trechos suspeitos, por
+    exemplo — sumia com os demais do índice de busca embora eles continuassem
+    intactos na tabela `paragrafo`. As duas tabelas dessincronizavam em
+    silêncio: `ficha` e `_melhor_idioma` achavam o parágrafo, `buscar` não.
+    Chavear pela chave primária conserva essa propriedade.
     """
     marcados = suspeitos or set()
     dados = [
@@ -300,38 +390,46 @@ def inserir_paragrafos(
          1 if p.numero in marcados else 0)
         for p in paragrafos
     ]
+    chaves = [(documento_id, p.numero, idioma) for p in paragrafos]
+
+    # RETIRAR do FTS antes de escrever, e com o texto ANTIGO em mãos. Com
+    # `content=`, o FTS5 não guarda o texto: para apagar uma entrada ele exige
+    # que se lhe devolva exatamente o texto que foi indexado, senão o índice
+    # invertido fica com termos órfãos e a busca passa a casar parágrafo que
+    # já não existe. Por isso a leitura vem ANTES do UPSERT — depois dele o
+    # texto antigo já se perdeu.
+    for did, num, idi in chaves:
+        antigo = con.execute(
+            "SELECT rowid AS rid, texto FROM paragrafo"
+            " WHERE documento_id = ? AND numero = ? AND idioma = ?",
+            (did, num, idi),
+        ).fetchone()
+        if antigo is not None:
+            con.execute(
+                "INSERT INTO paragrafo_fts (paragrafo_fts, rowid, texto)"
+                " VALUES ('delete', ?, ?)", (antigo["rid"], antigo["texto"]),
+            )
+
     con.executemany(
         "INSERT OR REPLACE INTO paragrafo"
         " (documento_id, numero, idioma, texto, suspeito)"
         " VALUES (?,?,?,?,?)", dados,
     )
-    # APAGAR antes de reinserir no FTS. A tabela `paragrafo` deduplica pela
-    # chave primária, mas `paragrafo_fts` é virtual e não tem chave: um
-    # `INSERT` puro duplicaria cada parágrafo a cada reindexação do mesmo
-    # documento, e a busca passaria a devolver o mesmo trecho repetido. O
-    # `buscar` deduplica por (documento, parágrafo) e esconderia o sintoma,
-    # o que torna o defeito silencioso — daí apagar aqui, na origem.
-    #
-    # O apagamento é pelos NÚMEROS PASSADOS, e não por (documento, idioma)
-    # inteiro. A versão anterior apagava tudo do par documento+idioma, então
-    # uma chamada com SUBCONJUNTO de parágrafos — a Tarefa 6 reprocessando só
-    # os trechos suspeitos, por exemplo — sumia com os demais do índice de
-    # busca, embora eles continuassem intactos na tabela `paragrafo`. As duas
-    # tabelas dessincronizavam em silêncio: `ficha` e `_melhor_idioma` achavam
-    # o parágrafo, `buscar` não. Medido pelo revisor em 2026-09-17.
-    numeros = [p.numero for p in paragrafos]
-    if numeros:
-        marcas = ",".join("?" * len(numeros))
-        con.execute(
-            f"DELETE FROM paragrafo_fts WHERE documento_id = ? AND idioma = ?"
-            f" AND numero IN ({marcas})",
-            (documento_id, idioma, *numeros),
-        )
-    con.executemany(
-        "INSERT INTO paragrafo_fts (texto, documento_id, numero, idioma)"
-        " VALUES (?,?,?,?)",
-        [(p.texto, documento_id, p.numero, idioma) for p in paragrafos],
-    )
+    # REINDEXAR pelos rowids NOVOS. O `INSERT OR REPLACE` apaga a linha e a
+    # reinsere, de modo que o rowid MUDA — o que foi lido no passo anterior já
+    # não vale aqui. Reler é o que mantém `paragrafo` e `paragrafo_fts`
+    # apontando para a mesma linha.
+    for did, num, idi in chaves:
+        nova = con.execute(
+            "SELECT rowid AS rid, texto FROM paragrafo"
+            " WHERE documento_id = ? AND numero = ? AND idioma = ?",
+            (did, num, idi),
+        ).fetchone()
+        if nova is not None:
+            con.execute(
+                "INSERT INTO paragrafo_fts (rowid, texto) VALUES (?, ?)",
+                (nova["rid"], nova["texto"]),
+            )
     con.execute(
         "UPDATE documento SET n_paragrafos = ("
         "  SELECT COUNT(DISTINCT numero) FROM paragrafo WHERE documento_id = ?"
@@ -407,11 +505,17 @@ def buscar(
     con, *, consulta: str, estado=None, tipo=None, artigo_cadh=None,
     ano_de=None, ano_ate=None, idioma_preferido="por", limite=10,
 ) -> list[dict]:
+    # A identificação do parágrafo vem de `paragrafo`, não do FTS. Com
+    # `content='paragrafo'` o índice guarda apenas o `rowid` e os termos: as
+    # colunas UNINDEXED que o `SELECT` lia aqui deixaram de existir, e a ponte
+    # entre um e outro é `p.rowid = f.rowid`. É a junção que a guarda de
+    # `abrir` protege — sobre banco no formato antigo ela casaria linha errada.
     sql = [
-        "SELECT f.documento_id AS doc_id, f.numero AS par, f.idioma AS idi,",
-        "       f.texto AS texto, d.*, bm25(paragrafo_fts) AS score",
+        "SELECT p.documento_id AS doc_id, p.numero AS par, p.idioma AS idi,",
+        "       p.texto AS texto, d.*, bm25(paragrafo_fts) AS score",
         "  FROM paragrafo_fts f",
-        "  JOIN documento d ON d.id = f.documento_id",
+        "  JOIN paragrafo p ON p.rowid = f.rowid",
+        "  JOIN documento d ON d.id = p.documento_id",
         " WHERE paragrafo_fts MATCH ?",
     ]
     args: list = [_para_fts(consulta)]

@@ -248,8 +248,12 @@ def _con_bilingue(favorecido: str, primeiro: str):
             c, doc_id, idi,
             [Paragrafo(89, _texto(idi, curto=(idi == favorecido)))])
 
+    # O idioma vem de `paragrafo`, e não do FTS: desde 19/09/2026 o índice é
+    # `content='paragrafo'` e guarda só o rowid e os termos.
     ranking = [r["idioma"] for r in c.execute(
-        "SELECT idioma FROM paragrafo_fts WHERE paragrafo_fts MATCH 'Ximenes'"
+        "SELECT p.idioma AS idioma FROM paragrafo_fts f"
+        "  JOIN paragrafo p ON p.rowid = f.rowid"
+        " WHERE f.paragrafo_fts MATCH 'Ximenes'"
         " ORDER BY bm25(paragrafo_fts)")]
     assert ranking and ranking[0] == favorecido, (
         f"premissa do teste quebrada: esperava {favorecido!r} primeiro no "
@@ -595,3 +599,153 @@ def test_reindexar_atualiza_a_marca_de_suspeito(con):
     indice.inserir_paragrafos(con, doc_id, "por",
                               [Paragrafo(7, "trecho qualquer")], suspeitos=set())
     assert indice.buscar(con, consulta="trecho")[0]["suspeito"] is False
+
+
+# ---------------------------------------------------------------------------
+# FTS5 external-content (19/09/2026) — o índice deixou de guardar cópia do
+# texto. O que estes testes protegem não é o tamanho do arquivo: é a JUNÇÃO
+# por rowid, cujo erro devolveria parágrafo trocado sem levantar exceção.
+# ---------------------------------------------------------------------------
+
+_DDL_FTS_ANTIGO = (
+    "CREATE VIRTUAL TABLE paragrafo_fts USING fts5("
+    " texto, documento_id UNINDEXED, numero UNINDEXED, idioma UNINDEXED,"
+    " tokenize='unicode61 remove_diacritics 2')"
+)
+
+
+def _banco_no_formato_antigo(caminho):
+    """Monta em disco um banco com o FTS de conteúdo próprio, como era antes.
+
+    Constrói pela DDL antiga em vez de usar um arquivo fixture porque o que se
+    quer exercitar é a FORMA do índice, e forma se declara melhor em DDL do que
+    em binário opaco.
+    """
+    con = indice.abrir(caminho, permitir_legado=True)
+    indice.criar_schema(con)
+    con.execute("DROP TABLE paragrafo_fts")
+    con.execute(_DDL_FTS_ANTIGO)
+    doc_id = indice.inserir_documento(
+        con, serie="C", numero=149, tipo="CC",
+        caso="Ximenes Lopes Vs. Brasil", estado="Brasil", data="2006-07-04")
+    trechos = [
+        (1, "Primeiro trecho sobre integridade pessoal."),
+        (2, "Segundo trecho sobre reparacao integral."),
+        (3, "Terceiro trecho sobre garantias judiciais."),
+    ]
+    for numero, texto in trechos:
+        con.execute(
+            "INSERT INTO paragrafo (documento_id, numero, idioma, texto,"
+            " suspeito) VALUES (?,?,?,?,0)", (doc_id, numero, "por", texto))
+        con.execute(
+            "INSERT INTO paragrafo_fts (texto, documento_id, numero, idioma)"
+            " VALUES (?,?,?,?)", (texto, doc_id, numero, "por"))
+    con.commit()
+    con.close()
+    return doc_id
+
+
+def test_fts_novo_nao_guarda_copia_do_texto(con):
+    """A cópia respondia por 36% do acervo — 138,1 MB contra 137,5 MB de texto
+    útil. O sinal de que ela sumiu é estrutural: com `content=`, o FTS5 não
+    cria a shadow table `paragrafo_fts_content`."""
+    tabelas = {
+        r["name"] for r in con.execute(
+            "SELECT name FROM sqlite_master WHERE type = 'table'")
+    }
+    assert "paragrafo_fts" in tabelas
+    assert "paragrafo_fts_content" not in tabelas, (
+        "o FTS voltou a guardar cópia própria do texto — confira o `content=` "
+        "na DDL de `paragrafo_fts`"
+    )
+    assert indice.fts_e_legado(con) is False
+
+
+def test_busca_devolve_o_paragrafo_certo_quando_o_rowid_nao_segue_a_ordem(con):
+    """O caso que mata o mutante da junção.
+
+    Com um só parágrafo, `p.rowid = f.rowid` acerta por acidente mesmo se a
+    junção estiver errada. Aqui a ordem dos rowids é embaralhada de propósito:
+    o `INSERT OR REPLACE` da reindexação apaga a linha e a reinsere no FIM,
+    então o parágrafo 1 passa a ter o MAIOR rowid do documento. Junção que
+    caia em outra linha devolve texto de outro parágrafo — plausível, numerado
+    e errado, que é exatamente o modo de falha que a guarda de `abrir` existe
+    para impedir.
+    """
+    doc_id = indice.inserir_documento(
+        con, serie="C", numero=333, tipo="CC",
+        caso="Favela Nova Brasilia Vs. Brasil", estado="Brasil",
+        data="2017-02-16")
+    indice.inserir_paragrafos(con, doc_id, "por", [
+        Paragrafo(1, "Trecho um sobre investigacao policial."),
+        Paragrafo(2, "Trecho dois sobre reparacao coletiva."),
+        Paragrafo(3, "Trecho tres sobre impunidade sistemica."),
+    ])
+    # Reindexa SÓ o 1, que assim ganha o maior rowid da tabela.
+    indice.inserir_paragrafos(
+        con, doc_id, "por",
+        [Paragrafo(1, "Trecho um sobre investigacao policial.")])
+
+    rowids = {
+        r["numero"]: r["rid"] for r in con.execute(
+            "SELECT numero, rowid AS rid FROM paragrafo"
+            " WHERE documento_id = ?", (doc_id,))
+    }
+    assert rowids[1] > rowids[3], (
+        f"premissa do teste quebrada: esperava o parágrafo 1 com rowid maior "
+        f"que o do 3 depois da reindexação, veio {rowids}"
+    )
+
+    for termo, esperado in (("investigacao", 1), ("reparacao", 2),
+                            ("impunidade", 3)):
+        res = indice.buscar(con, consulta=termo)
+        assert len(res) == 1, f"{termo}: esperava 1 resultado, veio {len(res)}"
+        assert res[0]["paragrafo"] == esperado, (
+            f"{termo}: a busca devolveu o parágrafo {res[0]['paragrafo']} "
+            f"quando o termo está no {esperado} — junção por rowid trocada"
+        )
+        assert termo in res[0]["texto"]
+
+
+def test_abrir_recusa_banco_no_formato_antigo(tmp_path):
+    """Banco velho com código novo devolveria parágrafo trocado em silêncio.
+    Recusar é o comportamento certo, e a mensagem tem de dizer como consertar."""
+    caminho = tmp_path / "antigo.db"
+    _banco_no_formato_antigo(caminho)
+
+    with pytest.raises(RuntimeError) as erro:
+        indice.abrir(caminho)
+    assert "--migrar-fts" in str(erro.value), (
+        "a recusa precisa apontar o comando que resolve, senão ela só bloqueia"
+    )
+
+    # E não pode barrar banco novo, que é o caso comum.
+    assert indice.abrir(tmp_path / "novo.db") is not None
+
+
+def test_migrar_fts_externo_converte_preserva_a_busca_e_e_idempotente(tmp_path):
+    """A conversão joga fora índice e cópia, ambos derivados, e reconstrói a
+    partir da tabela `paragrafo`, que é a fonte. O texto não se toca."""
+    caminho = tmp_path / "antigo.db"
+    _banco_no_formato_antigo(caminho)
+
+    con = indice.abrir(caminho, permitir_legado=True)
+    assert indice.fts_e_legado(con) is True
+    assert indice.migrar_fts_externo(con) is True
+    assert indice.fts_e_legado(con) is False
+    # Segunda passada não faz nada e diz que não fez.
+    assert indice.migrar_fts_externo(con) is False
+    con.close()
+
+    # Depois de convertido, abre sem a permissão explícita — e busca certo.
+    con = indice.abrir(caminho)
+    assert con.execute("SELECT COUNT(*) FROM paragrafo").fetchone()[0] == 3
+    for termo, esperado in (("integridade", 1), ("reparacao", 2),
+                            ("garantias", 3)):
+        res = indice.buscar(con, consulta=termo)
+        assert len(res) == 1, f"{termo}: sumiu da busca após a migração"
+        assert res[0]["paragrafo"] == esperado, (
+            f"{termo}: veio o parágrafo {res[0]['paragrafo']}, esperava "
+            f"{esperado}"
+        )
+    con.close()
