@@ -515,6 +515,101 @@ async def mapa_tematico_corteidh(tema: str, max_casos: int = 20) -> str:
     return _mapa_sync(tema=tema, max_casos=max_casos)
 
 
+def _recepcao_sync(caso: str) -> str:
+    # Import TARDIO e protegido: esta é a única parte do MCP que vai à rede, e
+    # o servidor tem de subir mesmo que ela esteja quebrada (spec §6.4).
+    try:
+        import recepcao_interna  # noqa: PLC0415
+    except ImportError as exc:
+        return _erro("recepcao-indisponivel",
+                     f"O módulo de recepção interna não carregou ({exc}). A "
+                     f"busca de parágrafo segue funcionando offline.")
+
+    r = recepcao_interna.consultar(caso)
+
+    achados = r["documentos"]
+    extra = {
+        "veredito": r["veredito"],
+        "consulta_cjf": r["consulta"],
+        "cache": r["cache"],
+        "totais_portal": ", ".join(
+            f"{t}: {n}" for t, n in sorted(r["totais"].items())) or "—",
+        # O leitor precisa saber que a POSTURA não foi lida. Sem esta linha, a
+        # lista de acórdãos parece um veredito de recepção, que é exatamente a
+        # inferência que a ferramenta se recusa a fazer.
+        "postura_nao_inferida": (
+            "Esta busca casa por palavra. O acórdão que ACOLHE e o que RECUSA "
+            "o caso casam igual — leia a ementa antes de afirmar recepção ou "
+            "resistência."),
+    }
+    if r["ancoras"]:
+        extra["ancoras_curadas"] = " | ".join(
+            f"{a['termo']} ({len(a['documentos'])} achado(s))"
+            for a in r["ancoras"])
+        extra["ancoras_procedencia"] = r["ancoras_procedencia"]
+
+    resultados = [BaseResultadoJuridico(
+        conteudo=r["motivo"],
+        fonte="https://jurisprudencia.cjf.jus.br/unificada/",
+        tipo="Recepção interna (medição)",
+        orgao="STF e STJ, via base unificada do CJF",
+        numero=r["caso"],
+        data="",
+        extra=extra,
+    )]
+
+    for d in achados + [
+            doc for a in r["ancoras"] for doc in a["documentos"]]:
+        resultados.append(BaseResultadoJuridico(
+            conteudo=truncar_por_tokens(d["ementa"], 400) if d["ementa"]
+            else "(sem ementa no retorno do portal)",
+            fonte="https://jurisprudencia.cjf.jus.br/unificada/",
+            tipo=d["classe"] or "Acórdão",
+            orgao=d["orgao_julgador"] or d["tribunal"],
+            numero=d["numero"],
+            data=d["data_julgamento"],
+            extra={"relator": d["relator"], "tribunal": d["tribunal"],
+                   "ementa_truncada": d["ementa_truncada"]},
+        ))
+
+    log_query(mcp="corteidh-jurisprudencia", tool="recepcao_interna_corteidh",
+              query=caso, n_resultados=len(achados), ms=0,
+              filtros={"veredito": r["veredito"]})
+    return formatar_resultados_xml(resultados, tag_raiz="recepcao")
+
+
+@mcp.tool()
+async def recepcao_interna_corteidh(caso: str) -> str:
+    """
+    Como o STF e o STJ trataram um caso da Corte IDH — ÚNICA tool que vai à rede.
+
+    Use antes de apoiar tese em precedente interamericano, para saber se há
+    acórdão interno que o invoque (e em que sentido). Isolada de propósito: se o
+    CJF estiver fora do ar, as demais tools deste MCP seguem servindo offline.
+
+    NÃO INFERE POSTURA. A busca casa por palavra, e o acórdão que acolhe o caso
+    casa igual ao que o recusa. Ela devolve ONDE LER, não o que foi decidido.
+
+    ZERO SÓ VALE CALIBRADO: não havendo resultado, roda um canário. Canário
+    mudo ⇒ veredito NAO_APURADO, nunca "não há recepção".
+
+    VEREDITOS:
+        HA_OCORRENCIA  — há acórdãos; leia a ementa de cada um
+        SEM_OCORRENCIA — zero MEDIDO (canário respondeu)
+        NAO_APURADO    — canal mudo ou erro; não conclua nada
+
+    Args:
+        caso: título como na ficha ("Gomes Lund e outros Vs. Brasil"). O
+              prefixo "Caso" e o "Vs. <país>" são tolerados.
+
+    Returns:
+        XML com o veredito, os acórdãos encontrados (número, classe, relator,
+        órgão, data, ementa) e, nos casos notórios, as âncoras internas curadas
+        — marcadas como curadoria a conferir, nunca como tese afirmada.
+    """
+    return _recepcao_sync(caso)
+
+
 @mcp.tool()
 def ajuda_sintaxe_corteidh() -> str:
     """
