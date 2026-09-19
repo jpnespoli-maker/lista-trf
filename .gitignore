@@ -31,6 +31,23 @@ ENV/
 env/
 
 # ===========================================
+# Lock de gerenciador que este repo NAO usa
+# ===========================================
+# `uv.lock` aparece quando alguem roda `uv sync`/`uv lock` na raiz, e nada
+# aqui o le: o `iniciar.bat` instala por `pip install -r requirements.txt`, o
+# README manda o mesmo, e os nove MCPs sobem de venvs proprios em
+# `~/.claude/mcp-venvs/`, cada um montado do seu `requirements.txt`.
+#
+# Versiona-lo criaria uma TERCEIRA declaracao de dependencia que nenhuma
+# ferramenta consulta e ninguem regenera — lock que ninguem atualiza diverge
+# em silencio, e o defeito so' aparece no dia em que alguem confia nele.
+# Adotar o `uv` e' decisao de regime de dependencias, e ai' o lock entra junto
+# com quem o leia; ate' la', ele e' artefato.
+uv.lock
+poetry.lock
+Pipfile.lock
+
+# ===========================================
 # IDE / Editors
 # ===========================================
 .idea/
