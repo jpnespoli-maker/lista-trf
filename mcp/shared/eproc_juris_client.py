@@ -32,7 +32,9 @@ Verificado em 2026-08-11:
   (``/TSPD/``, cookies ``TS…``), que devolve "Please enable JavaScript" a
   cliente sem JavaScript. O ``eproc-jur`` serve a mesma tela sem a barreira.
   Nessa data a origem *Varas Federais* voltou 0 documento para qualquer termo,
-  em ementa e inteiro teor (não comparável com o host antigo, já bloqueado)
+  em ementa e inteiro teor, enquanto o MESMO cliente, na mesma hora, achou
+  sentenças de vara no TRF4 (12 e 189) — o vazio é do índice do TRF6 neste
+  host, não do cliente. Não comparável com o host antigo, já bloqueado
 - **TRF1** — não usa eProc; a 1ª Região tem base regional própria no CJF, que é
   o servidor ``trf1-jurisprudencia`` (fonte ``JEF1``)
 - **TRF5** — não usa eProc, e não precisa: o ``julia-trf5`` já cobre as Turmas
