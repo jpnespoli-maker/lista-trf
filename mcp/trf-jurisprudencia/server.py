@@ -94,7 +94,9 @@ def _buscar(
         "data_fim": data_fim or "",
         "max_resultados": max_resultados,
         "somente_caput": somente_caput,
-        "v": 2,
+        # v3 (24/09/2026): os documentos passaram a trazer `id_inteiro_teor`; o
+        # cache anterior não o tem, e servi-lo esconderia o id por dois dias.
+        "v": 3,
     }
     cached = cached_http("trf-jurisprudencia", cache_key)
     if cached is not None:
@@ -166,8 +168,11 @@ def buscar_jurisprudencia_trf(
                        campo="IT" e estreita também a busca por ementa.
 
     Returns:
-        XML com número CNJ, tipo, órgão julgador, relator, data, UF e ementa.
+        XML com número CNJ, tipo, órgão julgador, relator, data, UF, ementa e
+        `id_inteiro_teor` — que `inteiro_teor_trf` consome para ler o VOTO.
         A ementa deve ser reproduzida FIELMENTE na peça — proibido resumir.
+        Com campo="IT" o conteúdo costuma ser só o dispositivo: para saber por
+        que a Turma decidiu, ler o voto pelo `inteiro_teor_trf`.
         Atenção ao peso: Turma Recursal é persuasivo (art. 926 CPC), não
         vinculante; a peça deve dizer o que está citando.
     """
@@ -203,6 +208,7 @@ def buscar_jurisprudencia_trf(
                         "uf": doc.get("uf", ""),
                         "data_publicacao": doc.get("data da publicacao", ""),
                         "relator_tratamento": doc.get("relator_tratamento", ""),
+                        "id_inteiro_teor": doc.get("id_inteiro_teor", ""),
                     },
                 )
             )
@@ -323,6 +329,9 @@ def relatorio_jurisprudencia_trf(
                 linhas.append(f"**Publicação:** {doc['data da publicacao']}")
             if doc.get("uf"):
                 linhas.append(f"**UF:** {doc['uf']}")
+            if doc.get("id_inteiro_teor"):
+                linhas.append(f"**Inteiro teor:** `inteiro_teor_trf(\"{doc['id_inteiro_teor']}\", "
+                              f"tribunal=\"{meta['tribunal']}\")`")
             linhas.append("")
             if doc.get("ementa"):
                 linhas.extend(["### Ementa", "", f"> {doc['ementa']}", ""])
@@ -345,6 +354,56 @@ def relatorio_jurisprudencia_trf(
             n_resultados=n_docs,
             ms=int((time.perf_counter() - t0) * 1000),
             cache_hit=cache_hit,
+            erro=erro_msg,
+        )
+
+
+@mcp.tool()
+def inteiro_teor_trf(
+    id_inteiro_teor: str,
+    tribunal: str = "TRF2",
+    max_caracteres: int = 60000,
+) -> str:
+    """
+    INTEIRO TEOR de um julgado achado pela busca: voto, acórdão e extrato de ata.
+
+    USE ANTES DE CLASSIFICAR UM PRECEDENTE COMO FAVORÁVEL OU ANÁLOGO. A ementa e o
+    trecho casado pela busca dão o resultado; a razão de decidir e o fato que torna
+    o caso análogo (fase, qual perícia, se a moléstia foi avaliada) estão no VOTO.
+    Muitos acórdãos de Turma Recursal nem têm ementa — só o voto e o dispositivo.
+
+    Args:
+        id_inteiro_teor: o campo `id_inteiro_teor` devolvido por
+                         buscar_jurisprudencia_trf / relatorio_jurisprudencia_trf.
+        tribunal: o MESMO tribunal da busca ("TRF2", "TRF4" ou "TRF6").
+        max_caracteres: teto do texto devolvido (mínimo 1000); `truncado` indica
+                        o corte — não concluir sobre texto lido pela metade.
+
+    Returns:
+        Cabeçalho com tribunal, id, url, chars_total e truncado, seguido do texto.
+    """
+    t0 = time.perf_counter()
+    erro_msg: Optional[str] = None
+    try:
+        r = eproc.baixar_inteiro_teor(tribunal, id_inteiro_teor, max_caracteres)
+        cab = (
+            f"<!-- Inteiro teor {r['tribunal']} | id {r['id_inteiro_teor']} | "
+            f"chars_total {r['chars_total']} | truncado: {str(r['truncado']).lower()} | "
+            f"{sanitizar_comentario_xml(r['url'])} -->\n"
+        )
+        return cab + r["texto"]
+    except Exception as e:
+        erro_msg = str(e)
+        return f"<erro>{sanitizar_comentario_xml(str(e))}</erro>"
+    finally:
+        log_query(
+            mcp="trf-jurisprudencia",
+            tool="inteiro_teor_trf",
+            query=str(id_inteiro_teor),
+            filtros={"tribunal": tribunal, "max_caracteres": max_caracteres},
+            n_resultados=0 if erro_msg else 1,
+            ms=int((time.perf_counter() - t0) * 1000),
+            cache_hit=False,
             erro=erro_msg,
         )
 
@@ -380,7 +439,12 @@ ORIGENS (parâmetro `origem`)
 
 CAMPO (parâmetro `campo`)
   EM   ementa (padrão — rápido e preciso)
-  IT   inteiro teor (mais abrangente, mais lento)
+  IT   inteiro teor (mais abrangente, mais lento) — BUSCA no inteiro teor, mas
+       devolve só ementa/dispositivo
+
+LER O VOTO
+  inteiro_teor_trf(id_inteiro_teor, tribunal) — com o id que a busca devolve.
+  Antes de dizer que um precedente é favorável ou análogo, leia o voto.
 
 OPERADORES (MINÚSCULO — ao contrário do CJF, que usa maiúsculo)
   e      ambos obrigatórios      "auxílio-doença" e cessação

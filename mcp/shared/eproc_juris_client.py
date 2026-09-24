@@ -315,6 +315,23 @@ def extrair_documentos(html: str) -> List[Dict[str, str]]:
         elif "relator" in doc:
             doc["relator_tratamento"] = "Relator"
 
+        # Id do INTEIRO TEOR — o que `baixar_inteiro_teor` consome. O cartão o
+        # traz no `data-link` do ícone "article" (a.inteiroTeor) e, repetido, no
+        # `id` do próprio div. Até 24/09/2026 era descartado, e o voto (onde está
+        # a razão de decidir e o fato que torna o caso análogo) não se lia pelo MCP.
+        idj = ""
+        icone = div.find("a", class_="inteiroTeor")
+        if icone and icone.get("data-link"):
+            m = re.search(r"id_jurisprudencia=(\d+)", icone["data-link"])
+            if m:
+                idj = m.group(1)
+        if not idj:
+            m = re.match(r"^resultado(\d{6,})$", div.get("id", ""))
+            if m:
+                idj = m.group(1)
+        if idj:
+            doc["id_inteiro_teor"] = idj
+
         if doc.get("numero") or doc.get("ementa"):
             documentos.append(doc)
 
@@ -451,3 +468,81 @@ def buscar_documentos(
         "tipos_disponiveis": sorted(sess.tipos),
     }
     return docs[:max_resultados], meta
+
+
+# ---------------------------------------------------------------------------
+# Inteiro teor
+# ---------------------------------------------------------------------------
+
+_RE_ID_INTEIRO_TEOR = re.compile(r"^\d{6,40}$")
+
+
+def _texto_do_inteiro_teor(html: str) -> str:
+    """Texto legível do HTML do inteiro teor: sem script/estilo, linhas em branco colapsadas."""
+    soup = BeautifulSoup(html, "html.parser")
+    for lixo in soup(["script", "style"]):
+        lixo.decompose()
+    texto = soup.get_text("\n")
+    texto = re.sub(r"[ \t\r\f\v]+", " ", texto)
+    texto = re.sub(r" *\n *", "\n", texto)
+    # O HTML do eProc põe cada linha num bloco próprio, e o get_text dobra as
+    # quebras: colapsar para uma só reduz ~metade do tamanho sem perder texto.
+    return re.sub(r"\n{2,}", "\n", texto).strip()
+
+
+def baixar_inteiro_teor(
+    tribunal: str, id_inteiro_teor: str, max_caracteres: int = 60000,
+) -> Dict[str, Any]:
+    """Baixa o INTEIRO TEOR (voto, acórdão, extrato de ata) de um resultado da busca.
+
+    O id vem do campo ``id_inteiro_teor`` de ``extrair_documentos``. O portal
+    serve HTML (ISO-8859-1) no TRF2 e no TRF4, medido em 24/09/2026, bastando a
+    sessão aberta pela tela de pesquisa.
+
+    **Canário, e é ele que impede o erro silencioso:** id inexistente volta HTTP
+    200 com a página GENÉRICA do eProc (título "eproc", menu do portal). O
+    documento verdadeiro tem título ``Documento:<n>``. Sem esse marcador,
+    ``RuntimeError`` — devolver o menu como se fosse voto seria pior que falhar.
+    """
+    trib = normalizar_tribunal(tribunal)
+    idj = str(id_inteiro_teor or "").strip()
+    if not _RE_ID_INTEIRO_TEOR.match(idj):
+        raise ValueError(
+            f"id_inteiro_teor inválido: {id_inteiro_teor!r}. Use o valor do campo "
+            "id_inteiro_teor devolvido pela busca (só dígitos)."
+        )
+    max_caracteres = max(1000, int(max_caracteres))
+
+    sess = get_sessao(trib)
+    if not sess.sessao_fresca:
+        sess.abrir()
+    url = (sess.base + "externo_controlador.php?acao=jurisprudencia@jurisprudencia/"
+           f"download_inteiro_teor&id_jurisprudencia={idj}")
+    resp = sess.session.get(url, headers={**HEADERS, "Referer": sess.url_pesquisar}, timeout=60)
+    resp.raise_for_status()
+
+    tipo = (resp.headers.get("content-type") or "").lower()
+    if "html" not in tipo:
+        raise RuntimeError(
+            f"O eProc {trib} devolveu o inteiro teor em formato não suportado "
+            f"({tipo or 'sem content-type'}); este cliente lê só HTML."
+        )
+    m = re.search(r"charset\s*=\s*([\w-]+)", tipo)
+    html = resp.content.decode(m.group(1) if m else "iso-8859-1", errors="replace")
+
+    titulo = BeautifulSoup(html, "html.parser").title
+    if not titulo or not titulo.get_text().strip().lower().startswith("documento"):
+        raise RuntimeError(
+            f"O id {idj} não devolveu inteiro teor no eProc {trib} (veio a página "
+            "genérica do portal). Conferir o id na busca e o tribunal."
+        )
+
+    texto = _texto_do_inteiro_teor(html)
+    return {
+        "tribunal": trib,
+        "id_inteiro_teor": idj,
+        "url": url,
+        "chars_total": len(texto),
+        "truncado": len(texto) > max_caracteres,
+        "texto": texto[:max_caracteres],
+    }
