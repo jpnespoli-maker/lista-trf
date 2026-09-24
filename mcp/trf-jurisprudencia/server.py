@@ -15,7 +15,7 @@ COBERTURA (verificada em 2026-08-11)
 |--------|---------------------------------------|----------------|
 | TRF2   | eproc.trf2.jus.br                     | sim (+ TRU2)   |
 | TRF4   | jurisprudencia.trf4.jus.br/eproc2trf4 | sim (+ TRU4)   |
-| TRF6   | eproc1g.trf6.jus.br                   | sim (+ TRU6)   |
+| TRF6   | eproc-jur.trf6.jus.br                 | sim (+ TRU6)   |
 | TRF1   | servidor ``trf1-jurisprudencia``      | sim (fonte JEF1) |
 | TRF5   | servidor ``julia-trf5``               | sim (+ TRU5)   |
 | TRF3   | sem portal acessível por HTTP          | não            |

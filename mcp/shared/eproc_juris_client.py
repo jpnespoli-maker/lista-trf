@@ -26,8 +26,13 @@ Verificado em 2026-08-11:
 - **TRF2** ``eproc.trf2.jus.br`` — TRF2, TRU2, Turmas Recursais
 - **TRF4** ``jurisprudencia.trf4.jus.br/eproc2trf4`` — TRF4, TRU4, Turmas
   Recursais, Varas Federais
-- **TRF6** ``eproc1g.trf6.jus.br`` — TRF6, TRU6, Turmas Recursais, Varas
-  Federais
+- **TRF6** ``eproc-jur.trf6.jus.br`` — TRF6, TRU6, Turmas Recursais, Varas
+  Federais. Até 2026-09 era ``eproc1g.trf6.jus.br``; em 24/09/2026 o TRF6 pôs
+  o ``eproc1g`` e o ``eproc2g`` atrás de uma barreira anti-robô da F5
+  (``/TSPD/``, cookies ``TS…``), que devolve "Please enable JavaScript" a
+  cliente sem JavaScript. O ``eproc-jur`` serve a mesma tela sem a barreira.
+  Nessa data a origem *Varas Federais* voltou 0 documento para qualquer termo,
+  em ementa e inteiro teor (não comparável com o host antigo, já bloqueado)
 - **TRF1** — não usa eProc; a 1ª Região tem base regional própria no CJF, que é
   o servidor ``trf1-jurisprudencia`` (fonte ``JEF1``)
 - **TRF5** — não usa eProc, e não precisa: o ``julia-trf5`` já cobre as Turmas
@@ -64,7 +69,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 TRIBUNAIS: Dict[str, str] = {
     "TRF2": "https://eproc.trf2.jus.br/eproc/",
     "TRF4": "https://jurisprudencia.trf4.jus.br/eproc2trf4/",
-    "TRF6": "https://eproc1g.trf6.jus.br/eproc/",
+    "TRF6": "https://eproc-jur.trf6.jus.br/eproc/",
 }
 
 # Rótulo canônico → padrão que casa o rótulo real do <option> no formulário.
@@ -131,6 +136,13 @@ class EProcJurisSession:
         html = resp.text
 
         if "txtPesquisa" not in html:
+            if "/TSPD/" in html:
+                raise RuntimeError(
+                    f"O eProc {self.tribunal} respondeu com a barreira anti-robô "
+                    "da F5 (/TSPD/, 'Please enable JavaScript') no lugar da tela "
+                    "de jurisprudência — o host passou a exigir navegador. "
+                    "Procurar host de jurisprudência sem a barreira."
+                )
             raise RuntimeError(
                 f"A tela de jurisprudência do eProc {self.tribunal} não veio como "
                 "esperado (sem campo txtPesquisa) — pode ter caído em login ou "
