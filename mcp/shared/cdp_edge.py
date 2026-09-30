@@ -40,12 +40,14 @@ LIMITES CONHECIDOS
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Optional
 
@@ -191,7 +193,36 @@ def obter_html(
 
     A navegacao para `url_alvo` acontece SEMPRE — reaproveitar a aba sem
     renavegar devolveria o resultado da consulta anterior na consulta seguinte.
+
+    CHAMADA DE DENTRO DE UM LOOP ASYNCIO: o `sync_playwright()` recusa rodar
+    em thread com loop em curso ("Sync API inside the asyncio loop"), e e'
+    exatamente ai que o FastMCP executa tool `def` sincrona (mcp 1.27: chama
+    `fn(**args)` direto na corotina). Havendo loop, o trabalho vai a uma thread
+    propria e esta chamada espera o resultado; sem loop, roda aqui mesmo.
+    Reproduzido em 29/09/2026 (B27): SUMU/INFJ morriam na rota CDP.
     """
+    kwargs = dict(
+        url_base=url_base, porta=porta, espera_pos_carga_s=espera_pos_carga_s,
+        seletor_busca=seletor_busca, termo=termo,
+    )
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return _obter_html(url_alvo, dominio, **kwargs)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="cdp_edge") as ex:
+        return ex.submit(_obter_html, url_alvo, dominio, **kwargs).result()
+
+
+def _obter_html(
+    url_alvo: str,
+    dominio: str,
+    *,
+    url_base: Optional[str],
+    porta: int,
+    espera_pos_carga_s: float,
+    seletor_busca: Optional[str],
+    termo: Optional[str],
+) -> tuple[str, str]:
     from playwright.sync_api import sync_playwright  # import tardio: opcional
 
     garantir_navegador(porta=porta, url_inicial=url_base or url_alvo)
