@@ -150,6 +150,37 @@ _INFORMATIVO_TIMEOUT_S = 20
 # Conversão de sintaxe BRS (STJ/SCON) → CJF (Unificada)
 # ---------------------------------------------------------------------------
 
+# Cobertura medida em 01/10/2026 (PAJ 2021/016-09136): o índice do STJ na CJF
+# Unificada não passa de ~dez/2019. "covid" dá zero para o STJ e o SCON traz 46
+# acórdãos de superendividamento de 2022 a 09/2026 onde a CJF traz 4, até 2019.
+# O cliente não envia filtro de data; o TRF4, na mesma CJF, vai até 2026.
+AVISO_COBERTURA_CJF_STJ = (
+    "COBERTURA: a CJF Unificada não indexa acórdão do STJ posterior a ~dez/2019 "
+    "(medido em 01/10/2026). Jurisprudência recente do STJ: repetir com forcar_scon=True."
+)
+
+# Classe do recurso, como se escreve na citação ("AgInt no AREsp", "EDcl nos EREsp").
+_CLASSES_STJ = (
+    r"REsp|AREsp|EREsp|AgInt|AgRg|EDcl|EAREsp|HC|RHC|RMS|MS|CC|Rcl|Pet|SLS|SS|"
+    r"AR|AgRg|PUIL|IAC|EDv|RE|AI|Ag|no|nos|na|nas"
+)
+_RE_NUMERO_PROCESSO = re.compile(
+    rf"^\s*(?:(?:{_CLASSES_STJ})\.?\s+)*(\d{{1,3}}(?:\.\d{{3}})+|\d{{4,8}})"
+    r"(?:\s*/\s*[A-Za-z]{2})?\s*$",
+    re.IGNORECASE,
+)
+
+
+def _numero_de_processo(query: str) -> Optional[str]:
+    """Dígitos do processo quando a busca é SÓ um número de recurso; senão None.
+
+    "REsp 2.098.934/RO" → "2098934". "Tema 1285" e "Lei 14.181" não casam:
+    a classe tem de ser de recurso, e número de tema ou de lei não é processo.
+    """
+    m = _RE_NUMERO_PROCESSO.match(query or "")
+    return m.group(1).replace(".", "") if m else None
+
+
 _BRS_OPERADORES = {"e", "ou", "nao", "não", "xou"}
 _BRS_PROXIMIDADE = re.compile(r"^(adj|prox|com|mesmo)(\d*)$", re.IGNORECASE)
 
@@ -801,6 +832,7 @@ def _rota_cjf(
     meta = (
         f'<!-- STJ via CJF Unificada ({sanitizar_comentario_xml(origem)}) '
         f'| Total STJ: {total} | Exibindo: {len(resultados)} -->\n'
+        f'<!-- {AVISO_COBERTURA_CJF_STJ} -->\n'
     )
     if relaxada:
         meta += (
@@ -850,6 +882,10 @@ def buscar_jurisprudencia_stj(
     Notas:
         ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
         que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
+        A CJF NÃO TEM acórdão do STJ posterior a ~dez/2019 (medido em
+        01/10/2026): para jurisprudência recente, forcar_scon=True. Busca que é
+        só número de recurso ("REsp 2.098.934/RO", "2098934") vai sozinha ao
+        SCON, com o qualificador .NUM., que traz o processo e não quem o cita.
         SUMU existe apenas no SCON — ali ele é tentado primeiro, por HTTP, no
         host processo.stj.jus.br (sem Cloudflare) e depois no scon.stj.jus.br.
         Cada súmula traz verbete, órgão, data, ramo e, se não vigora mais,
@@ -884,7 +920,11 @@ def buscar_jurisprudencia_stj(
     # `scon_primeiro`: o SCON é insubstituível em SUMU/INFJ (o CJF não cobre
     # súmula nem informativo) e opcional em ACOR. Fora desses casos ele entra
     # como fallback, não como pedágio de entrada.
-    scon_primeiro = base != "ACOR" or forcar_scon
+    # Busca que é só número de processo vai ao SCON com `.NUM.`: na CJF dava
+    # zero (sem cobertura pós-2019) e no SCON livre trazia quem CITA o número.
+    numero = _numero_de_processo(query) if base == "ACOR" else None
+    query_scon = f"{numero}.NUM." if numero else query
+    scon_primeiro = base != "ACOR" or forcar_scon or bool(numero)
     rota = "scon" if scon_primeiro else "cjf"
     try:
         # A1 — cache HTTP. Chave inclui base (e o truncamento, pois o XML
@@ -941,7 +981,7 @@ def buscar_jurisprudencia_stj(
         try:
             if scon_primeiro:
                 saida, n_results, host = _rota_scon_http(
-                    query, base, tamanho, max_tokens_ementa
+                    query_scon, base, tamanho, max_tokens_ementa
                 )
                 rota = "scon-processo" if host == _host_scon(SCON_PROCESSO_BASE) else "scon"
             else:
@@ -958,7 +998,7 @@ def buscar_jurisprudencia_stj(
             try:
                 rota = "scon-cdp"
                 saida, n_results = _rota_scon_cdp(
-                    query, base, tamanho, max_tokens_ementa
+                    query_scon, base, tamanho, max_tokens_ementa
                 )
                 return _guardar(saida, n_results)
             except Exception as e:
