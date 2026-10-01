@@ -3,7 +3,9 @@ MCP Server: STJ Jurisprudência
 
 ACÓRDÃOS (ACOR)   → CJF Unificada com filtro tribunais=STJ
                     (https://jurisprudencia.cjf.jus.br/unificada/index.xhtml)
-SÚMULAS (SUMU)    → SCON STJ via curl_cffi, depois CDP (https://scon.stj.jus.br/SCON/)
+SÚMULAS (SUMU)    → SCON por HTTP no host processo.stj.jus.br (sem Cloudflare),
+                    depois scon.stj.jus.br por HTTP, depois CDP
+                    (https://processo.stj.jus.br/SCON/pesquisar.jsp?b=SUMU)
 INFORMATIVOS (INFJ) → portal do Informativo de Jurisprudência por HTTP
                     (https://processo.stj.jus.br/jurisprudencia/externo/informativo/)
 
@@ -12,9 +14,16 @@ programático. Até 2026-07-30 este servidor ainda o tentava primeiro em toda
 chamada e só então caía no CJF — a telemetria do período mostrou 359 de 366
 chamadas terminando no fallback, ao custo de ~44 s cada (268 min). Desde então
 a precedência é invertida para ACOR: o CJF responde direto (~1,3 s) e o SCON
-vira fallback. Em SUMU/INFJ, que o CJF não cobre, o SCON segue primeiro, com
-pedágio curto (1 tentativa, 8 s); bloqueado, a via é a escada do projeto
-(Playwright → desafio resolvido pelo Defensor).
+vira fallback. Em SUMU, que o CJF não cobre, o SCON segue primeiro, com
+pedágio curto (1 tentativa, 8 s por host).
+
+HOST SEM CLOUDFLARE (01/10/2026): o Cloudflare barra scon.stj.jus.br (403),
+mas o MESMO aplicativo SCON responde em processo.stj.jus.br, por HTTP simples
+e com a pesquisa por querystring funcionando (SUMU "impenhorabilidade" = 9
+súmulas em ~1 s). A via HTTP do SCON tenta esse host primeiro, em SUMU e em
+ACOR (forcar_scon ou fallback), e o comentário inicial declara qual host
+respondeu. A lista de súmulas tem layout próprio (`.gridSumula`) — ver
+`_parse_sumulas_html`.
 
 A API pública continua sendo `buscar_jurisprudencia_stj(query, base, tamanho)`,
 agora com `forcar_scon` para pedir o SCON explicitamente em ACOR. O comentário
@@ -38,7 +47,6 @@ from shared.base_juridica import (
     BaseResultadoJuridico,
     formatar_resultados_xml,
     truncar_por_tokens,
-    limpar_texto_html,
     sanitizar_comentario_xml,
 )
 from shared import cjf_client
@@ -97,6 +105,18 @@ _SCON_TIMEOUT_S = 8
 SCON_BASE = "https://scon.stj.jus.br/SCON"
 SCON_HOME = f"{SCON_BASE}/"
 SCON_PESQUISAR = f"{SCON_BASE}/pesquisar.jsp"
+
+# O MESMO aplicativo SCON responde em processo.stj.jus.br SEM Cloudflare
+# (medido em 01/10/2026: scon.stj.jus.br → 403; processo.stj.jus.br → 200, com
+# a pesquisa por querystring funcionando — SUMU "impenhorabilidade" = 9 súmulas,
+# ACOR idem). Por isso a via HTTP tenta esse host PRIMEIRO e só depois o
+# scon.stj.jus.br; a rota CDP continua no scon.stj.jus.br.
+SCON_PROCESSO_BASE = "https://processo.stj.jus.br/SCON"
+_SCON_HOSTS_HTTP = (SCON_PROCESSO_BASE, SCON_BASE)
+
+# A busca sem resultado traz este aviso; página SEM contagem e SEM o aviso não
+# é resultado (tela inicial, erro silencioso) e não pode virar "0 encontrados".
+_SCON_AVISO_ZERO = "Nenhum documento encontrado"
 
 SCON_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
@@ -190,7 +210,10 @@ def _criar_session_scon():
 
 @retry(wait=wait_exponential(multiplier=1, min=2, max=6),
        stop=stop_after_attempt(_SCON_TENTATIVAS), reraise=True)
-def _pesquisar_scon(session, query: str, base: str) -> str:
+def _pesquisar_scon(
+    session, query: str, base: str, tamanho: int = 10,
+    scon_base: str = SCON_BASE,
+) -> str:
     params = {
         "acao": "pesquisar",
         "novaConsulta": "true",
@@ -200,79 +223,157 @@ def _pesquisar_scon(session, query: str, base: str) -> str:
         "tipo_visualizacao": "RESUMO",
         "p": "true",
         "O": "JT",
+        # Itens por página: sem `l` o portal devolve 10, e a tool aceita até 40.
+        "l": str(tamanho),
     }
     # curl_cffi/libcurl não lê REQUESTS_CA_BUNDLE — verify explícito.
-    resp = session.get(SCON_PESQUISAR, params=params, timeout=_SCON_TIMEOUT_S,
+    resp = session.get(f"{scon_base}/pesquisar.jsp", params=params,
+                       timeout=_SCON_TIMEOUT_S,
+                       headers={"Referer": f"{scon_base}/"},
                        verify=tls_sistema.caminho_bundle())
     resp.raise_for_status()
-    text = resp.text
+    # O SCON serve ISO-8859-1; decodificar pelo cabeçalho, não por palpite.
+    text = resp.content.decode(resp.encoding or "iso-8859-1", "replace")
     # Sentinelas de Cloudflare/erro silencioso
     if "Verificação automática" in text or "cf-mitigated" in text.lower():
         raise RuntimeError("Cloudflare challenge ativo no SCON")
     return text
 
 
-def _parse_scon_html(
-    html_str: str, base: str, max_tokens_ementa: int = 400
-) -> Tuple[List[BaseResultadoJuridico], int]:
-    soup = BeautifulSoup(html_str, "html.parser")
-
+def _ler_total_scon(soup) -> int:
     num_docs_el = soup.find(class_="numDocs")
-    total = 0
     if num_docs_el:
         m = re.search(r"(\d[\d.]*)", num_docs_el.get_text())
         if m:
-            total = int(m.group(1).replace(".", ""))
+            return int(m.group(1).replace(".", ""))
+    return 0
 
-    resultados = []
-    for item in soup.select(".itemlistadocumentos"):
-        meta_div = item.select_one(".col-sm-3")
-        meta_items = []
-        if meta_div:
-            for el in meta_div.find_all(["span", "div", "p", "label", "strong"]):
-                txt = el.get_text(" ", strip=True)
-                if txt and len(txt) > 1:
-                    meta_items.append(txt)
-            seen = set()
-            meta_items = [t for t in meta_items if not (t in seen or seen.add(t))]
 
-        numero = meta_items[0] if meta_items else ""
-        tipo = meta_items[1] if len(meta_items) > 1 else BASES_VALIDAS.get(base, base)
+# Nota inline depois da fonte: cancelamento/revogação, revisão/alteração/
+# modificação (com a "REDAÇÃO ANTERIOR") ou questão de ordem — os rótulos que
+# aparecem nas 676 súmulas (01/10/2026). O verbete vigente é o que vem antes.
+_RE_SUM_NOTA = re.compile(
+    r"\b(S[ÚU]MULA\s+(CANCELADA|REVOGADA|REVISADA|ALTERADA)"
+    r"|QUEST[ÃA]O\s+DE\s+ORDEM|MODIFICA[ÇC][ÃA]O\s+DE\s+TEXTO)\s*:", re.I
+)
+# Súmula que deixou de valer: o rótulo vai à `situacao` e ao `tipo`.
+_SUM_FORA_DE_VIGOR = {"CANCELADA", "REVOGADA"}
+# Data com ou sem zero à esquerda: "11/9/2024" convive com "03/03/2010".
+_RE_SUM_PUBLICACAO = re.compile(r"\b(DJe|DJEN|DJ)\s+(?:de\s+)?(\d{1,2}/\d{1,2}/\d{4})")
+_RE_SUM_JULGADO = re.compile(r"julgad[oa] em\s+(\d{1,2}/\d{1,2}/\d{4})")
+# Há súmulas que não marcam o órgão com `.clsOrgaoJulgador`, ou no formato
+# antigo "(SÚMULA 152, PRIMEIRA SEÇÃO, DJ ...)" ou no novo sem a marcação
+# "(SEGUNDA SEÇÃO, julgado em ...)" — Súmula 222.
+_RE_SUM_ORGAO_ANTIGO = re.compile(
+    r"\((?:S[ÚU]MULA\s+\d+\s*,\s*)?([A-ZÀ-ÚÇ][A-ZÀ-ÚÇ ]+?)\s*,\s*(?:julgad|DJ)"
+)
 
-        relator = next((m for m in meta_items if re.match(r"Ministr[oa]", m, re.I)), "")
-        data = next((m for m in meta_items if re.match(r"DJe\s+\d{2}/\d{2}/\d{4}", m)), "")
-        if not data:
-            for m in meta_items:
-                hit = re.search(r"\d{2}/\d{2}/\d{4}", m)
-                if hit:
-                    data = hit.group()
-                    break
 
-        ementa_div = item.select_one(".clsEmentaCompleta")
-        ementa = limpar_texto_html(str(ementa_div)) if ementa_div else ""
-        ementa = truncar_por_tokens(ementa, max_tokens=max_tokens_ementa)
+def _texto_corrido(el) -> str:
+    # Separador vazio: os nós de texto já trazem o espaçamento, e o realce da
+    # busca (`span.highlightBrs`) não pode partir palavra nem soltar pontuação.
+    return " ".join(el.get_text("").split())
 
-        extra = {"base": base}
-        repet_div = item.select_one(".indicaRepetitivo")
-        if repet_div:
-            t = repet_div.get_text(" ", strip=True)
-            if t:
-                extra["vinculante"] = t[:100]
+
+def _parse_sumulas_html(
+    html_str: str, max_tokens_ementa: int = 400
+) -> Tuple[List[BaseResultadoJuridico], int]:
+    """Parser da lista de SÚMULAS do SCON (base SUMU).
+
+    A base SUMU tem layout PRÓPRIO — cada súmula é um `.gridSumula`, sem o
+    `.itemlistadocumentos` dos acórdãos; por isso o parser dos acórdãos via
+    a contagem ("9 súmulas") e extraía zero. Campos: `.numeroSumula`,
+    `.ramoSumula`, `.clsVerbete`, `.clsOrgaoJulgador`, `.clsData`.
+
+    O MARKUP VARIA COM O REALCE DA BUSCA (medido em 01/10/2026 sobre as 676
+    súmulas): quando o termo pesquisado cai no verbete, o portal o serve como
+    texto solto, SEM `.clsVerbete`/`.clsOrgaoJulgador`, com a fonte entre
+    parênteses — "(TERCEIRA SEÇÃO, julgado em ..., DJe de ...)" ou, nas antigas,
+    "(SÚMULA 152, PRIMEIRA SEÇÃO, DJ ...)". Aí o verbete é o texto do bloco sem
+    o ramo, sem a nota e sem o parêntese final.
+
+    CANCELAMENTO tem duas marcas: `.clsINDE` ("CANCELADA", ao lado do número)
+    com a nota em `.clsCOM`, ou — quando a busca casa o próprio índice — a nota
+    inline após "SÚMULA CANCELADA:". As duas vão ao `tipo` e a
+    `extra["situacao"]`, porque citar súmula cancelada é erro grave.
+    """
+    soup = BeautifulSoup(html_str, "html.parser")
+    total = _ler_total_scon(soup)
+
+    resultados: List[BaseResultadoJuridico] = []
+    for item in soup.select(".gridSumula"):
+        num_el = item.select_one(".numeroSumula")
+        num = num_el.get_text(strip=True) if num_el else ""
+        inde_el = item.select_one(".clsINDE")
+        inde = _texto_corrido(inde_el).upper() if inde_el else ""
+
+        bloco = item.select_one(".blocoVerbete")
+        ramo, verbete, orgao, texto, nota = "", "", "", "", ""
+        if bloco is not None:
+            ramo_el = bloco.select_one(".ramoSumula")
+            if ramo_el is not None:
+                ramo = _texto_corrido(ramo_el)
+                ramo_el.extract()
+            com_el = bloco.select_one(".clsCOM")
+            if com_el is not None:
+                nota = _texto_corrido(com_el)
+                com_el.extract()
+            verbete_el = bloco.select_one(".clsVerbete")
+            orgao_el = bloco.select_one(".clsOrgaoJulgador")
+            orgao = _texto_corrido(orgao_el) if orgao_el else ""
+            texto = _texto_corrido(bloco)
+            if verbete_el is not None:
+                verbete = _texto_corrido(verbete_el)
+
+        vigente = texto
+        m_nota = _RE_SUM_NOTA.search(texto)
+        if m_nota:
+            vigente = texto[:m_nota.start()].strip()
+            estado = (m_nota.group(2) or "").upper()
+            if estado in _SUM_FORA_DE_VIGOR:
+                inde = inde or estado
+                nota = nota or texto[m_nota.end():].strip()
+            else:
+                nota = nota or texto[m_nota.start():].strip()
+        if not verbete:
+            verbete = re.sub(r"\s*\([^()]*\)\.?\s*$", "", vigente).strip()
+        if not orgao:
+            m_org = _RE_SUM_ORGAO_ANTIGO.search(vigente)
+            orgao = m_org.group(1) if m_org else ""
+
+        m_pub = _RE_SUM_PUBLICACAO.search(vigente)
+        m_julg = _RE_SUM_JULGADO.search(vigente)
+
+        extra = {"base": "SUMU"}
+        if ramo:
+            extra["ramo"] = ramo
+        if m_julg:
+            extra["julgamento"] = m_julg.group(1)
+        if inde:
+            extra["situacao"] = f"{inde} — {nota}" if nota else inde
+        elif nota:
+            extra["observacao"] = nota
 
         resultados.append(
             BaseResultadoJuridico(
-                conteudo=ementa,
+                conteudo=truncar_por_tokens(verbete, max_tokens=max_tokens_ementa),
                 fonte="STJ",
-                tipo=tipo,
-                orgao="Superior Tribunal de Justiça",
-                numero=numero,
-                relator=relator,
-                data=data,
+                tipo=f"Súmula ({inde})" if inde else "Súmula",
+                orgao=orgao or "Superior Tribunal de Justiça",
+                numero=f"Súmula {num}" if num else "",
+                data=f"{m_pub.group(1)} {m_pub.group(2)}" if m_pub else "",
                 extra=extra,
             )
         )
 
     return resultados, total
+
+
+def _parser_scon(base: str):
+    """SUMU tem layout próprio; ACOR (e o resto) sai pelos rótulos do RESUMO."""
+    if base == "SUMU":
+        return lambda html_str, _base, mt: _parse_sumulas_html(html_str, mt)
+    return _parse_scon_resumo
 
 
 # ---------------------------------------------------------------------------
@@ -309,27 +410,68 @@ def _buscar_via_cjf(
 # Rotas — cada uma devolve (saida_xml, n_resultados) ou levanta exceção
 # ---------------------------------------------------------------------------
 
+def _host_scon(scon_base: str) -> str:
+    from urllib.parse import urlparse
+    return urlparse(scon_base).netloc
+
+
 def _rota_scon(
-    query: str, base: str, tamanho: int, max_tokens_ementa: int
+    query: str, base: str, tamanho: int, max_tokens_ementa: int,
+    *, scon_base: str = SCON_BASE,
 ) -> Tuple[str, int]:
+    host = _host_scon(scon_base)
     sess = _criar_session_scon()
-    html_str = _pesquisar_scon(sess, query, base)
-    parseados, total = _parse_scon_html(html_str, base, max_tokens_ementa)
-    # Canário estrutural: a página indica total > 0 mas o parser
-    # (seletores .itemlistadocumentos) extraiu 0 itens → layout do SCON
-    # provavelmente mudou. Falha LOUD em vez de devolver vazio silencioso.
+    html_str = _pesquisar_scon(sess, query, base, tamanho, scon_base=scon_base)
+    parseados, total = _parser_scon(base)(html_str, base, max_tokens_ementa)
+    # Canário estrutural: a página indica total > 0 mas o parser extraiu 0
+    # itens → layout do SCON provavelmente mudou. Falha LOUD em vez de
+    # devolver vazio silencioso.
     if total > 0 and not parseados:
         raise RuntimeError(
-            f"SCON reportou {total} documento(s) mas o parser extraiu 0 "
+            f"SCON ({host}) reportou {total} documento(s) mas o parser extraiu 0 "
             "— provável mudança no HTML do portal. Verificar "
-            "_parse_scon_html (.itemlistadocumentos/.numDocs)."
+            "_parse_sumulas_html (.gridSumula) / _parse_scon_resumo "
+            "(.itemlistadocumentos)."
+        )
+    # Canário do item OCO: itens extraídos, todos sem número — resultado oco
+    # passa por resultado e vira citação sem fonte.
+    if parseados and not any(r.numero for r in parseados):
+        raise RuntimeError(
+            f"SCON ({host}) extraiu {len(parseados)} item(ns), todos SEM número "
+            "— seletores/rótulos do portal mudaram."
+        )
+    # Canário do FALSO ZERO: sem contagem, sem itens e sem o aviso de busca
+    # vazia, a página não é uma lista de resultados (tela inicial, erro).
+    if not parseados and total == 0 and _SCON_AVISO_ZERO not in html_str:
+        raise RuntimeError(
+            f"SCON ({host}) devolveu página sem contagem, sem itens e sem o "
+            f"aviso '{_SCON_AVISO_ZERO}' — não é lista de resultados."
         )
     resultados = parseados[:tamanho]
     meta = (
-        f'<!-- STJ/SCON | Base: {BASES_VALIDAS[base]} '
+        f'<!-- STJ/SCON ({host}) | Base: {BASES_VALIDAS[base]} '
         f'| Total encontrado: {total} | Exibindo: {len(resultados)} -->\n'
     )
     return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
+
+
+def _rota_scon_http(
+    query: str, base: str, tamanho: int, max_tokens_ementa: int
+) -> Tuple[str, int, str]:
+    """SCON por HTTP, host a host (`_SCON_HOSTS_HTTP`): processo.stj.jus.br,
+    sem Cloudflare, e depois scon.stj.jus.br. Devolve (saida, n, host) do
+    primeiro que responder; falhando todos, levanta com a falha de cada um."""
+    falhas = []
+    for scon_base in _SCON_HOSTS_HTTP:
+        host = _host_scon(scon_base)
+        try:
+            saida, n = _rota_scon(
+                query, base, tamanho, max_tokens_ementa, scon_base=scon_base
+            )
+            return saida, n, host
+        except Exception as e:
+            falhas.append(f"{host}: {type(e).__name__}: {str(e)[:140]}")
+    raise RuntimeError(" | ".join(falhas))
 
 
 _RE_TIPO = re.compile(r"^\((.+)\)$")
@@ -614,7 +756,7 @@ def _rota_scon_cdp(
     _titulo, html_str = cdp_edge.obter_html(
         url_alvo, "scon.stj.jus.br", url_base=SCON_HOME,
     )
-    parseados, total = _parse_scon_resumo(html_str, base, max_tokens_ementa)
+    parseados, total = _parser_scon(base)(html_str, base, max_tokens_ementa)
 
     if total > 0 and not parseados:
         raise RuntimeError(
@@ -695,10 +837,11 @@ def buscar_jurisprudencia_stj(
         tamanho: Número de resultados por página (1–40, padrão 10)
         max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
                            Aumente para obter ementa mais longa/íntegra.
-        forcar_scon: Tenta o SCON primeiro mesmo em ACOR. Default False — o SCON
-                     está sob Cloudflare e falha em ~98% das chamadas, então
+        forcar_scon: Tenta o SCON primeiro mesmo em ACOR. Default False —
                      acórdãos vão direto ao CJF Unificada. Use quando quiser
-                     especificamente a ficha do SCON e aceitar a espera.
+                     especificamente a ficha do SCON (sai pelo host
+                     processo.stj.jus.br; ementa TRUNCADA na visualização
+                     RESUMO, sinalizada em `ementa_truncada`).
 
     Returns:
         XML estruturado com os resultados encontrados.
@@ -707,11 +850,15 @@ def buscar_jurisprudencia_stj(
     Notas:
         ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
         que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
-        SUMU existe apenas no SCON — ali ele é tentado primeiro, com pedágio
-        curto (1 tentativa, 8 s). INFJ vai ao portal do Informativo de
-        Jurisprudência por HTTP (no SCON a base só devolve "Documento inválido").
+        SUMU existe apenas no SCON — ali ele é tentado primeiro, por HTTP, no
+        host processo.stj.jus.br (sem Cloudflare) e depois no scon.stj.jus.br.
+        Cada súmula traz verbete, órgão, data, ramo e, se não vigora mais,
+        tipo "Súmula (CANCELADA)"/"(REVOGADA)" com a nota em `situacao`;
+        alteração de redação vai em `observacao`. INFJ vai ao portal do
+        Informativo de Jurisprudência por HTTP (no SCON a base só devolve
+        "Documento inválido").
 
-        BLOQUEADO O SCON POR HTTP, A ROTA É AUTOMÁTICA: `scon-cdp` abre um Edge
+        BLOQUEADO O SCON POR HTTP NOS DOIS HOSTS, A ROTA É AUTOMÁTICA: `scon-cdp` abre um Edge
         REAL (lançado fora do Playwright, com porta de depuração) e conecta-se a
         ele por CDP, atravessando o Cloudflare sem intervenção humana. Uma janela
         do navegador aparece na máquina e é reaproveitada entre chamadas.
@@ -789,20 +936,24 @@ def buscar_jurisprudencia_stj(
                     f'indisponível. Detalhes: {erro_final}</erro>'
                 )
 
-        # 1) Rota primária.
+        # 1) Rota primária. O SCON por HTTP tenta processo.stj.jus.br (sem
+        #    Cloudflare) antes de scon.stj.jus.br — ver `_rota_scon_http`.
         try:
             if scon_primeiro:
-                saida, n_results = _rota_scon(query, base, tamanho, max_tokens_ementa)
+                saida, n_results, host = _rota_scon_http(
+                    query, base, tamanho, max_tokens_ementa
+                )
+                rota = "scon-processo" if host == _host_scon(SCON_PROCESSO_BASE) else "scon"
             else:
                 saida, n_results = _rota_cjf(query, tamanho, max_tokens_ementa)
             return _guardar(saida, n_results)
         except Exception as e:
             rotulo = "SCON" if scon_primeiro else "CJF"
-            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
+            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:320]}")
 
         # 2) SCON por NAVEGADOR REAL (CDP). Entra sempre que a via HTTP do SCON
-        #    falhou — e é a única saída quando a base é SUMU/INFJ, que o CJF não
-        #    cobre. Antes daqui o servidor devolvia <erro> nesses casos.
+        #    falhou nos dois hosts — e é a última saída em SUMU, que o CJF não
+        #    cobre.
         if scon_primeiro and cdp_edge is not None:
             try:
                 rota = "scon-cdp"
@@ -830,11 +981,13 @@ def buscar_jurisprudencia_stj(
                 )
             else:
                 rota = "scon-fallback"
-                saida, n_results = _rota_scon(query, base, tamanho, max_tokens_ementa)
+                saida, n_results, _host = _rota_scon_http(
+                    query, base, tamanho, max_tokens_ementa
+                )
             return _guardar(saida, n_results)
         except Exception as e:
             rotulo = "CJF" if scon_primeiro else "SCON"
-            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:160]}")
+            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:320]}")
 
         # 4) Último degrau em ACOR: o SCON pelo navegador real. Chega-se aqui
         #    quando CJF não tinha o julgado E o SCON recusou por HTTP — que é
@@ -903,10 +1056,11 @@ DICAS:
 
 ROTEAMENTO INTERNO:
   ACOR vai direto ao CJF Unificada com filtro STJ (~1,3 s) — operadores BRS
-  são convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.). O SCON, que
-  está sob Cloudflare e falhava em ~98% das chamadas, entra só como fallback
-  se o CJF falhar; para tentá-lo primeiro use forcar_scon=True.
-  SUMU só existe no SCON e vai a ele primeiro, com 1 tentativa e 8 s.
+  são convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.). O SCON entra
+  só como fallback se o CJF falhar; para tentá-lo primeiro use forcar_scon=True.
+  SUMU só existe no SCON e vai a ele primeiro, por HTTP no host
+  processo.stj.jus.br (sem Cloudflare), depois scon.stj.jus.br, depois CDP.
+  Súmula cancelada/revogada vem marcada no tipo e em <situacao>.
   INFJ vai ao portal do Informativo de Jurisprudência (processo.stj.jus.br).
   A resposta indica em comentário qual fonte respondeu de fato.
 """
