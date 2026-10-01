@@ -3,8 +3,9 @@ MCP Server: STJ Jurisprudência
 
 ACÓRDÃOS (ACOR)   → CJF Unificada com filtro tribunais=STJ
                     (https://jurisprudencia.cjf.jus.br/unificada/index.xhtml)
-SÚMULAS (SUMU) e
-INFORMATIVOS (INFJ) → SCON STJ via curl_cffi (https://scon.stj.jus.br/SCON/)
+SÚMULAS (SUMU)    → SCON STJ via curl_cffi, depois CDP (https://scon.stj.jus.br/SCON/)
+INFORMATIVOS (INFJ) → portal do Informativo de Jurisprudência por HTTP
+                    (https://processo.stj.jus.br/jurisprudencia/externo/informativo/)
 
 O SCON migrou para Cloudflare com challenge JS (Turnstile) que bloqueia acesso
 programático. Até 2026-07-30 este servidor ainda o tentava primeiro em toda
@@ -109,6 +110,16 @@ BASES_VALIDAS = {
     "SUMU": "Súmulas",
     "INFJ": "Informativos",
 }
+
+# --- Informativo de Jurisprudência (base INFJ) -------------------------------
+# Medido em 01/10/2026: no SCON, `pesquisar.jsp?b=INFJ` ainda CONTA as notas
+# (164 para "defensoria publica") mas renderiza a aba de Acórdãos com cada item
+# reduzido a "Documento inválido: <n>" — não há o que extrair. A base vive no
+# portal próprio do Informativo, que responde por HTTP simples, sem Cloudflare
+# (~3 s), com o mesmo total de notas.
+INFORMATIVO_HOST = "https://processo.stj.jus.br"
+INFORMATIVO_PESQUISAR = f"{INFORMATIVO_HOST}/jurisprudencia/externo/informativo/"
+_INFORMATIVO_TIMEOUT_S = 20
 
 # --- CJF Unificada (fallback) ----------------------------------------------
 # Sessão, parsers, paginação e canário estrutural vivem em shared/cjf_client.py
@@ -426,6 +437,154 @@ def _parse_scon_resumo(
     return resultados, total
 
 
+_RE_INF_TOTAL = re.compile(r"Notas encontradas:\s*(\d[\d.]*)")
+# "Informativo de Jurisprudência n. 897 - 18 de agosto de 2026. <tema>" ou
+# "Informativo de Jurisprudência - Edição Extraordinária n. 33 - Direito Penal
+# - 28 de julho de 2026. <tema>" — a numeração das extraordinárias é PRÓPRIA,
+# então o rótulo da edição inteiro vai no tipo, nunca só o número.
+_RE_INF_EDICAO = re.compile(
+    r"^(Informativo de Jurisprud\S+.*?n\.\s*\d+).*?(\d{1,2} de \w+ de \d{4})"
+)
+_RE_INF_RELATOR = re.compile(r"Rel\.\s*(Ministr[oa]\s+[^,]+)")
+_RE_INF_JULGADO = re.compile(r"julgado em\s+(\d{1,2}/\d{1,2}/\d{4})")
+_RE_INF_PUBLICACAO = re.compile(r"\b(DJEN|DJe|DJ)\s+(\d{1,2}/\d{1,2}/\d{4})")
+
+
+def _rotulos_informativo(item) -> dict:
+    """Pares rótulo→texto de uma nota. O valor vem na MESMA `.divLinha` do
+    rótulo (Processo, Ramo, Tema) ou na linha SEGUINTE (Destaque, Inteiro Teor)."""
+    pares: dict = {}
+    pendente = None
+    for linha in item.select(".clsInformativoTextoBloco .divLinha"):
+        rotulo_el = linha.select_one(".clsInformativoLabel")
+        valor_el = linha.select_one(".clsInformativoTexto, .clsInformativoTextoFormatado")
+        if rotulo_el is not None:
+            rotulo = rotulo_el.get_text(" ", strip=True)
+            if valor_el is None:
+                pendente = rotulo
+                continue
+        else:
+            rotulo, pendente = pendente, None
+        if rotulo and valor_el is not None:
+            # O realce da busca (`span.highlightBrs`) parte o texto; o " " do
+            # get_text deixaria "Defensoria Pública ." — cola a pontuação.
+            texto = re.sub(r"\s+([.,;:)])", r"\1", valor_el.get_text(" ", strip=True))
+            pares.setdefault(rotulo, texto)
+    return pares
+
+
+def _parse_informativo_html(
+    html_str: str, max_tokens_ementa: int = 400
+) -> Tuple[List[BaseResultadoJuridico], int]:
+    """Parser da lista do portal do Informativo de Jurisprudência do STJ.
+
+    Cada nota é um `.clsInformativoBlocoItem`. A identificação (URL, edição) sai
+    dos campos ocultos `#urlNotaN`/`#temaNotaN`, presentes em TODA nota — o
+    título visível da edição só aparece na primeira nota de cada edição. O
+    conteúdo é o DESTAQUE (a tese da nota); sem ele, o TEMA.
+    """
+    soup = BeautifulSoup(html_str, "html.parser")
+
+    total = 0
+    m_total = _RE_INF_TOTAL.search(soup.get_text(" ", strip=True))
+    if m_total:
+        total = int(m_total.group(1).replace(".", ""))
+
+    resultados: List[BaseResultadoJuridico] = []
+    orgao_corrente, tipo_corrente = "", ""
+    for item in soup.select(".clsInformativoBlocoItem"):
+        pares = _rotulos_informativo(item)
+        processo = pares.get("Processo", "")
+        numero = re.split(r",\s*Rel\.", processo, maxsplit=1)[0].strip(" ,")
+
+        m_rel = _RE_INF_RELATOR.search(processo)
+        m_julg = _RE_INF_JULGADO.search(processo)
+        m_pub = _RE_INF_PUBLICACAO.search(processo)
+
+        tema_oculto = item.select_one("[id^=temaNota]")
+        m_ed = _RE_INF_EDICAO.search(tema_oculto.get_text(" ", strip=True)) if tema_oculto else None
+        tipo = " ".join(m_ed.group(1).split()) if m_ed else BASES_VALIDAS["INFJ"]
+
+        # O cabeçalho do órgão só vem na PRIMEIRA nota de cada órgão dentro da
+        # edição; as seguintes herdam-no até a edição mudar.
+        if tipo != tipo_corrente:
+            orgao_corrente, tipo_corrente = "", tipo
+        orgao_el = item.select_one(".clsInformativoOrgaojulgador")
+        if orgao_el:
+            orgao_corrente = orgao_el.get_text(" ", strip=True)
+        orgao = orgao_corrente or "Superior Tribunal de Justiça"
+
+        tema = pares.get("Tema", "")
+        conteudo = truncar_por_tokens(pares.get("Destaque") or tema, max_tokens=max_tokens_ementa)
+
+        extra = {"base": "INFJ"}
+        if m_ed:
+            extra["data_edicao"] = m_ed.group(2)
+        if tema:
+            extra["tema"] = tema
+        if pares.get("Ramo do Direito"):
+            extra["ramo"] = pares["Ramo do Direito"]
+        if m_julg:
+            extra["julgamento"] = m_julg.group(1)
+        url_el = item.select_one("[id^=urlNota]")
+        if url_el:
+            extra["url"] = INFORMATIVO_HOST + url_el.get_text(strip=True)
+
+        resultados.append(
+            BaseResultadoJuridico(
+                conteudo=conteudo,
+                fonte="STJ",
+                tipo=tipo,
+                orgao=orgao,
+                numero=numero,
+                relator=m_rel.group(1).strip() if m_rel else "",
+                data=f"{m_pub.group(1)} {m_pub.group(2)}" if m_pub else "",
+                extra=extra,
+            )
+        )
+
+    return resultados, total
+
+
+def _pesquisar_informativo(query: str, tamanho: int) -> str:
+    params = {
+        "acao": "pesquisar", "livre": query, "b": "INFJ",
+        "p": "true", "l": str(tamanho), "i": "1",
+    }
+    sess = _criar_session_scon()
+    resp = sess.get(INFORMATIVO_PESQUISAR, params=params,
+                    timeout=_INFORMATIVO_TIMEOUT_S,
+                    verify=tls_sistema.caminho_bundle())
+    resp.raise_for_status()
+    # O portal serve ISO-8859-1; decodificar pelo cabeçalho, não por palpite.
+    return resp.content.decode(resp.encoding or "iso-8859-1", "replace")
+
+
+def _rota_informativo(
+    query: str, tamanho: int, max_tokens_ementa: int
+) -> Tuple[str, int]:
+    html_str = _pesquisar_informativo(query, tamanho)
+    parseados, total = _parse_informativo_html(html_str, max_tokens_ementa)
+    if total > 0 and not parseados:
+        raise RuntimeError(
+            f"Informativo reportou {total} nota(s) mas o parser extraiu 0 "
+            "— provável mudança no HTML do portal. Verificar "
+            "_parse_informativo_html (.clsInformativoBlocoItem)."
+        )
+    if parseados and not any(r.numero for r in parseados):
+        raise RuntimeError(
+            f"Informativo extraiu {len(parseados)} nota(s), todas SEM processo "
+            "— rótulos do portal mudaram. Ver _rotulos_informativo."
+        )
+    resultados = parseados[:tamanho]
+    meta = (
+        f'<!-- STJ/Informativo de Jurisprudência (processo.stj.jus.br) '
+        f'| Base: {BASES_VALIDAS["INFJ"]} '
+        f'| Total encontrado: {total} | Exibindo: {len(resultados)} -->\n'
+    )
+    return meta + formatar_resultados_xml(resultados, tag_raiz="resultados"), len(resultados)
+
+
 def _rota_scon_cdp(
     query: str, base: str, tamanho: int, max_tokens_ementa: int
 ) -> Tuple[str, int]:
@@ -548,8 +707,9 @@ def buscar_jurisprudencia_stj(
     Notas:
         ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
         que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
-        SUMU e INFJ existem apenas no SCON — ali ele é tentado primeiro, com
-        pedágio curto (1 tentativa, 8 s).
+        SUMU existe apenas no SCON — ali ele é tentado primeiro, com pedágio
+        curto (1 tentativa, 8 s). INFJ vai ao portal do Informativo de
+        Jurisprudência por HTTP (no SCON a base só devolve "Documento inválido").
 
         BLOQUEADO O SCON POR HTTP, A ROTA É AUTOMÁTICA: `scon-cdp` abre um Edge
         REAL (lançado fora do Playwright, com porta de depuração) e conecta-se a
@@ -613,6 +773,21 @@ def buscar_jurisprudencia_stj(
             return saida
 
         erros = []
+
+        # 0) INFJ tem portal próprio e não passa pelo SCON: lá a base devolve
+        #    só "Documento inválido" (01/10/2026). Falhando o portal, não há
+        #    rota alternativa que tenha as notas.
+        if base == "INFJ":
+            rota = "informativo"
+            try:
+                saida, n_results = _rota_informativo(query, tamanho, max_tokens_ementa)
+                return _guardar(saida, n_results)
+            except Exception as e:
+                erro_final = f"Informativo: {type(e).__name__}: {str(e)[:160]}"
+                return (
+                    f'<erro>Base INFJ (portal do Informativo de Jurisprudência) '
+                    f'indisponível. Detalhes: {erro_final}</erro>'
+                )
 
         # 1) Rota primária.
         try:
@@ -731,7 +906,8 @@ ROTEAMENTO INTERNO:
   são convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.). O SCON, que
   está sob Cloudflare e falhava em ~98% das chamadas, entra só como fallback
   se o CJF falhar; para tentá-lo primeiro use forcar_scon=True.
-  SUMU e INFJ só existem no SCON e vão a ele primeiro, com 1 tentativa e 8 s.
+  SUMU só existe no SCON e vai a ele primeiro, com 1 tentativa e 8 s.
+  INFJ vai ao portal do Informativo de Jurisprudência (processo.stj.jus.br).
   A resposta indica em comentário qual fonte respondeu de fato.
 """
 

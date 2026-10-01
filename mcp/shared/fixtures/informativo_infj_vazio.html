@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head><body>
+<!-- Recorte de https://processo.stj.jus.br/jurisprudencia/externo/informativo/ livre='xqzwvkjh plmnbtr' l=10, capturado por _pesquisar_informativo (rota de producao) em 01/10/2026. Pagina publica. -->
+<div id="idInformativoBlocoLista">
+<div class="divTabela" id="idDivSelectFormatoEdicaoAtual">
+<input id="idInformativoEdicaoAtual" type="hidden" value="0903"/>
+<div class="divLinha">
+<div class="divCell">
+<label class="customRadio">HTML
+
+			<input checked="" id="idSelectFormatoHTMLEdicaoAtual" name="formatoEdicaoAtual" type="radio" value="HTML"/>
+<span class="checkmark"></span>
+</label>
+</div>
+<div class="divCell">
+<label class="customRadio">PDF
+
+			<input id="idSelectFormatoPDFEdicaoAtual" name="formatoEdicaoAtual" type="radio" value="PDF"/>
+<span class="checkmark"></span>
+</label>
+</div>
+<div class="divCell">
+<label class="customRadio">RTF
+
+			<input id="idSelectFormatoRTFEdicaoAtual" name="formatoEdicaoAtual" type="radio" value="RTF"/>
+<span class="checkmark"></span>
+</label>
+</div>
+<div class="divCell">
+<button class="input-group-text icofont-ui-search btn" id="idBaixarEdicaoAtual"><span>Visualizar</span></button>
+</div>
+</div>
+</div>
+<form action="https://scon.stj.jus.br/SCON/SetContentINFJ" class="formOculto" id="frmGeraPDF" method="post" target="_blank">
+<input name="username" type="hidden" value="REDIGIDO"/>
+<input name="thesaurus" type="hidden" value="JURIDICO"/>
+<input id="ordem" name="ordem" type="hidden" value=""/>
+<input name="p" type="hidden" value="true"/>
+<input name="o" type="hidden" value="tmt"/>
+<input name="b" type="hidden" value="INFJ"/>
+<div style="display: none">
+<textarea cols="80" id="listaNotasSelecionadas" name="livre" rows="5">
+
+			</textarea>
+</div>
+<div class="row p-2 m-2 clsDivOpcoesSelecao d-none d-md-flex">
+<!-- <div class="col-auto">
+
+			<label class="customCheckbox" data-bs-toggle="tooltip" data-bs-placement="bottom" title="Marcar/Desmarcar todas as notas aqui listadas">
+
+			<input type="checkbox" id="checkSelecaoTodos">
+
+			<span class="checkmark"></span>&nbsp; 
+
+			</label>
+
+	</div> -->
+<div class="col-auto">
+<input id="criterioDePesquisa" name="criterioDePesquisa" style="width: 100%" type="hidden" value="($XQZWVKJH AND $PLMNBTR)"/>
+<button class="btn-juris" data-bs-placement="bottom" data-bs-toggle="tooltip" id="btnSelecionaResultset" title="Selecionar todas as notas da pesquisa. É possível selecionar no máximo 1000 notas." type="button">Selecionar todas as notas</button>
+<img id="esperaSelecao" src="/recursos/imagens/gif-carregando.gif" style="display: none; width: 22px;"/>
+</div>
+<div class="col-auto">
+<button class="btn-juris-azul btn-disabled" data-bs-placement="bottom" data-bs-toggle="tooltip" disabled="" id="btnExportarNotasPDF" title="Gerar PDF com notas seleciondas. É possível selecionar no máximo 1000 notas." type="submit"><i class="icofont-file-pdf"></i> Gerar PDF com notas selecionadas (<span>0</span>)</button>
+</div>
+<div class="col-auto">
+<button class="btn-juris btn-disabled" data-bs-placement="bottom" data-bs-toggle="tooltip" disabled="" id="btnLimparSelecao" title="Remover todas as notas da seleção." type="button"><i class="fa-solid fa-trash-can"></i> Limpar seleção</button>
+</div>
+<div class="col">
+<label class="customCheckbox clsDisabled" data-bs-placement="bottom" data-bs-toggle="tooltip" title="Agrupar por ramos do direito">
+<input disabled="" id="checkAgruparRamos" type="checkbox"/>
+<span class="checkmark"></span>
+<span class="labelRamos">Agrupar por ramos do direito</span>
+</label>
+</div>
+</div>
+</form>
+<style>
+
+.clsBarraCompartilhamento {
+
+/*display:none;*/
+
+}
+
+</style>
+</div>
+<div class="clsCaixaMensagem">Nenhum documento encontrado!</div>
+</body></html>
