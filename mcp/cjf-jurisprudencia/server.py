@@ -49,6 +49,15 @@ mcp = FastMCP("cjf-jurisprudencia")
 # Sessão, parsers, paginação e canário estrutural vivem em shared/cjf_client.py
 # (compartilhado com o fallback do stj-jurisprudencia desde 2026-06-10).
 
+# Medido em 01/10/2026 (PAJ 2021/016-09136): "pandemia" traz 41 acórdãos do STF,
+# milhares do TRF1/TRF3/TRF5 e só 2 do STJ, até 2019; "covid" dá zero para o STJ.
+# O índice do STJ nesta base para em ~dez/2019 — os demais tribunais seguem atuais.
+AVISO_COBERTURA_STJ = (
+    "COBERTURA: esta base não indexa acórdão do STJ posterior a ~dez/2019 "
+    "(medido em 01/10/2026). Jurisprudência recente do STJ: stj-jurisprudencia "
+    "com forcar_scon=True. Os demais tribunais seguem atualizados."
+)
+
 
 @mcp.tool()
 def buscar_jurisprudencia_cjf(
@@ -75,6 +84,11 @@ def buscar_jurisprudencia_cjf(
       que devolve o número em campo próprio.
     - Demais Regiões: julia-trf5 (TRF5), trf-jurisprudencia (TRF2/TRF4/TRF6).
     Para STF/STJ não há problema — o número do recurso basta e vem na ementa.
+
+    ATENÇÃO — O STJ NESTA BASE PARA EM ~DEZ/2019 (medido em 01/10/2026). Zero ou
+    só julgados antigos do STJ não provam que ele não decidiu a matéria: para o
+    recente, stj-jurisprudencia com forcar_scon=True. Os demais tribunais seguem
+    atualizados.
 
     Args:
         busca: Query com sintaxe CJF (operadores MAIÚSCULOS, campos [EMEN], etc).
@@ -167,6 +181,8 @@ def buscar_jurisprudencia_cjf(
 
         totais_str = ", ".join([f"{k}:{v}" for k, v in totais.items()])
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | Totais: {totais_str} -->\n'
+        if "STJ" in lista_tribunais:
+            meta += f'<!-- {AVISO_COBERTURA_STJ} -->\n'
         if busca_relaxada:
             meta += (
                 f'<!-- BUSCA RELAXADA: "{sanitizar_comentario_xml(busca_relaxada)}" '
