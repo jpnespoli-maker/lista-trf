@@ -87,6 +87,52 @@ class TestPortaResponde:
         assert cdp_edge.porta_responde(59999, timeout=0.5) is False
 
 
+class TestHostCdp:
+    """O host do CDP e' 127.0.0.1, nunca "localhost": no Windows o "localhost"
+    resolve para ::1 primeiro, o Edge so' escuta em IPv4, e a recusa no ::1
+    come ~2 s — o timeout inteiro de `porta_responde`. O falso "porta fechada"
+    faz `garantir_navegador` lancar um SEGUNDO Edge no mesmo perfil."""
+
+    def test_endpoint_em_127(self):
+        assert cdp_edge.endpoint_cdp(9222) == "http://127.0.0.1:9222"
+
+    def test_porta_responde_consulta_127(self, monkeypatch):
+        vistos = []
+
+        def _urlopen(url, timeout=None):
+            vistos.append(url)
+            raise OSError("sem rede no teste")
+
+        monkeypatch.setattr(cdp_edge.urllib.request, "urlopen", _urlopen)
+        assert cdp_edge.porta_responde(9333, timeout=0.1) is False
+        assert vistos == ["http://127.0.0.1:9333/json/version"]
+
+    def test_connect_over_cdp_em_127(self, monkeypatch):
+        sync_api = pytest.importorskip("playwright.sync_api")
+        vistos = []
+
+        class _Chromium:
+            def connect_over_cdp(self, endpoint):
+                vistos.append(endpoint)
+                raise RuntimeError("sem navegador no teste")
+
+        class _P:
+            chromium = _Chromium()
+
+        class _Ctx:
+            def __enter__(self):
+                return _P()
+
+            def __exit__(self, *_a):
+                return False
+
+        monkeypatch.setattr(sync_api, "sync_playwright", lambda: _Ctx())
+        monkeypatch.setattr(cdp_edge, "garantir_navegador", lambda **_k: None)
+        with pytest.raises(cdp_edge.CDPIndisponivel, match="connect_over_cdp"):
+            cdp_edge.obter_html("https://exemplo.invalid/x", "exemplo.invalid", porta=9444)
+        assert vistos == ["http://127.0.0.1:9444"]
+
+
 class TestPerfilPadrao:
     def test_respeita_env(self, monkeypatch):
         monkeypatch.setenv("DPU_CDP_PERFIL", "D:/perfil-teste")

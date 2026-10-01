@@ -52,6 +52,12 @@ from pathlib import Path
 from typing import Optional
 
 PORTA_PADRAO = int(os.environ.get("DPU_CDP_PORTA", "9222"))
+# 127.0.0.1, NUNCA "localhost": no Windows "localhost" resolve para ::1 PRIMEIRO,
+# e o Edge so' escuta a porta de depuracao em 127.0.0.1. Medido em 01/10/2026:
+# urllib em "localhost" levou 2,05 s (recusa no ::1, depois IPv4) contra 0,02 s
+# em 127.0.0.1 — no limite do timeout de 2 s de `porta_responde`, cujo falso
+# "nao responde" faz `garantir_navegador` lancar um SEGUNDO Edge no mesmo perfil.
+HOST_CDP = "127.0.0.1"
 ESPERA_PORTA_S = int(os.environ.get("DPU_CDP_ESPERA_PORTA", "25"))
 DESABILITADO = os.environ.get("DPU_CDP_DESABILITADO", "") == "1"
 
@@ -116,10 +122,15 @@ def detectar_desafio(titulo: str, texto: str = "") -> bool:
     return any(s in alvo for s in _SENTINELAS_DESAFIO)
 
 
+def endpoint_cdp(porta: int = PORTA_PADRAO) -> str:
+    """URL base do CDP. PURO. Ver `HOST_CDP` (por que 127.0.0.1)."""
+    return f"http://{HOST_CDP}:{porta}"
+
+
 def porta_responde(porta: int = PORTA_PADRAO, timeout: float = 2.0) -> bool:
     try:
         with urllib.request.urlopen(
-            f"http://localhost:{porta}/json/version", timeout=timeout
+            f"{endpoint_cdp(porta)}/json/version", timeout=timeout
         ) as r:
             json.loads(r.read().decode("utf-8", "replace"))
             return True
@@ -228,7 +239,7 @@ def _obter_html(
     garantir_navegador(porta=porta, url_inicial=url_base or url_alvo)
     with sync_playwright() as p:
         try:
-            browser = p.chromium.connect_over_cdp(f"http://localhost:{porta}")
+            browser = p.chromium.connect_over_cdp(endpoint_cdp(porta))
         except Exception as e:  # noqa: BLE001
             raise CDPIndisponivel(f"connect_over_cdp falhou: {e}") from e
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
