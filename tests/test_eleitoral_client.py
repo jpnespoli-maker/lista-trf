@@ -95,6 +95,27 @@ def test_reescrever_pedido_post():
     assert json.loads(rota.continuou["post_data"])["tamanho"] == 3
 
 
+def test_manipulador_sobrevive_ao_despacho_do_playwright():
+    # O Playwright passa ao handler tantos argumentos quantos parâmetros a
+    # assinatura tiver (`_impl_to_api_mapping.wrap_handler`: `args[:arg_count]`),
+    # e com dois ele manda (route, request). Medido ao vivo em 16/10/2026: um
+    # `partial(..., ajuste=...)` expõe `ajuste` como 2º parâmetro, o request
+    # colide com ele ("got multiple values for argument 'ajuste'") e a busca
+    # nunca sai.
+    import inspect
+
+    rota = _Rota("POST", json.dumps(CORPO))
+    manipulador = C._manipulador_de_rota(lambda c: {**c, "tamanho": 4})
+    n = len(inspect.signature(manipulador).parameters)
+    manipulador(*(rota, rota.request)[:n])
+    assert json.loads(rota.continuou["post_data"])["tamanho"] == 4
+
+
+def test_navegador_registra_o_manipulador_e_nao_um_partial():
+    fonte = (MODULO / "sjur_client.py").read_text(encoding="utf-8")
+    assert "pg.route(\"**\" + SUFIXO_API, _manipulador_de_rota(ajuste))" in fonte
+
+
 def test_reescrever_pedido_nao_post_segue_intacto():
     rota = _Rota("OPTIONS")
     C._reescrever_pedido(rota, ajuste=lambda c: pytest.fail("não devia ajustar"))

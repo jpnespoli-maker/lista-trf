@@ -115,6 +115,17 @@ def _reescrever_pedido(route, ajuste: Callable[[dict], dict]) -> None:
     route.continue_(post_data=json.dumps(ajuste(corpo), ensure_ascii=False))
 
 
+def _manipulador_de_rota(ajuste: Callable[[dict], dict]) -> Callable:
+    """Handler de UM parâmetro. O Playwright passa ao handler tantos argumentos
+    quantos parâmetros a assinatura tiver, e com dois manda (route, request):
+    um `partial(_reescrever_pedido, ajuste=...)` expõe `ajuste` como segundo
+    parâmetro e o request colide com ele (medido ao vivo em 16/10/2026)."""
+    def manipulador(route) -> None:
+        _reescrever_pedido(route, ajuste)
+
+    return manipulador
+
+
 def _executar_no_navegador(busca: str, url_front: str, ajuste: Callable[[dict], dict]) -> dict:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
@@ -128,7 +139,7 @@ def _executar_no_navegador(busca: str, url_front: str, ajuste: Callable[[dict], 
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         pg = ctx.new_page()
         try:
-            pg.route("**" + SUFIXO_API, partial(_reescrever_pedido, ajuste=ajuste))
+            pg.route("**" + SUFIXO_API, _manipulador_de_rota(ajuste))
             pg.goto(url_front, wait_until="domcontentloaded", timeout=60_000)
             pg.wait_for_selector("#inputPesquisaLivre", timeout=60_000)
             pg.wait_for_timeout(ESPERA_CAPTCHA_MS)
