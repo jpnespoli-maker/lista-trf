@@ -19,6 +19,7 @@ Desenho: ~/.claude/DPU/docs/specs/2026-10-16-mcp-jurisprudencia-eleitoral-design
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import sys
@@ -55,7 +56,7 @@ from sjur_parser import (  # noqa: E402
     avisos_busca,
     conferir_filtros,
     contagem_por_tribunal,
-    extrair_texto_pdf,
+    extrair_inteiro_teor,
     interpretar_busca,
     normalizar_tipos,
     normalizar_tribunal,
@@ -153,7 +154,8 @@ def _buscar(c: Consulta) -> tuple[list[Decisao], int, dict[str, int], bool]:
             c.busca, c.alvo, tipos=c.tipos, ano_eleicao=c.ano, tamanho=c.tamanho,
             pagina=c.pagina, ordenacao=c.ordenacao,
         )
-    decisoes, total = interpretar_busca(payload)  # levanta ANTES de gravar no cache
+    # levanta ANTES de gravar no cache
+    decisoes, total = interpretar_busca(payload, pagina=c.pagina, tamanho=c.tamanho)
     conferir_filtros(decisoes, alvo=c.alvo, tipos=c.tipos, ano_eleicao=c.ano)
     if bruto is None:
         registrar_dispositivo(
@@ -185,47 +187,11 @@ def _erro(prefixo: str, e: Exception) -> str:
     return f"<erro>{prefixo}: {sanitizar_comentario_xml(str(e))}</erro>"
 
 
-@mcp.tool()
-def buscar_jurisprudencia_eleitoral(
-    busca: str,
-    tribunal: str = "TSE",
-    tipo_decisao: str = "todos",
-    ano_eleicao: str = "",
-    ordenacao: str = "re",
-    max_resultados: int = 10,
-    pagina: int = 1,
-    max_tokens_ementa: int = 600,
+def _buscar_xml(
+    busca, tribunal="TSE", tipo_decisao="todos", ano_eleicao="", ordenacao="re",
+    max_resultados=10, pagina=1, max_tokens_ementa=600,
 ) -> str:
-    """
-    Busca jurisprudência da Justiça Eleitoral (TSE e TREs) no SJUR.
-
-    USE PARA: tese eleitoral — AIJE, AIME, registro de candidatura,
-    inelegibilidade, prestação de contas, propaganda, condutas vedadas, crimes
-    eleitorais. Nenhuma outra base do projeto alcança o TSE ou os TREs.
-
-    SINTAXE: operadores E, OU, NÃO em MAIÚSCULO (em minúsculo viram termo);
-    "frase exata"; * e ? como curingas. Ver ajuda_sintaxe_eleitoral().
-
-    LENTO: abre o portal num Edge real (~11 s por busca; cache de 7 dias).
-
-    Args:
-        busca: Termos de pesquisa. NÃO passe pergunta em linguagem natural.
-        tribunal: "TSE" (default), "TREs" (todos) ou "TRE-UF" (ex.: "TRE-RJ";
-                  aceita lista "TRE-RJ,TRE-ES").
-        tipo_decisao: "todos" (default) ou lista entre acordao, resolucao,
-                      decisao_sem_resolucao.
-        ano_eleicao: Ano da eleição (AAAA), opcional.
-        ordenacao: "re" (relevância, default), "dj_desc", "dj_asc", "dp_desc", "dp_asc".
-        max_resultados: 1-100. Default 10.
-        pagina: Página de resultados, a partir de 1.
-        max_tokens_ementa: Truncamento da ementa (50-4000). Default 600.
-
-    Returns:
-        XML com número CNJ, classe, tribunal, relator, data, publicação, UF,
-        município, ano da eleição, codigo_decisao (para inteiro_teor_eleitoral)
-        e ementa. A ementa se reproduz FIELMENTE na peça. Falha do portal volta
-        como <erro>, nunca como lista vazia.
-    """
+    """Implementação síncrona de buscar_jurisprudencia_eleitoral (roda numa thread)."""
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     t0 = time.perf_counter()
     cache_hit, n_docs, erro_msg = False, 0, None
@@ -281,23 +247,11 @@ def buscar_jurisprudencia_eleitoral(
         )
 
 
-@mcp.tool()
-def relatorio_jurisprudencia_eleitoral(
-    busca: str,
-    tribunal: str = "TSE",
-    tipo_decisao: str = "todos",
-    ano_eleicao: str = "",
-    ordenacao: str = "re",
-    max_resultados: int = 10,
-    pagina: int = 1,
+def _relatorio_md(
+    busca, tribunal="TSE", tipo_decisao="todos", ano_eleicao="", ordenacao="re",
+    max_resultados=10, pagina=1,
 ) -> str:
-    """
-    Mesma busca de buscar_jurisprudencia_eleitoral, em Markdown com ementa íntegra.
-
-    USE para ler os julgados ou copiar a ementa na peça. A ementa se reproduz
-    FIELMENTE — é PROIBIDO resumir ou parafrasear. Acórdão de TRE é persuasivo
-    fora da sua circunscrição; a peça diz qual tribunal está citando.
-    """
+    """Implementação síncrona de relatorio_jurisprudencia_eleitoral (roda numa thread)."""
     t0 = time.perf_counter()
     cache_hit, n_docs, erro_msg = False, 0, None
     try:
@@ -365,36 +319,41 @@ def relatorio_jurisprudencia_eleitoral(
         )
 
 
-@mcp.tool()
-def inteiro_teor_eleitoral(codigo_decisao: str, max_caracteres: int = 60000) -> str:
-    """
-    Texto do inteiro teor (PDF) de uma decisão do SJUR, pelo codigo_decisao que
-    a busca devolve.
-
-    USE para ler o voto — onde estão a razão de decidir e o fato que torna o
-    caso análogo — e para conferir um trecho com a sua continuação antes de
-    citá-lo. Cadência mínima entre downloads; o portal limita a taxa.
-
-    Args:
-        codigo_decisao: Campo <codigo_decisao> da busca (só dígitos).
-        max_caracteres: Corte do texto devolvido (1000-400000). Default 60000.
-    """
+def _inteiro_teor_txt(codigo_decisao, max_caracteres=60000) -> str:
+    """Implementação síncrona de inteiro_teor_eleitoral (roda numa thread)."""
     max_caracteres = max(1000, min(int(max_caracteres), 400_000))
     t0 = time.perf_counter()
     cache_hit, erro_msg, n = False, None, 0
     try:
-        chave = {"mcp": NOME, "inteiro_teor": str(codigo_decisao).strip(), "v": 1}
-        texto = cached_http(NOME, chave)
-        cache_hit = texto is not None
-        if texto is None:
-            texto = extrair_texto_pdf(sjur_client.baixar_inteiro_teor(str(codigo_decisao).strip()))
-            registrar_dispositivo(NOME, chave, texto, ttl_s=TTL_INTEIRO_TEOR_S)
+        codigo = str(codigo_decisao).strip()
+        # v2: o cache guarda também as páginas sem camada de texto, para o aviso
+        # de texto incompleto sobreviver ao cache.
+        chave = {"mcp": NOME, "inteiro_teor": codigo, "v": 2}
+        bruto = cached_http(NOME, chave)
+        cache_hit = bruto is not None
+        if bruto is not None:
+            dados = json.loads(bruto)
+        else:
+            r = extrair_inteiro_teor(sjur_client.baixar_inteiro_teor(codigo))
+            dados = {"texto": r.texto, "paginas": r.paginas, "sem_texto": r.paginas_sem_texto}
+            registrar_dispositivo(NOME, chave, json.dumps(dados, ensure_ascii=False),
+                                  ttl_s=TTL_INTEIRO_TEOR_S)
+        texto, sem_texto = dados["texto"], dados["sem_texto"]
         n = 1
         truncado = len(texto) > max_caracteres
+        aviso = ""
+        if sem_texto:
+            aviso = (
+                f"ATENÇÃO — texto INCOMPLETO: {len(sem_texto)} de {dados['paginas']} "
+                f"página(s) sem camada de texto (digitalizadas): {', '.join(map(str, sem_texto))}. "
+                "O conteúdo dessas páginas não está abaixo; conferir no PDF antes de afirmar "
+                "o que o voto diz ou deixa de dizer.\n"
+            )
         return (
-            f"# Inteiro teor — código {codigo_decisao}\n"
-            f"Fonte: {sjur_client.URL_PDF.format(codigo=str(codigo_decisao).strip())}\n"
-            f"({len(texto)} caracteres; truncado: {'sim' if truncado else 'não'})\n\n"
+            f"# Inteiro teor — código {codigo}\n"
+            f"Fonte: {sjur_client.URL_PDF.format(codigo=codigo)}\n"
+            f"({len(texto)} caracteres; truncado: {'sim' if truncado else 'não'})\n"
+            + aviso + "\n"
             + texto[:max_caracteres]
         )
     except Exception as e:  # noqa: BLE001
@@ -441,6 +400,101 @@ EXEMPLOS:
   inelegibilidade E "alínea g" E "rejeição de contas"
   "fraude à cota de gênero"    tribunal="TREs"   ano_eleicao="2024"
 """
+
+
+# As tools são `async` e levam o trabalho a uma thread: o mcp 1.27 executa tool
+# síncrona direto no loop do FastMCP, e cada busca (~11 s no Edge) travava as
+# demais do mesmo processo. Na thread não há loop em curso, e a API síncrona do
+# Playwright roda sem o desvio de `sjur_client._fora_do_loop`.
+
+@mcp.tool()
+async def buscar_jurisprudencia_eleitoral(
+    busca: str,
+    tribunal: str = "TSE",
+    tipo_decisao: str = "todos",
+    ano_eleicao: str = "",
+    ordenacao: str = "re",
+    max_resultados: int = 10,
+    pagina: int = 1,
+    max_tokens_ementa: int = 600,
+) -> str:
+    """
+    Busca jurisprudência da Justiça Eleitoral (TSE e TREs) no SJUR.
+
+    USE PARA: tese eleitoral — AIJE, AIME, registro de candidatura,
+    inelegibilidade, prestação de contas, propaganda, condutas vedadas, crimes
+    eleitorais. Nenhuma outra base do projeto alcança o TSE ou os TREs.
+
+    SINTAXE: operadores E, OU, NÃO em MAIÚSCULO (em minúsculo viram termo);
+    "frase exata"; * e ? como curingas. Ver ajuda_sintaxe_eleitoral().
+
+    LENTO: abre o portal num Edge real (~11 s por busca; cache de 7 dias).
+    Buscas simultâneas correm em paralelo, cada uma na sua aba.
+
+    Args:
+        busca: Termos de pesquisa. NÃO passe pergunta em linguagem natural.
+        tribunal: "TSE" (default), "TREs" (todos) ou "TRE-UF" (ex.: "TRE-RJ";
+                  aceita lista "TRE-RJ,TRE-ES").
+        tipo_decisao: "todos" (default) ou lista entre acordao, resolucao,
+                      decisao_sem_resolucao.
+        ano_eleicao: Ano da eleição (AAAA), opcional.
+        ordenacao: "re" (relevância, default), "dj_desc", "dj_asc", "dp_desc", "dp_asc".
+        max_resultados: 1-100. Default 10.
+        pagina: Página de resultados, a partir de 1.
+        max_tokens_ementa: Truncamento da ementa (50-4000). Default 600.
+
+    Returns:
+        XML com número CNJ, classe, tribunal, relator, data, publicação, UF,
+        município, ano da eleição, codigo_decisao (para inteiro_teor_eleitoral)
+        e ementa. A ementa se reproduz FIELMENTE na peça. Falha do portal volta
+        como <erro>, nunca como lista vazia.
+    """
+    return await asyncio.to_thread(
+        _buscar_xml, busca, tribunal, tipo_decisao, ano_eleicao, ordenacao,
+        max_resultados, pagina, max_tokens_ementa,
+    )
+
+
+@mcp.tool()
+async def relatorio_jurisprudencia_eleitoral(
+    busca: str,
+    tribunal: str = "TSE",
+    tipo_decisao: str = "todos",
+    ano_eleicao: str = "",
+    ordenacao: str = "re",
+    max_resultados: int = 10,
+    pagina: int = 1,
+) -> str:
+    """
+    Mesma busca de buscar_jurisprudencia_eleitoral, em Markdown com ementa íntegra.
+
+    USE para ler os julgados ou copiar a ementa na peça. A ementa se reproduz
+    FIELMENTE — é PROIBIDO resumir ou parafrasear. Acórdão de TRE é persuasivo
+    fora da sua circunscrição; a peça diz qual tribunal está citando.
+    """
+    return await asyncio.to_thread(
+        _relatorio_md, busca, tribunal, tipo_decisao, ano_eleicao, ordenacao,
+        max_resultados, pagina,
+    )
+
+
+@mcp.tool()
+async def inteiro_teor_eleitoral(codigo_decisao: str, max_caracteres: int = 60000) -> str:
+    """
+    Texto do inteiro teor (PDF) de uma decisão do SJUR, pelo codigo_decisao que
+    a busca devolve.
+
+    USE para ler o voto — onde estão a razão de decidir e o fato que torna o
+    caso análogo — e para conferir um trecho com a sua continuação antes de
+    citá-lo. Cadência mínima de 10 s entre downloads; o portal limita a taxa.
+    Página digitalizada (sem camada de texto) é avisada no cabeçalho: o texto
+    devolvido fica incompleto.
+
+    Args:
+        codigo_decisao: Campo <codigo_decisao> da busca (só dígitos).
+        max_caracteres: Corte do texto devolvido (1000-400000). Default 60000.
+    """
+    return await asyncio.to_thread(_inteiro_teor_txt, codigo_decisao, max_caracteres)
 
 
 if __name__ == "__main__":

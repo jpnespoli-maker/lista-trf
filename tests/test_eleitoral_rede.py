@@ -3,6 +3,7 @@ máquina com sessão gráfica (a busca abre o Edge)."""
 
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import re
 import sys
@@ -32,22 +33,39 @@ def _sem_cache(monkeypatch):
 
 
 def test_busca_tse_ao_vivo():
-    out = S.buscar_jurisprudencia_eleitoral('"abuso de poder econômico" E AIJE', max_resultados=5)
+    out = asyncio.run(S.buscar_jurisprudencia_eleitoral('"abuso de poder econômico" E AIJE',
+                                                        max_resultados=5))
     assert not out.startswith("<erro>"), out[:300]
     assert re.search(r"<numero>\d{7}-\d{2}\.\d{4}\.6\.\d{2}\.\d{4}</numero>", out)
 
 
 def test_busca_tre_rj_ao_vivo():
-    out = S.buscar_jurisprudencia_eleitoral("propaganda E irregular", tribunal="TRE-RJ",
-                                            max_resultados=5)
+    out = asyncio.run(S.buscar_jurisprudencia_eleitoral("propaganda E irregular",
+                                                        tribunal="TRE-RJ", max_resultados=5))
     assert not out.startswith("<erro>"), out[:300]
     assert set(re.findall(r"<fonte>([^<]+)</fonte>", out)) == {"TRE-RJ"}
 
 
 def test_inteiro_teor_ao_vivo():
-    out = S.buscar_jurisprudencia_eleitoral("inelegibilidade", max_resultados=5)
+    out = asyncio.run(S.buscar_jurisprudencia_eleitoral("inelegibilidade", max_resultados=5))
     codigos = re.findall(r"<codigo_decisao>(\d+)</codigo_decisao>\s*<tem_inteiro_teor>sim", out)
     assert codigos, "nenhuma decisão com inteiro teor na amostra"
-    texto = S.inteiro_teor_eleitoral(codigos[0], max_caracteres=3000)
+    texto = asyncio.run(S.inteiro_teor_eleitoral(codigos[0], max_caracteres=3000))
     assert not texto.startswith("<erro>"), texto[:300]
     assert len(texto) > 500
+
+
+def test_duas_buscas_simultaneas_ao_vivo():
+    # M9 — em paralelo, cada busca na sua aba: nenhuma recebe o ajuste da outra.
+    async def ambas():
+        return await asyncio.gather(
+            S.buscar_jurisprudencia_eleitoral("condutas E vedadas", max_resultados=5),
+            S.buscar_jurisprudencia_eleitoral("condutas E vedadas", tribunal="TRE-RJ",
+                                              max_resultados=5),
+        )
+
+    tse, tre = asyncio.run(ambas())
+    assert not tse.startswith("<erro>"), tse[:300]
+    assert not tre.startswith("<erro>"), tre[:300]
+    assert set(re.findall(r"<fonte>([^<]+)</fonte>", tse)) == {"TSE"}
+    assert set(re.findall(r"<fonte>([^<]+)</fonte>", tre)) == {"TRE-RJ"}

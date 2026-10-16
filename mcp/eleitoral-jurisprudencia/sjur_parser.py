@@ -108,7 +108,7 @@ def normalizar_tipos(valor: str) -> list[str]:
     return rotulos
 
 
-def _aplicar_siglas(corpo: dict, filtros: list, siglas: tuple[str, ...]) -> None:
+def _aplicar_siglas(filtros: list, siglas: tuple[str, ...]) -> None:
     if siglas:
         filtros.append({"terms": {_CAMPO_SIGLA: list(siglas)}})
 
@@ -138,7 +138,7 @@ def ajustar_corpo(
     must.append({"terms": {_CAMPO_TIPO: list(tipos)}})
     clausulas["must"] = must
     filtros = [c for c in clausulas.get("filter", []) if not _eh_filtro_proprio(c)]
-    _aplicar_siglas(novo, filtros, siglas)
+    _aplicar_siglas(filtros, siglas)
     if ano_eleicao is not None:
         filtros.append({"term": {_CAMPO_ANO: int(ano_eleicao)}})
     clausulas["filter"] = filtros
@@ -235,7 +235,11 @@ def _decisao(x: dict) -> Decisao:
     )
 
 
-def interpretar_busca(payload: dict) -> tuple[list[Decisao], int]:
+def interpretar_busca(
+    payload: dict, *, pagina: int | None = None, tamanho: int | None = None
+) -> tuple[list[Decisao], int]:
+    """`pagina` (0-based) e `tamanho`, quando informados, separam a página além
+    do fim (erro de parâmetro) do item que sumiu dentro do alcance (canário)."""
     if not isinstance(payload, dict):
         raise ErroSJUR(f"resposta da API não é um objeto JSON ({type(payload).__name__})")
     mensagem = payload.get("mensagem")
@@ -252,6 +256,12 @@ def interpretar_busca(payload: dict) -> tuple[list[Decisao], int]:
         raise ErroSJUR(
             "formato da resposta da API mudou (sem `content` lista ou "
             f"`totalRegistros` inteiro; chaves: {sorted(payload)[:8]})"
+        )
+    if total > 0 and not itens and pagina is not None and tamanho and pagina * tamanho >= total:
+        ultima = (total - 1) // tamanho + 1
+        raise ParametroInvalido(
+            f"página {pagina + 1} além do fim: há {total} decisão(ões), "
+            f"{ultima} página(s) de {tamanho}"
         )
     if total > 0 and not itens:
         raise ErroSJUR(
@@ -313,7 +323,9 @@ def contagem_por_tribunal(payload: dict) -> dict[str, int]:
 
 
 def avisos_busca(busca: str) -> list[str]:
-    if _OPERADOR_MINUSCULO.search(f" {busca} "):
+    # Dentro da frase exata, "e"/"ou" são palavras da frase, não operadores.
+    fora_das_aspas = re.sub(r'"[^"]*"', " ", busca)
+    if _OPERADOR_MINUSCULO.search(f" {fora_das_aspas} "):
         return [
             "operador em minúsculo (e, ou, nao) é buscado como TERMO; use E, OU, NÃO "
             "em MAIÚSCULO para que o portal os aplique"
@@ -341,11 +353,22 @@ def desembrulhar_pdf(corpo: bytes) -> bytes:
     return corpo[inicio:fim + len(b"%%EOF")]
 
 
-def extrair_texto_pdf(pdf: bytes) -> str:
+@dataclass
+class TextoPDF:
+    texto: str
+    paginas: int
+    paginas_sem_texto: list[int]
+
+
+def extrair_inteiro_teor(pdf: bytes) -> TextoPDF:
+    """Texto do PDF e as páginas (1-based) sem camada de texto — digitalizadas,
+    cujo conteúdo falta no texto devolvido."""
     import fitz  # PyMuPDF; import tardio para o módulo carregar sem ele
 
     with fitz.open(stream=pdf, filetype="pdf") as doc:
-        texto = "\n".join(pagina.get_text() for pagina in doc).strip()
+        por_pagina = [pagina.get_text() for pagina in doc]
+    texto = "\n".join(por_pagina).strip()
     if not texto:
         raise ErroSJUR("PDF do inteiro teor sem camada de texto (provável digitalização)")
-    return texto
+    sem_texto = [i for i, t in enumerate(por_pagina, 1) if not t.strip()]
+    return TextoPDF(texto=texto, paginas=len(por_pagina), paginas_sem_texto=sem_texto)

@@ -49,22 +49,31 @@ FRONT = {
 SUFIXO_API = "/sjur-pesquisa-backend/rest/public/pesquisa"
 URL_PDF = "https://sjur-servicos.tse.jus.br/sjur-servicos/rest/download/pdf/{codigo}"
 ESPERA_CAPTCHA_MS = 5000
-TIMEOUT_RESPOSTA_MS = 60_000
+# Medido em 16/10/2026: nas buscas que deram certo a resposta veio de 3 a 12 s
+# depois do clique; 30 s por tentativa, e uma nova tentativa em aba nova quando
+# o token não vem (falha intermitente, 3 em ~60 buscas, causa não apurada).
+TIMEOUT_RESPOSTA_MS = 30_000
+TENTATIVAS_BUSCA = 2
 # Medido em 16/10/2026: a 2 s e a 5 s entre downloads o portal alterna PDF e
 # "Excesso de requisições"; a 10 s, 6 de 6 vieram como PDF.
 INTERVALO_MIN_PDF_S = 10.0
 TENTATIVAS_PDF = 3
 MSG_SEM_ENVIO = (
-    "a busca não foi enviada em 60 s: o hCaptcha do portal não emitiu o token. "
-    "Repita a busca; se a janela do Edge mostrar um desafio, resolva-o ali "
-    "enquanto a busca aguarda (até 60 s — a aba fecha ao fim da espera). "
-    "Isto NÃO significa ausência de precedente."
+    f"a busca não foi enviada: o hCaptcha do portal não emitiu o token em "
+    f"{TENTATIVAS_BUSCA} tentativas de {TIMEOUT_RESPOSTA_MS // 1000} s. Repita a busca; "
+    "se a janela do Edge mostrar um desafio, resolva-o ali enquanto a busca aguarda "
+    "(a aba fecha ao fim de cada espera). Isto NÃO significa ausência de precedente."
 )
+
+
+class TokenNaoEmitido(ErroSJUR):
+    """O POST da pesquisa não saiu: o hCaptcha não emitiu o token a tempo."""
 
 Executor = Callable[[str, str, Callable[[dict], dict]], dict]
 
 _ultimo_pdf = float("-inf")
 _trava_pdf = threading.Lock()
+_trava_navegador = threading.Lock()
 
 
 def pesquisar(
@@ -142,40 +151,71 @@ def _levantar_falha_de_ajuste(estado: dict) -> None:
         raise ErroSJUR(f"falha ao ajustar o pedido da pesquisa: {erro}") from erro
 
 
+def _garantir_navegador(url_front: str) -> None:
+    """Com as tools rodando em paralelo, duas buscas podiam achar a porta CDP
+    fechada ao mesmo tempo e lançar dois Edge no mesmo perfil — o lock de
+    perfil derruba o segundo. Só esta etapa é serializada; a busca, cada uma
+    na sua aba, segue em paralelo."""
+    with _trava_navegador:
+        cdp_edge.garantir_navegador(url_inicial=url_front)
+
+
 def _executar_no_navegador(busca: str, url_front: str, ajuste: Callable[[dict], dict]) -> dict:
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
     from playwright.sync_api import sync_playwright
 
-    cdp_edge.garantir_navegador(url_inicial=url_front)
+    _garantir_navegador(url_front)
     with sync_playwright() as p:
         try:
             browser = p.chromium.connect_over_cdp(cdp_edge.endpoint_cdp())
         except Exception as e:  # noqa: BLE001
             raise cdp_edge.CDPIndisponivel(f"connect_over_cdp falhou: {e}") from e
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
-        pg = ctx.new_page()
-        estado: dict = {}
+        return _pesquisar_com_nova_tentativa(ctx.new_page, busca, url_front, ajuste, PlaywrightTimeout)
+
+
+def _pesquisar_com_nova_tentativa(
+    nova_aba: Callable, busca: str, url_front: str, ajuste: Callable[[dict], dict],
+    erro_de_espera: type,
+) -> dict:
+    """Só a falta do token ganha nova tentativa, em aba nova: HTTP de erro ou
+    falha do ajuste não são intermitentes, e repetir só gastaria tempo."""
+    for tentativa in range(1, TENTATIVAS_BUSCA + 1):
         try:
-            pg.route("**" + SUFIXO_API, _manipulador_de_rota(ajuste, estado))
-            pg.goto(url_front, wait_until="domcontentloaded", timeout=60_000)
-            pg.wait_for_selector("#inputPesquisaLivre", timeout=60_000)
-            pg.wait_for_timeout(ESPERA_CAPTCHA_MS)
-            pg.click("#inputPesquisaLivre")
-            pg.fill("#inputPesquisaLivre", "")
-            pg.keyboard.type(busca, delay=60)
-            try:
-                with pg.expect_response(_eh_resposta_da_pesquisa, timeout=TIMEOUT_RESPOSTA_MS) as info:
-                    pg.get_by_role("button", name="Pesquisar").first.click()
-            except PlaywrightTimeout as e:
-                _levantar_falha_de_ajuste(estado)
-                raise ErroSJUR(MSG_SEM_ENVIO) from e
+            return _pesquisar_na_pagina(nova_aba(), busca, url_front, ajuste, erro_de_espera)
+        except TokenNaoEmitido:
+            if tentativa == TENTATIVAS_BUSCA:
+                raise
+    raise AssertionError("inalcançável")
+
+
+def _pesquisar_na_pagina(
+    pg, busca: str, url_front: str, ajuste: Callable[[dict], dict], erro_de_espera: type
+) -> dict:
+    """O gesto na aba e a leitura da resposta; a aba fecha em qualquer saída.
+    `erro_de_espera` é o TimeoutError do Playwright (injetável para teste)."""
+    estado: dict = {}
+    try:
+        pg.route("**" + SUFIXO_API, _manipulador_de_rota(ajuste, estado))
+        pg.goto(url_front, wait_until="domcontentloaded", timeout=60_000)
+        pg.wait_for_selector("#inputPesquisaLivre", timeout=60_000)
+        pg.wait_for_timeout(ESPERA_CAPTCHA_MS)
+        pg.click("#inputPesquisaLivre")
+        pg.fill("#inputPesquisaLivre", "")
+        pg.keyboard.type(busca, delay=60)
+        try:
+            with pg.expect_response(_eh_resposta_da_pesquisa, timeout=TIMEOUT_RESPOSTA_MS) as info:
+                pg.get_by_role("button", name="Pesquisar").first.click()
+        except erro_de_espera as e:
             _levantar_falha_de_ajuste(estado)
-            resposta = info.value
-            if resposta.status != 200:
-                raise ErroSJUR(f"a API do SJUR respondeu HTTP {resposta.status}")
-            return resposta.json()
-        finally:
-            pg.close()
+            raise TokenNaoEmitido(MSG_SEM_ENVIO) from e
+        _levantar_falha_de_ajuste(estado)
+        resposta = info.value
+        if resposta.status != 200:
+            raise ErroSJUR(f"a API do SJUR respondeu HTTP {resposta.status}")
+        return resposta.json()
+    finally:
+        pg.close()
 
 
 def _http_get(url: str) -> tuple[int, bytes]:

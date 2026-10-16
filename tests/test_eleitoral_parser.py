@@ -244,7 +244,7 @@ def test_desembrulha_multipart():
              b"filename=\"inteiroTeor.pdf\"\r\nContent-Type: application/pdf\r\n\r\n"
              + pdf + b"\r\n--qOQabc--\r\n")
     assert P.desembrulhar_pdf(corpo) == _ate_eof(pdf)
-    assert "ACORDAO TESTE" in P.extrair_texto_pdf(P.desembrulhar_pdf(corpo))
+    assert "ACORDAO TESTE" in P.extrair_inteiro_teor(P.desembrulhar_pdf(corpo)).texto
 
 
 def test_pdf_cru_passa_direto():
@@ -278,7 +278,7 @@ def test_pdf_sem_texto_e_erro():
     vazio = doc.tobytes()
     doc.close()
     with pytest.raises(P.ErroSJUR, match="camada de texto"):
-        P.extrair_texto_pdf(vazio)
+        P.extrair_inteiro_teor(vazio)
 
 
 # ---------------- revisão final (16/10/2026) ----------------
@@ -345,6 +345,60 @@ def test_conferir_filtros_acusa_ajuste_sem_efeito(decisao, alvo, tipos, ano):
     # I2 — o backend já ignorou calado um filtro (`tribunais`) no spike.
     with pytest.raises(P.ErroSJUR, match="filtro"):
         P.conferir_filtros([decisao], alvo=alvo, tipos=tipos, ano_eleicao=ano)
+
+
+def test_pagina_alem_do_fim_e_erro_de_parametro_nao_de_json():
+    # M3 — 12 decisões, página 2 de tamanho 25: não há o que devolver, e o
+    # culpado é o parâmetro, não uma mudança no JSON da API.
+    vazio = {"mensagem": None, "content": [], "totalRegistros": 12}
+    with pytest.raises(P.ParametroInvalido, match="além do fim"):
+        P.interpretar_busca(vazio, pagina=1, tamanho=25)
+
+
+@pytest.mark.parametrize("pagina,tamanho", [(0, 25), (None, None)])
+def test_pagina_dentro_do_alcance_sem_itens_continua_canario(pagina, tamanho):
+    vazio = {"mensagem": None, "content": [], "totalRegistros": 30}
+    with pytest.raises(P.ErroSJUR, match="0 itens"):
+        P.interpretar_busca(vazio, pagina=pagina, tamanho=tamanho)
+
+
+@pytest.mark.parametrize("busca", [
+    '"abuso de poder político e econômico"',
+    'AIJE E "captação ou gasto ilícito"',
+])
+def test_minusculo_dentro_de_aspas_nao_avisa(busca):
+    # M5 — dentro da frase exata, "e" e "ou" são palavras da frase, não operadores.
+    assert P.avisos_busca(busca) == []
+
+
+def test_minusculo_fora_das_aspas_ainda_avisa():
+    assert P.avisos_busca('"abuso de poder" e fraude')
+
+
+def _pdf_paginas(*textos: str) -> bytes:
+    import fitz
+    doc = fitz.open()
+    for t in textos:
+        pagina = doc.new_page()
+        if t:
+            pagina.insert_text((72, 72), t)
+    dados = doc.tobytes()
+    doc.close()
+    return dados
+
+
+def test_inteiro_teor_conta_paginas_sem_texto():
+    # M7 — página digitalizada no meio do voto: o texto sai incompleto, e quem
+    # lê precisa saber quais páginas faltam.
+    r = P.extrair_inteiro_teor(_pdf_paginas("VOTO", "", "DISPOSITIVO", ""))
+    assert "VOTO" in r.texto and "DISPOSITIVO" in r.texto
+    assert r.paginas == 4
+    assert r.paginas_sem_texto == [2, 4]
+
+
+def test_inteiro_teor_completo_nao_lista_paginas():
+    r = P.extrair_inteiro_teor(_pdf_paginas("A", "B"))
+    assert (r.paginas, r.paginas_sem_texto) == (2, [])
 
 
 def test_parametro_invalido_e_classe_propria():
