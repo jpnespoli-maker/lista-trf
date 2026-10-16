@@ -30,5 +30,5 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
 markers = [
-    "rede: testes que vao ao site da Corte IDH pela rede; ficam fora da corrida padrao (rodar com -m rede)",
+    "rede: testes que vao a portais externos pela rede (Corte IDH, SJUR do TSE); ficam fora da corrida padrao (rodar com -m rede)",
 ]

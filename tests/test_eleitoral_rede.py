@@ -1,0 +1,52 @@
+"""Ao vivo contra o SJUR. Fora da corrida padrão: rodar com -m rede, numa
+máquina com sessão gráfica (a busca abre o Edge)."""
+
+from __future__ import annotations
+
+import importlib.util
+import re
+import sys
+from pathlib import Path
+
+import pytest
+
+RAIZ = Path(__file__).resolve().parent.parent
+MODULO = RAIZ / "mcp" / "eleitoral-jurisprudencia"
+for p in (MODULO, MODULO.parent):
+    if str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+_spec = importlib.util.spec_from_file_location("eleitoral_server_rede", MODULO / "server.py")
+S = importlib.util.module_from_spec(_spec)
+sys.modules["eleitoral_server_rede"] = S  # o @dataclass do servidor exige o registro
+_spec.loader.exec_module(S)
+
+pytestmark = pytest.mark.rede
+
+
+@pytest.fixture(autouse=True)
+def _sem_cache(monkeypatch):
+    monkeypatch.setattr(S, "cached_http", lambda mcp, key: None)
+    monkeypatch.setattr(S, "registrar_dispositivo", lambda *a, **k: None)
+
+
+def test_busca_tse_ao_vivo():
+    out = S.buscar_jurisprudencia_eleitoral('"abuso de poder econômico" E AIJE', max_resultados=5)
+    assert not out.startswith("<erro>"), out[:300]
+    assert re.search(r"<numero>\d{7}-\d{2}\.\d{4}\.6\.\d{2}\.\d{4}</numero>", out)
+
+
+def test_busca_tre_rj_ao_vivo():
+    out = S.buscar_jurisprudencia_eleitoral("propaganda E irregular", tribunal="TRE-RJ",
+                                            max_resultados=5)
+    assert not out.startswith("<erro>"), out[:300]
+    assert set(re.findall(r"<fonte>([^<]+)</fonte>", out)) == {"TRE-RJ"}
+
+
+def test_inteiro_teor_ao_vivo():
+    out = S.buscar_jurisprudencia_eleitoral("inelegibilidade", max_resultados=5)
+    codigos = re.findall(r"<codigo_decisao>(\d+)</codigo_decisao>\s*<tem_inteiro_teor>sim", out)
+    assert codigos, "nenhuma decisão com inteiro teor na amostra"
+    texto = S.inteiro_teor_eleitoral(codigos[0], max_caracteres=3000)
+    assert not texto.startswith("<erro>"), texto[:300]
+    assert len(texto) > 500

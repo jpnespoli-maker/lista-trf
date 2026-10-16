@@ -1,0 +1,9 @@
+# Dependências diretas do MCP eleitoral-jurisprudencia
+# (venv: mcp-venvs/eleitoral-jurisprudencia, Python 3.11)
+mcp==1.27.0
+curl_cffi==0.14.0
+# connect_over_cdp a um Edge lançado fora do Playwright (shared/cdp_edge.py);
+# não precisa de `playwright install` — não usa navegador próprio.
+playwright==1.62.0
+# Casa com o PyMuPDF do Python do sistema (1.27.2), que roda os testes.
+PyMuPDF==1.27.2
