@@ -1,0 +1,242 @@
+{
+ "mensagem": null,
+ "content": [
+  {
+   "id": null,
+   "siglaTribunalJE": "TSE",
+   "codigoDecisao": 3606299,
+   "numeroProcesso": "060044894",
+   "numeroDecisao": null,
+   "dataDecisao": "08/10/2026",
+   "dataDecisaoInvertida": null,
+   "anoEleicao": "2024",
+   "siglaClasse": "AREspEl",
+   "descricaoClasse": "Agravo em Recurso Especial Eleitoral ",
+   "siglaUF": "RJ",
+   "naturezaDocumento": "Sem anotação",
+   "nomeMunicipio": "CACHOEIRAS <span class='highlighted'>DE</span> MACACU",
+   "siglaTipoProcesso": "AgR-AREspE",
+   "nomeTipoProcesso": "Agravo Regimental no Agravo em Recurso Especial Eleitoral",
+   "descricaoTipoDecisao": "Acórdão",
+   "numeroUnico": "06004489420246190049",
+   "numeroUnicoFormatado": "0600448-94.2024.6.19.0049",
+   "numeroProtocolo": "0",
+   "origemDecisao": "PJE",
+   "temInteiroTeorPDF": "true",
+   "temInteiroTeorAudio": null,
+   "textoDecisao": "<div style=\"text-align: justify;\"><p style=\"font-size: 10pt;\"></p>\r\n<p style=\"font-size: 10pt;\"></p>\r\n<p style=\"\"><span style=\"font-size: small;\">O Tribunal, por unanimidade, negou provimento ao agravo interno, nos termos do voto do Relator.</span></p>\r\n<p style=\"\"><span style=\"font-size: small;\">Acompanharam o Relator os Ministros Ricardo Villas Bôas Cueva, Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques, Estela Aranha, André Mendonça e Nunes Marques (Presidente).</span></p>\r\n<p style=\"\"><span style=\"font-size: small;\">Composição: Ministros Nunes Marques (Presidente), André Mendonça, Dias Toffoli, Ricardo Villas Bôas Cueva, Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques e Estela Aranha.</span></p>\r\n<p style=\"font-size: 10pt;\"> </p></div>",
+   "textoEmenta": "<p style=\"text-align: justify;\"><span style=\"font-size: small;\">Eleições 2024. Agravo regimental. Agravo em recurso especial eleitoral. Ação <span class='highlighted'>de</span> impugnação <span class='highlighted'>de</span> mandato eletivo. <span class='highlighted'>Abuso</span> <span class='highlighted'>de</span> <span class='highlighted'>poder</span> <span class='highlighted'>econômico</span>. Materiais <span class='highlighted'>de</span> propaganda produzidos por eleitores. Ausência <span class='highlighted'>de</span> provas robustas da prática <span class='highlighted'>de</span> ilícito. Ausência <span class='highlighted'>de</span> gravidade. Improcedência dos pedidos nas instâncias ordinárias. Súmula nºs 24 e 30 do TSE. Agravo regimental não provido. </span></p><p style=\"text-align: justify;\"><span style=\"font-size: small;\">1. O Tribunal Regional decidiu a controvérsia em consonância com a jurisprudência desta Corte Superior, segundo a qual a condenação pela prática <span class='highlighted'>de</span> <span class='highlighted'>abuso</span> <span class='highlighted'>de</span> <span class='highlighted'>econômico</span> exige a presença <span class='highlighted'>de</span> provas robustas do ilícito e demonstração <span class='highlighted'>de</span> gravidade qualitativa e quantitativa. Precedentes. </span></p><p style=\"text-align: justify;\"><span style=\"font-size: small;\">2. O reexame dos fatos e das provas produzidos nos autos é providência incompatível com a estreita via do recurso especial, nos termos da Súmula nº 24 do TSE. </span></p><p style=\"text-align: justify;\"><span style=\"font-size: small;\">3. Incidência, na hipótese, da Súmula nº 30 do TSE, visto que o referido enunciado ¿impede o conhecimento <span class='highlighted'>de</span> recurso especial eleitoral por dissídio jurisprudencial &ndash; também aplicável aos casos <span class='highlighted'>de</span> alegada violação à lei &ndash; quando a decisão recorrida estiver alinhada com a jurisprudência do Tribunal¿ (AgR&ndash;AREspE nº 0602831&ndash;29/CE, Rel. Min. André Mendonça, DJe <span class='highlighted'>de</span> 9/10/24). </span></p><p style=\"text-align: justify;\"><span style=\"font-size: small;\">4. Agravo regimental não provido.\r\n \r\n </span></p>",
+   "textoIndexacaoLegado": null,
+   "textoVotoVencidoLegado": null,
+   "anoEleicaoSuplementar": null,
+   "textoVotoVistaLegado": null,
+   "textoDoutrinaLegado": null,
+   "textoObservacaoGeral": null,
+   "quantidadePaginasPDF": "9",
+   "textoIndexacaoLegadoValido": "S",
+   "tipoImportanciaJurisprudencial": "X",
+   "textoObservacaoLegado": null,
+   "selecionada": "N",
+   "textoObservacaoLegadoValido": "S",
+   "anexos": null,
+   "argumentosSelecao": null,
+   "assuntos": [
+    {
+     "nomeAssunto": "Matéria processual"
+    },
+    {
+     "nomeAssunto": "AIJE"
+    },
+    {
+     "nomeAssunto": "<span class='highlighted'>Abuso</span> <span class='highlighted'>de</span> <span class='highlighted'>poder</span>"
+    }
+   ],
+   "casos": null,
+   "catalogos": null,
+   "decisoesRelacionadasOutrosTribunais": null,
+   "decisoesOutrosTribunais": null,
+   "doutrinas": null,
+   "etiquetas": [
+    {
+     "etiqueta": "Eleição 2024"
+    }
+   ],
+   "indexacoes": null,
+   "precedentes": null,
+   "publicacoes": [
+    {
+     "numeroPublicacao": "183",
+     "nomeFontePublicacao": "Diário <span class='highlighted'>de</span> Justiça Eletrônico",
+     "numeroPagina": null,
+     "siglaFontePublicacao": "DJE",
+     "dataPublicacao": "16/10/2026",
+     "numeroVolume": null
+    }
+   ],
+   "referenciasLegislativas": null,
+   "relatores": [
+    {
+     "autoridade": "Min.",
+     "nome": "Dias Toffoli",
+     "competencia": "Relator(a)",
+     "descricaoCompleta": "Relator(a) Min. Dias Toffoli"
+    }
+   ],
+   "sumulas": null,
+   "vides": null
+  },
+  {
+   "id": null,
+   "siglaTribunalJE": "TSE",
+   "codigoDecisao": 3606512,
+   "numeroProcesso": "060214041",
+   "numeroDecisao": null,
+   "dataDecisao": "08/10/2026",
+   "dataDecisaoInvertida": null,
+   "anoEleicao": "2026",
+   "siglaClasse": "AIJE",
+   "descricaoClasse": "Ação de Investigação Judicial Eleitoral",
+   "siglaUF": "DF",
+   "naturezaDocumento": "Sem anotação",
+   "nomeMunicipio": "BRASÍLIA",
+   "siglaTipoProcesso": null,
+   "nomeTipoProcesso": null,
+   "descricaoTipoDecisao": "Acórdão",
+   "numeroUnico": "06021404120266000000",
+   "numeroUnicoFormatado": "0602140-41.2026.6.00.0000",
+   "numeroProtocolo": "0",
+   "origemDecisao": "PJE",
+   "temInteiroTeorPDF": "true",
+   "temInteiroTeorAudio": null,
+   "textoDecisao": "<div style=\"text-align: justify;\"></p>\n<p>O Tribunal, por unanimidade, referendou a liminar parcialmente deferida, nos termos do voto do Relator.</p>\n<p>Acompanharam o Relator os Ministros Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques, Estela Aranha, André Mendonça, Dias Toffoli e Nunes Marques (Presidente).</p>\n<p>Composição: Ministros Nunes Marques (Presidente), André Mendonça, Dias Toffoli, Ricardo Villas Bôas Cueva, Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques e Estela Aranha.</p>\n<p> </div>",
+   "textoEmenta": "<div style=\"text-align: justify;\"><html>\n <head></head>\n <body>\n  <br/>\n   CORREGEDORIA&ndash;GERAL DA JUSTIÇA ELEITORAL \n  <br/>\n   ACÓRDÃO \n  <br/>\n   REFERENDO NA AÇÃO <span class='highlighted'>DE</span> INVESTIGAÇÃO JUDICIAL ELEITORAL Nº 0602140&ndash;41.2026.6.00.0000 &ndash; BRASÍLIA &ndash; DISTRITO FEDERAL \n  <br/>\n   Relator: Ministro RICARDO VILLAS BÔAS CUEVA \n  <br/>\n   Representante: Coligação Brasil Pronto pra Mais Advogados: Evelyn Catarina do Carmo Santos &ndash; OAB/DF nº 69899 e outros \n  <br/>\n   Representado: Flávio Nantes Bolsonaro Representado: Alfredo Gaspar <span class='highlighted'>de</span> Mendonça Neto Representado: Mario Luís Frias \n  <br/>\n   ELEIÇÕES 2026. REFERENDO. AÇÃO <span class='highlighted'>DE</span> INVESTIGAÇÃO JUDICIAL ELEITORAL. PRESIDENTE E VICE&ndash;PRESIDENTE DA REPÚBLICA. DEPUTADO FEDERAL. <span class='highlighted'>ABUSO</span> <span class='highlighted'>DE</span> <span class='highlighted'>PODER</span> POLÍTICO E <span class='highlighted'>ECONÔMICO</span> E USO INDEVIDO DOS MEIOS <span class='highlighted'>DE</span> COMUNICAÇÃO SOCIAL. ART. 22 DA LC Nº 64/1990. TUTELA <span class='highlighted'>DE</span> URGÊNCIA. PARCIALMENTE DEFERIDA. PRESERVAÇÃO <span class='highlighted'>DE</span> REGISTROS <span class='highlighted'>DE</span> ACESSO E <span class='highlighted'>DE</span> CONTEÚDO. FORNECIMENTO <span class='highlighted'>DE</span> DADOS CADASTRAIS E <span class='highlighted'>DE</span> REGISTROS <span class='highlighted'>DE</span> IP <span class='highlighted'>DE</span> CRIAÇÃO E <span class='highlighted'>DE</span> ACESSO. SUSPENSÃO <span class='highlighted'>DE</span> LINKS <span class='highlighted'>DE</span> VENDA. PLAUSIBILIDADE DO DIREITO INVOCADO. PERIGO DA DEMORA. CONFIGURAÇÃO. DECISÃO LIMINAR REFERENDADA. \n  <br/>\n   1. Decisão monocrática que se submete a referendo do Plenário, pela qual se deferiu parcialmente o pedido <span class='highlighted'>de</span> tutela <span class='highlighted'>de</span> urgência para determinar (a) ao Facebook a preservação <span class='highlighted'>de</span> registros <span class='highlighted'>de</span> acesso e <span class='highlighted'>de</span> conteúdo, o fornecimento <span class='highlighted'>de</span> dados cadastrais e <span class='highlighted'>de</span> registros <span class='highlighted'>de</span> IP <span class='highlighted'>de</span> criação e <span class='highlighted'>de</span> acesso, assim como a suspensão da divulgação <span class='highlighted'>de</span> endereços eletrônicos <span class='highlighted'>de</span> venda mantidos em biografias e publicações em perfis <span class='highlighted'>de</span> redes sociais; e (b) à Shopee a identificação dos dados <span class='highlighted'>de</span> qualificação da loja e dos responsáveis pelos links encurtados e a informação sobre estarem, ou não, vinculados a contas do programa <span class='highlighted'>de</span> afiliados da plataforma. \n  <br/>\n   2. Na presente Ação <span class='highlighted'>de</span> Investigação Judicial Eleitoral, imputam&ndash;se aos investigados supostas práticas <span class='highlighted'>de</span> <span class='highlighted'>abuso</span> <span class='highlighted'>de</span> <span class='highlighted'>poder</span> político e <span class='highlighted'>econômico</span> e uso indevido dos meios <span class='highlighted'>de</span> comunicação social, consubstanciadas em publicações em coautoria <em>(collabs),</em> em possível atuação coordenada entre contas e divulgação <span class='highlighted'>de</span> links <span class='highlighted'>de</span> venda em perfis relacionados à propaganda eleitoral. \n  <br/>\n   3. A preservação dos registros mostra&ndash;se cabível diante do risco <span class='highlighted'>de</span> desaparecimento dos elementos necessários à verificação da autoria das publicações, da cadeia <span class='highlighted'>de</span> convites e aceites para colaborações e da identificação dos responsáveis pelas postagens, nos termos do art. 15, <em>caput </em>e § 2º, da Lei nº 12.965/2014. \n  <br/>\n   4. O fornecimento <span class='highlighted'>de</span> dados cadastrais, registros <span class='highlighted'>de</span> endereço IP, informações sobre contas vinculadas e dados relativos a contas <span class='highlighted'>de</span> anúncios ou gerenciador <span class='highlighted'>de</span> negócios revela&ndash;se adequado à identificação dos operadores dos perfis, diante dos indícios apresentados, observada a delimitação temporal <span class='highlighted'>de</span> 90 dias e observados os princípios da finalidade, adequação e necessidade. \n  <br/>\n   5. A suspensão da divulgação <span class='highlighted'>de</span> links <span class='highlighted'>de</span> venda mostra&ndash;se cabível diante <span class='highlighted'>de</span> elementos objetivos que indicam atuação articulada entre os perfis, mediante reutilização <span class='highlighted'>de</span> conjuntos <span class='highlighted'>de</span> coautores e repetição <span class='highlighted'>de</span> endereços encurtados, em ambiente <span class='highlighted'>de</span> propaganda eleitoral, com possível proveito <span class='highlighted'>econômico</span> associado aos titulares das contas. \n  <br/>\n   6. O perigo <span class='highlighted'>de</span> dano está configurado diante da proximidade da eleição e do aparente crescimento do volume <span class='highlighted'>de</span> publicações em coautoria, sendo a medida reversível e proporcional. \n  <br/>\n   7. Decisão liminar referendada.\n </body>\n</html> </div>",
+   "textoIndexacaoLegado": null,
+   "textoVotoVencidoLegado": null,
+   "anoEleicaoSuplementar": null,
+   "textoVotoVistaLegado": null,
+   "textoDoutrinaLegado": null,
+   "textoObservacaoGeral": null,
+   "quantidadePaginasPDF": null,
+   "textoIndexacaoLegadoValido": "S",
+   "tipoImportanciaJurisprudencial": null,
+   "textoObservacaoLegado": null,
+   "selecionada": "N",
+   "textoObservacaoLegadoValido": "S",
+   "anexos": null,
+   "argumentosSelecao": null,
+   "assuntos": null,
+   "casos": null,
+   "catalogos": null,
+   "decisoesRelacionadasOutrosTribunais": null,
+   "decisoesOutrosTribunais": null,
+   "doutrinas": null,
+   "etiquetas": null,
+   "indexacoes": null,
+   "precedentes": null,
+   "publicacoes": [
+    {
+     "numeroPublicacao": "183",
+     "nomeFontePublicacao": "Diário <span class='highlighted'>de</span> Justiça Eletrônico",
+     "numeroPagina": null,
+     "siglaFontePublicacao": "DJE",
+     "dataPublicacao": "16/10/2026",
+     "numeroVolume": null
+    }
+   ],
+   "referenciasLegislativas": null,
+   "relatores": [
+    {
+     "autoridade": "Min.",
+     "nome": "Ricardo Villas Bôas Cueva",
+     "competencia": "Relator(a)",
+     "descricaoCompleta": "Relator(a) Min. Ricardo Villas Bôas Cueva"
+    }
+   ],
+   "sumulas": null,
+   "vides": null
+  },
+  {
+   "id": null,
+   "siglaTribunalJE": "TSE",
+   "codigoDecisao": 3604242,
+   "numeroProcesso": "060038435",
+   "numeroDecisao": null,
+   "dataDecisao": "01/10/2026",
+   "dataDecisaoInvertida": null,
+   "anoEleicao": "2024",
+   "siglaClasse": "AREspEl",
+   "descricaoClasse": "Agravo em Recurso Especial Eleitoral ",
+   "siglaUF": "CE",
+   "naturezaDocumento": "Sem anotação",
+   "nomeMunicipio": "ALTANEIRA",
+   "siglaTipoProcesso": null,
+   "nomeTipoProcesso": null,
+   "descricaoTipoDecisao": "Acórdão",
+   "numeroUnico": "06003843520246060053",
+   "numeroUnicoFormatado": "0600384-35.2024.6.06.0053",
+   "numeroProtocolo": "0",
+   "origemDecisao": "PJE",
+   "temInteiroTeorPDF": "true",
+   "temInteiroTeorAudio": null,
+   "textoDecisao": "<div style=\"text-align: justify;\"></p>\n<p></p>\n<p>O Tribunal, por unanimidade, negou provimento ao agravo interno, nos termos do voto do Relator.</p>\n<p>Acompanharam o Relator os Ministros Dias Toffoli, Ricardo Villas Bôas Cueva, Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques, Estela Aranha (Art. 7º, § 2º, da Resolução-TSE nº 23.598/2019) e Nunes Marques (Presidente).</p>\n<p>Composição: Ministros Nunes Marques (Presidente), André Mendonça, Dias Toffoli, Ricardo Villas Bôas Cueva, Sebastião Reis Júnior, Floriano <span class='highlighted'>de</span> Azevedo Marques e Estela Aranha.</p>\n<p> </div>",
+   "textoEmenta": "<div style=\"text-align: justify;\"><html>\n <head></head>\n <body>\n  <br/>\n   ELEIÇÕES 2024. AGRAVO REGIMENTAL. AGRAVO EM RECURSO ESPECIAL ELEITORAL. AÇÃO <span class='highlighted'>DE</span> INVESTIGAÇÃO JUDICIAL ELEITORAL (AIJE). <span class='highlighted'>ABUSO</span> DO <span class='highlighted'>PODER</span> <span class='highlighted'>ECONÔMICO</span>. EXTRAPOLAÇÃO <span class='highlighted'>DE</span> GASTOS. OMISSÃO E SUBFATURAMENTO <span class='highlighted'>DE</span> DESPESAS. DISTRIBUIÇÃO <span class='highlighted'>DE</span> COMBUSTÍVEL. AUSÊNCIA <span class='highlighted'>DE</span> PROVAS ROBUSTAS. PRINCÍPIO DO<em> IN DUBIO PRO SUFRAGIO</em>. DECISÃO AGRAVADA CALCADA NA INCIDÊNCIA DAS SÚMULAS&ndash;TSE Nºs 24 E 30. IMPUGNAÇÃO INSUFICIENTE. DEFICIÊNCIA RECURSAL INTRANSPONÍVEL. REEXAME <span class='highlighted'>DE</span> FATOS E PROVAS. IMPOSSIBILIDADE. CONSONÂNCIA DO ACÓRDÃO RECORRIDO COM A JURISPRUDÊNCIA DESTA CORTE SUPERIOR. SÚMULAS&ndash;TSE Nºs 24, 26 E 30. NEGATIVA <span class='highlighted'>DE</span> PROVIMENTO. \n  <br/>\n   1. É ônus do agravante insurgir&ndash;se, especificamente, contra a integralidade dos fundamentos da decisão combatida. A ausência <span class='highlighted'>de</span> vertical impugnação atrai a incidência do óbice processual descrito no Enunciado nº 26 da Súmula do Tribunal Superior Eleitoral (TSE). \n  <br/>\n   2. Na instância especial, o direito alegado pela parte é analisado à luz da moldura fático&ndash;probatória estabelecida no acórdão proferido pela Corte Regional, soberana quanto à sua delimitação. Em outros termos, não é possível partir <span class='highlighted'>de</span> premissa fática distinta, porquanto essa providência demandaria nova incursão no caderno probatório, o que é vedado pela Súmula nº 24 desta Corte Superior. \n  <br/>\n   3. No caso, o Tribunal Regional concluiu que o conjunto <span class='highlighted'>de</span> irregularidades não ostentou gravidade suficiente para configurar <span class='highlighted'>abuso</span> do <span class='highlighted'>poder</span> <span class='highlighted'>econômico</span>. Consignou, ainda, a ausência <span class='highlighted'>de</span> prova robusta do uso desproporcional ou abusivo <span class='highlighted'>de</span> recursos capaz <span class='highlighted'>de</span> comprometer a paridade <span class='highlighted'>de</span> armas ou a legitimidade do processo eleitoral, aplicando o princípio do<em> in dubio pro suffragio</em>. \n  <br/>\n   4. É assente na jurisprudência desta Corte Superior que, para a configuração do <span class='highlighted'>abuso</span> dos poderes político e <span class='highlighted'>econômico</span>, ¿(¿) ¿há a necessidade da existência <span class='highlighted'>de</span> prova contundente, inviabilizada qualquer pretensão com respaldo em conjecturas e presunções¿ (AgR&ndash;RO&ndash;El 0601659&ndash;36, [<span class='highlighted'>de</span> minha relatoria], <em>DJE</em> <span class='highlighted'>de</span> 26.9.2024)¿ (AgR&ndash;AREspE nº 0600317&ndash;91/RS, rel. Min. Floriano <span class='highlighted'>de</span> Azevedo Marques, <em>DJe</em> <span class='highlighted'>de</span> 26.6.2026). É igualmente firme a orientação <span class='highlighted'>de</span> que, \"[...] ¿diante <span class='highlighted'>de</span> dúvida razoável sobre a robustez do conjunto fático&ndash;probatório do acórdão regional, é <span class='highlighted'>de</span> rigor privilegiar o princípio do <em>in dubio </em><em>pro sufragio</em>¿ (AgR&ndash;REspEl nº 0600471&ndash;15/RN, rel. Min. Raul Araújo, <em>DJe</em> <span class='highlighted'>de</span> 5.12.2023)¿ (AgR&ndash;AREspE nº 0600297&ndash;02/BA, <span class='highlighted'>de</span> minha relatoria, <em>DJe</em> <span class='highlighted'>de</span> 24.6.2026). \n  <br/>\n   5. O acórdão regional está alinhado com a jurisprudência deste Tribunal Superior, a atrair a incidência do Enunciado nº 30 da Súmula do TSE. \n  <br/>\n   6. Agravo regimental ao qual se nega provimento.\n </body>\n</html> </div>",
+   "textoIndexacaoLegado": null,
+   "textoVotoVencidoLegado": null,
+   "anoEleicaoSuplementar": null,
+   "textoVotoVistaLegado": null,
+   "textoDoutrinaLegado": null,
+   "textoObservacaoGeral": null,
+   "quantidadePaginasPDF": null,
+   "textoIndexacaoLegadoValido": "S",
+   "tipoImportanciaJurisprudencial": null,
+   "textoObservacaoLegado": null,
+   "selecionada": "N",
+   "textoObservacaoLegadoValido": "S",
+   "anexos": null,
+   "argumentosSelecao": null,
+   "assuntos": null,
+   "casos": null,
+   "catalogos": null,
+   "decisoesRelacionadasOutrosTribunais": null,
+   "decisoesOutrosTribunais": null,
+   "doutrinas": null,
+   "etiquetas": null,
+   "indexacoes": null,
+   "precedentes": null,
+   "publicacoes": [
+    {
+     "numeroPublicacao": "181",
+     "nomeFontePublicacao": "Diário <span class='highlighted'>de</span> Justiça Eletrônico",
+     "numeroPagina": null,
+     "siglaFontePublicacao": "DJE",
+     "dataPublicacao": "14/10/2026",
+     "numeroVolume": null
+    }
+   ],
+   "referenciasLegislativas": null,
+   "relatores": [
+    {
+     "autoridade": "Min.",
+     "nome": "André Mendonça",
+     "competencia": "Relator(a)",
+     "descricaoCompleta": "Relator(a) Min. André Mendonça"
+    }
+   ],
+   "sumulas": null,
+   "vides": null
+  }
+ ],
+ "totalRegistros": 2772,
+ "aggs": [
+  {
+   "nome": "siglaTribunalJE.keyword",
+   "buckets": [
+    {
+     "key": "TSE",
+     "docCount": 2772,
+     "checked": false
+    }
+   ]
+  }
+ ]
+}
