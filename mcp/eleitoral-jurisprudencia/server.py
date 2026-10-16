@@ -51,7 +51,9 @@ from sjur_parser import (  # noqa: E402
     Alvo,
     Decisao,
     ErroSJUR,
+    ParametroInvalido,
     avisos_busca,
+    conferir_filtros,
     contagem_por_tribunal,
     extrair_texto_pdf,
     interpretar_busca,
@@ -104,33 +106,45 @@ class Consulta:
 def _preparar(busca, tribunal, tipo_decisao, ano_eleicao, ordenacao, max_resultados, pagina) -> Consulta:
     busca = (busca or "").strip()
     if not busca:
-        raise ValueError("busca vazia")
+        raise ParametroInvalido("busca vazia")
     if len(busca) > MAX_BUSCA:
-        raise ValueError(f"busca com mais de {MAX_BUSCA} caracteres")
+        raise ParametroInvalido(f"busca com mais de {MAX_BUSCA} caracteres")
     ano = None
     if str(ano_eleicao or "").strip():
         if not re.fullmatch(r"\d{4}", str(ano_eleicao).strip()):
-            raise ValueError(f"ano_eleicao inválido: {ano_eleicao!r} (esperado AAAA)")
+            raise ParametroInvalido(f"ano_eleicao inválido: {ano_eleicao!r} (esperado AAAA)")
         ano = int(str(ano_eleicao).strip())
     if ordenacao not in ORDENACOES:
-        raise ValueError(f"ordenacao inválida: {ordenacao!r}. Use {', '.join(ORDENACOES)}.")
+        raise ParametroInvalido(f"ordenacao inválida: {ordenacao!r}. Use {', '.join(ORDENACOES)}.")
+    try:
+        tamanho, pag = int(max_resultados), int(pagina)
+    except (TypeError, ValueError) as e:
+        raise ParametroInvalido(f"max_resultados e pagina devem ser inteiros: {e}") from e
     return Consulta(
         busca=busca,
         alvo=normalizar_tribunal(tribunal),
         tipos=normalizar_tipos(tipo_decisao),
         ano=ano,
         ordenacao=ordenacao,
-        tamanho=max(1, min(int(max_resultados), TAMANHO_MAX)),
-        pagina=max(1, int(pagina)) - 1,
+        tamanho=max(1, min(tamanho, TAMANHO_MAX)),
+        pagina=max(1, pag) - 1,
     )
 
 
-def _buscar(c: Consulta) -> tuple[list[Decisao], int, dict[str, int], bool]:
-    chave = {
-        "mcp": NOME, "busca": c.busca, "portal": c.alvo.portal, "siglas": list(c.alvo.siglas),
-        "tipos": c.tipos, "ano": c.ano, "ordenacao": c.ordenacao, "tamanho": c.tamanho,
-        "pagina": c.pagina, "v": 1,
+def _chave_busca(c: Consulta) -> dict:
+    """Chave do cache. A expressão vai no campo `expressao`, FORA dos campos
+    textuais que o `shared.cache_http` normaliza (minúscula, sem aspas nem
+    acento): no SJUR a caixa do operador (`OU` × `ou`) e as aspas mudam o
+    resultado, e a normalização faria buscas diferentes colidirem."""
+    return {
+        "mcp": NOME, "expressao": c.busca, "portal": c.alvo.portal,
+        "siglas": list(c.alvo.siglas), "tipos": c.tipos, "ano": c.ano,
+        "ordenacao": c.ordenacao, "tamanho": c.tamanho, "pagina": c.pagina, "v": 2,
     }
+
+
+def _buscar(c: Consulta) -> tuple[list[Decisao], int, dict[str, int], bool]:
+    chave = _chave_busca(c)
     bruto = cached_http(NOME, chave)
     if bruto is not None:
         payload = json.loads(bruto)
@@ -140,6 +154,7 @@ def _buscar(c: Consulta) -> tuple[list[Decisao], int, dict[str, int], bool]:
             pagina=c.pagina, ordenacao=c.ordenacao,
         )
     decisoes, total = interpretar_busca(payload)  # levanta ANTES de gravar no cache
+    conferir_filtros(decisoes, alvo=c.alvo, tipos=c.tipos, ano_eleicao=c.ano)
     if bruto is None:
         registrar_dispositivo(
             NOME, chave, json.dumps(sem_dados_de_partes(payload), ensure_ascii=False),
@@ -155,14 +170,15 @@ def _avisos(c: Consulta, decisoes: list[Decisao], por_tribunal: dict[str, int]) 
     sem_cnj = sum(1 for d in decisoes if d.sem_cnj)
     if sem_cnj:
         avisos.append(
-            f"{sem_cnj} decisão(ões) sem número CNJ: o número exibido é o de protocolo; "
-            "não citar sem recuperar o CNJ"
+            f"{sem_cnj} decisão(ões) sem número CNJ: o número exibido é o do processo "
+            "no SJUR (prefixo do CNJ) com o nº do acórdão; recuperar o CNJ no inteiro "
+            "teor antes de citar"
         )
     return avisos
 
 
 def _erro(prefixo: str, e: Exception) -> str:
-    if isinstance(e, ValueError):
+    if isinstance(e, ParametroInvalido):
         return f"<erro>Parâmetro inválido: {sanitizar_comentario_xml(str(e))}</erro>"
     if isinstance(e, CDPIndisponivel):
         return f"<erro>{sanitizar_comentario_xml(MSG_SEM_NAVEGADOR.format(erro=e))}</erro>"
@@ -245,6 +261,12 @@ def buscar_jurisprudencia_eleitoral(
         )
         for aviso in _avisos(c, decisoes, por_tribunal):
             cabecalho += f"<!-- {sanitizar_comentario_xml(aviso)} -->\n"
+        if total == 0:
+            cabecalho += (
+                "<!-- Nenhuma decisão encontrada. Antes de concluir que não há precedente, "
+                "revise a sintaxe: operador em minúsculo vira termo, e muitos termos "
+                "sem OU zeram a busca. Tente menos termos. -->\n"
+            )
         return cabecalho + formatar_resultados_xml(resultados, "jurisprudencia_eleitoral")
     except Exception as e:  # noqa: BLE001
         erro_msg = str(e)
@@ -303,8 +325,9 @@ def relatorio_jurisprudencia_eleitoral(
         for i, d in enumerate(decisoes, 1):
             linhas.extend([f"## {i}. {d.numero or 'N/I'}", ""])
             if d.sem_cnj:
-                linhas.append("> **Decisão sem número CNJ** — o número acima é o de protocolo; "
-                              "recuperar o CNJ antes de citar.")
+                linhas.append("> **Decisão sem número CNJ** — o número acima é o do processo "
+                              "no SJUR (prefixo do CNJ) com o nº do acórdão; recuperar o CNJ "
+                              "no inteiro teor antes de citar.")
             linhas.append(f"**Tribunal:** {d.tribunal}")
             if d.classe:
                 linhas.append(f"**Classe:** {d.classe}")

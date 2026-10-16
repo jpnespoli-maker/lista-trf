@@ -56,7 +56,8 @@ INTERVALO_MIN_PDF_S = 10.0
 TENTATIVAS_PDF = 3
 MSG_SEM_ENVIO = (
     "a busca não foi enviada em 60 s: o hCaptcha do portal não emitiu o token. "
-    "Se a janela do Edge mostrar um desafio, resolva-o lá e repita a busca. "
+    "Repita a busca; se a janela do Edge mostrar um desafio, resolva-o ali "
+    "enquanto a busca aguarda (até 60 s — a aba fecha ao fim da espera). "
     "Isto NÃO significa ausência de precedente."
 )
 
@@ -115,15 +116,30 @@ def _reescrever_pedido(route, ajuste: Callable[[dict], dict]) -> None:
     route.continue_(post_data=json.dumps(ajuste(corpo), ensure_ascii=False))
 
 
-def _manipulador_de_rota(ajuste: Callable[[dict], dict]) -> Callable:
+def _manipulador_de_rota(ajuste: Callable[[dict], dict], estado: dict) -> Callable:
     """Handler de UM parâmetro. O Playwright passa ao handler tantos argumentos
     quantos parâmetros a assinatura tiver, e com dois manda (route, request):
     um `partial(_reescrever_pedido, ajuste=...)` expõe `ajuste` como segundo
-    parâmetro e o request colide com ele (medido ao vivo em 16/10/2026)."""
+    parâmetro e o request colide com ele (medido ao vivo em 16/10/2026).
+
+    Exceção aqui dentro roda numa task do Playwright e some, com a rota nunca
+    continuada: a busca esperaria 60 s e acusaria o captcha. Por isso o erro
+    fica guardado em `estado` e a rota é respondida na hora, para o
+    `expect_response` voltar e o chamador levantar o erro verdadeiro."""
     def manipulador(route) -> None:
-        _reescrever_pedido(route, ajuste)
+        try:
+            _reescrever_pedido(route, ajuste)
+        except Exception as e:  # noqa: BLE001
+            estado["erro"] = e
+            route.fulfill(status=599, content_type="application/json", body="{}")
 
     return manipulador
+
+
+def _levantar_falha_de_ajuste(estado: dict) -> None:
+    erro = estado.get("erro")
+    if erro is not None:
+        raise ErroSJUR(f"falha ao ajustar o pedido da pesquisa: {erro}") from erro
 
 
 def _executar_no_navegador(busca: str, url_front: str, ajuste: Callable[[dict], dict]) -> dict:
@@ -138,18 +154,22 @@ def _executar_no_navegador(busca: str, url_front: str, ajuste: Callable[[dict], 
             raise cdp_edge.CDPIndisponivel(f"connect_over_cdp falhou: {e}") from e
         ctx = browser.contexts[0] if browser.contexts else browser.new_context()
         pg = ctx.new_page()
+        estado: dict = {}
         try:
-            pg.route("**" + SUFIXO_API, _manipulador_de_rota(ajuste))
+            pg.route("**" + SUFIXO_API, _manipulador_de_rota(ajuste, estado))
             pg.goto(url_front, wait_until="domcontentloaded", timeout=60_000)
             pg.wait_for_selector("#inputPesquisaLivre", timeout=60_000)
             pg.wait_for_timeout(ESPERA_CAPTCHA_MS)
             pg.click("#inputPesquisaLivre")
+            pg.fill("#inputPesquisaLivre", "")
             pg.keyboard.type(busca, delay=60)
             try:
                 with pg.expect_response(_eh_resposta_da_pesquisa, timeout=TIMEOUT_RESPOSTA_MS) as info:
                     pg.get_by_role("button", name="Pesquisar").first.click()
             except PlaywrightTimeout as e:
+                _levantar_falha_de_ajuste(estado)
                 raise ErroSJUR(MSG_SEM_ENVIO) from e
+            _levantar_falha_de_ajuste(estado)
             resposta = info.value
             if resposta.status != 200:
                 raise ErroSJUR(f"a API do SJUR respondeu HTTP {resposta.status}")

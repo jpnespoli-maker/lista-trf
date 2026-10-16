@@ -48,6 +48,18 @@ class ErroSJUR(RuntimeError):
     """Falha do portal que NÃO pode virar lista vazia."""
 
 
+class ParametroInvalido(ValueError):
+    """Parâmetro da tool fora do domínio. Classe própria para não se confundir
+    com o ValueError de um JSON quebrado, que é falha do portal, não da consulta."""
+
+
+MSG_ANTIRROBO = (
+    "o portal recusou o token do hCaptcha (verificação antirrobô). Repita a busca; "
+    "se a janela do Edge mostrar um desafio, resolva-o ali enquanto a busca aguarda. "
+    "Isto NÃO significa ausência de precedente."
+)
+
+
 @dataclass(frozen=True)
 class Alvo:
     portal: str
@@ -70,7 +82,7 @@ def normalizar_tribunal(valor: str) -> Alvo:
     for parte in re.split(r"[,;]", bruto):
         uf = re.sub(r"^TRE[\s/\-]*", "", parte.strip().upper())
         if uf not in UFS_TRE:
-            raise ValueError(
+            raise ParametroInvalido(
                 f"tribunal inválido: {parte.strip()!r}. Use TSE, TREs ou TRE-UF "
                 f"(UF entre {', '.join(UFS_TRE)})."
             )
@@ -88,7 +100,7 @@ def normalizar_tipos(valor: str) -> list[str]:
     for parte in bruto.split(","):
         chave = parte.strip()
         if chave not in TIPOS_DECISAO:
-            raise ValueError(
+            raise ParametroInvalido(
                 f"tipo_decisao inválido: {chave!r}. Use todos ou {', '.join(TIPOS_DECISAO)}."
             )
         if TIPOS_DECISAO[chave] not in rotulos:
@@ -171,16 +183,31 @@ def _classe(x: dict) -> str:
     return descricao or sigla
 
 
+def _cnj(x: dict) -> str:
+    """CNJ formatado; na falta, o `numeroUnico` cru de 20 dígitos, formatado."""
+    formatado = _texto(x.get("numeroUnicoFormatado"))
+    if formatado:
+        return formatado
+    cru = _texto(x.get("numeroUnico"))
+    if re.fullmatch(r"\d{20}", cru):
+        return f"{cru[:7]}-{cru[7:9]}.{cru[9:13]}.{cru[13]}.{cru[14:16]}.{cru[16:]}"
+    return ""
+
+
+def _numero_sem_cnj(x: dict) -> str:
+    """Sem CNJ, o número do processo no SJUR (o prefixo de 9 dígitos do CNJ,
+    medido em 16/10/2026) e o nº do acórdão — não é número de protocolo."""
+    processo = _texto(x.get("numeroProcesso"))
+    if not processo:
+        return ""
+    numero = f"{_texto(x.get('siglaClasse'))} nº {processo}".strip()
+    acordao = _texto(x.get("numeroDecisao"))
+    return f"{numero}, acórdão nº {acordao}" if acordao else numero
+
+
 def _decisao(x: dict) -> Decisao:
-    cnj = _texto(x.get("numeroUnicoFormatado"))
-    protocolo = _texto(x.get("numeroProcesso"))
-    sigla_classe = _texto(x.get("siglaClasse"))
-    if cnj:
-        numero = cnj
-    elif protocolo:
-        numero = f"{sigla_classe} nº {protocolo}".strip()
-    else:
-        numero = ""
+    cnj = _cnj(x)
+    numero = cnj or _numero_sem_cnj(x)
     relator = "; ".join(
         _texto(r.get("descricaoCompleta")) or _texto(r.get("nome"))
         for r in (x.get("relatores") or []) if r
@@ -213,9 +240,19 @@ def interpretar_busca(payload: dict) -> tuple[list[Decisao], int]:
         raise ErroSJUR(f"resposta da API não é um objeto JSON ({type(payload).__name__})")
     mensagem = payload.get("mensagem")
     if mensagem:
+        if "antirrob" in str(mensagem).lower():
+            raise ErroSJUR(MSG_ANTIRROBO)
         raise ErroSJUR(f"o portal recusou a busca: {mensagem}")
-    itens = payload.get("content") or []
-    total = int(payload.get("totalRegistros") or 0)
+    itens = payload.get("content")
+    total = payload.get("totalRegistros")
+    if not isinstance(itens, list) or not isinstance(total, int):
+        # Zero só é zero quando a API diz zero: resposta sem `content` lista e
+        # `totalRegistros` inteiro (erro do Spring em HTTP 200, mudança de
+        # contrato) não pode virar "nenhuma decisão encontrada".
+        raise ErroSJUR(
+            "formato da resposta da API mudou (sem `content` lista ou "
+            f"`totalRegistros` inteiro; chaves: {sorted(payload)[:8]})"
+        )
     if total > 0 and not itens:
         raise ErroSJUR(
             f"o portal informou {total} decisão(ões) e devolveu 0 itens — "
@@ -228,6 +265,31 @@ def interpretar_busca(payload: dict) -> tuple[list[Decisao], int]:
             "campos da API mudaram"
         )
     return decisoes, total
+
+
+def conferir_filtros(
+    decisoes: list[Decisao], *, alvo: Alvo, tipos: list[str], ano_eleicao: int | None
+) -> None:
+    """Confere que o ajuste do pedido teve efeito. O backend já ignorou calado
+    um filtro (`tribunais`, spike de 16/10/2026); sem esta conferência, a
+    resposta de todos os TREs sairia rotulada como a de um só."""
+    for d in decisoes:
+        if alvo.portal == "tse" and d.tribunal != "TSE":
+            erro = f"tribunal {d.tribunal!r} numa busca do TSE"
+        elif alvo.portal == "tres" and not d.tribunal.startswith("TRE-"):
+            erro = f"tribunal {d.tribunal!r} numa busca dos TREs"
+        elif alvo.siglas and d.tribunal not in alvo.siglas:
+            erro = f"tribunal {d.tribunal!r} fora de {', '.join(alvo.siglas)}"
+        elif d.tipo_decisao and d.tipo_decisao not in tipos:
+            erro = f"tipo {d.tipo_decisao!r} fora de {', '.join(tipos)}"
+        elif ano_eleicao is not None and d.ano_eleicao and d.ano_eleicao != str(ano_eleicao):
+            erro = f"eleição {d.ano_eleicao} fora de {ano_eleicao}"
+        else:
+            continue
+        raise ErroSJUR(
+            f"o portal devolveu decisão fora do filtro pedido ({erro}): o ajuste do "
+            "pedido não teve efeito — resultado descartado"
+        )
 
 
 def sem_dados_de_partes(payload: dict) -> dict:

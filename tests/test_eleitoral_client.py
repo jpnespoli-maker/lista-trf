@@ -84,9 +84,13 @@ class _Rota:
     def __init__(self, metodo, dados=None):
         self.request = _Pedido(metodo, dados)
         self.continuou = None
+        self.cumprido = None
 
     def continue_(self, **kw):
         self.continuou = kw
+
+    def fulfill(self, **kw):
+        self.cumprido = kw
 
 
 def test_reescrever_pedido_post():
@@ -105,7 +109,7 @@ def test_manipulador_sobrevive_ao_despacho_do_playwright():
     import inspect
 
     rota = _Rota("POST", json.dumps(CORPO))
-    manipulador = C._manipulador_de_rota(lambda c: {**c, "tamanho": 4})
+    manipulador = C._manipulador_de_rota(lambda c: {**c, "tamanho": 4}, {})
     n = len(inspect.signature(manipulador).parameters)
     manipulador(*(rota, rota.request)[:n])
     assert json.loads(rota.continuou["post_data"])["tamanho"] == 4
@@ -113,7 +117,39 @@ def test_manipulador_sobrevive_ao_despacho_do_playwright():
 
 def test_navegador_registra_o_manipulador_e_nao_um_partial():
     fonte = (MODULO / "sjur_client.py").read_text(encoding="utf-8")
-    assert "pg.route(\"**\" + SUFIXO_API, _manipulador_de_rota(ajuste))" in fonte
+    assert "pg.route(\"**\" + SUFIXO_API, _manipulador_de_rota(ajuste, estado))" in fonte
+
+
+@pytest.mark.parametrize("dados,ajuste", [
+    (json.dumps(CORPO), lambda c: (_ for _ in ()).throw(P.ErroSJUR("corpo da pesquisa em formato inesperado"))),
+    ("nao-e-json", lambda c: c),
+], ids=["ajuste-levanta", "post-nao-json"])
+def test_erro_no_ajuste_responde_na_hora_e_fica_guardado(dados, ajuste):
+    # I1 — exceção no handler some numa task do Playwright e a rota nunca
+    # continua: o usuário esperava 60 s e lia um diagnóstico de captcha falso.
+    rota = _Rota("POST", dados)
+    estado = {}
+    C._manipulador_de_rota(ajuste, estado)(rota)
+    assert rota.cumprido is not None and rota.continuou is None
+    assert estado["erro"] is not None
+    with pytest.raises(P.ErroSJUR, match="ajustar o pedido"):
+        C._levantar_falha_de_ajuste(estado)
+
+
+def test_sem_falha_de_ajuste_nao_levanta():
+    C._levantar_falha_de_ajuste({})
+
+
+def test_mensagem_sem_envio_e_executavel():
+    # I3 — a aba fecha no timeout: a instrução é repetir e resolver durante a espera.
+    assert "Repita a busca" in C.MSG_SEM_ENVIO
+    assert "enquanto a busca aguarda" in C.MSG_SEM_ENVIO
+
+
+def test_campo_limpo_antes_de_digitar():
+    # M6 — se a SPA restaurar a última busca, a nova não pode ser anexada a ela.
+    fonte = (MODULO / "sjur_client.py").read_text(encoding="utf-8")
+    assert fonte.index('pg.fill("#inputPesquisaLivre", "")') < fonte.index("pg.keyboard.type(busca")
 
 
 def test_reescrever_pedido_nao_post_segue_intacto():

@@ -28,6 +28,7 @@ pytestmark = pytest.mark.rede
 def _sem_cache(monkeypatch):
     monkeypatch.setattr(S, "cached_http", lambda mcp, key: None)
     monkeypatch.setattr(S, "registrar_dispositivo", lambda *a, **k: None)
+    monkeypatch.setattr(S, "log_query", lambda **kw: None)  # não sujar a telemetria
 
 
 def test_busca_tse_ao_vivo():

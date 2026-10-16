@@ -279,3 +279,78 @@ def test_pdf_sem_texto_e_erro():
     doc.close()
     with pytest.raises(P.ErroSJUR, match="camada de texto"):
         P.extrair_texto_pdf(vazio)
+
+
+# ---------------- revisão final (16/10/2026) ----------------
+
+@pytest.mark.parametrize("payload", [
+    {},
+    {"mensagem": None, "content": None, "totalRegistros": 0},
+    {"error": "Internal Server Error", "status": 500},
+    {"mensagem": None, "content": [], "totalRegistros": None},
+])
+def test_resposta_sem_a_forma_esperada_e_erro_nunca_zero(payload):
+    # C2 — zero só é zero com `content` lista e `totalRegistros` inteiro.
+    with pytest.raises(P.ErroSJUR, match="formato"):
+        P.interpretar_busca(payload)
+
+
+def test_antirrobo_orienta_e_nega_ausencia_de_precedente():
+    # I3 — o modo de falha mais provável do captcha não pode soar como "nada achado".
+    payload = {"mensagem": "Falha na verificação antirrobô.", "content": [],
+               "totalRegistros": 0, "aggs": []}
+    with pytest.raises(P.ErroSJUR) as exc:
+        P.interpretar_busca(payload)
+    assert "antirrobô" in str(exc.value)
+    assert "NÃO significa ausência de precedente" in str(exc.value)
+
+
+def test_item_real_sem_cnj():
+    # I4 — o item real (TRE-PR) traz o prefixo do processo e o nº do acórdão.
+    item = json.loads((FIX / "item_sem_cnj.json").read_text(encoding="utf-8"))
+    (d,), _ = P.interpretar_busca({"mensagem": None, "content": [item], "totalRegistros": 1})
+    assert d.sem_cnj is True
+    assert d.numero == f"{item['siglaClasse']} nº {item['numeroProcesso']}, acórdão nº {item['numeroDecisao']}"
+
+
+def test_numero_unico_cru_vira_cnj_formatado():
+    item = {"siglaTribunalJE": "TRE-SC", "siglaClasse": "REC", "numeroUnico": "06005506020266240000",
+            "numeroProcesso": "060055060", "textoEmenta": "E."}
+    (d,), _ = P.interpretar_busca({"mensagem": None, "content": [item], "totalRegistros": 1})
+    assert d.numero == "0600550-60.2026.6.24.0000"
+    assert d.sem_cnj is False
+
+
+def _dec(**kw):
+    base = dict(numero="1", sem_cnj=False, tribunal="TRE-RJ", classe="", tipo_decisao="Acórdão",
+                data="", relator="", publicacao="", uf="", municipio="", ano_eleicao="2024",
+                codigo_decisao="1", tem_inteiro_teor=False, ementa="E.", decisao="")
+    base.update(kw)
+    return P.Decisao(**base)
+
+
+def test_conferir_filtros_aceita_o_que_bate():
+    P.conferir_filtros([_dec(), _dec(ano_eleicao="")], alvo=P.Alvo("tres", ("TRE-RJ",)),
+                       tipos=["Acórdão"], ano_eleicao=2024)
+
+
+@pytest.mark.parametrize("decisao,alvo,tipos,ano", [
+    (_dec(tribunal="TRE-SP"), P.Alvo("tres", ("TRE-RJ",)), ["Acórdão"], None),
+    (_dec(tribunal="TSE"), P.Alvo("tres"), ["Acórdão"], None),
+    (_dec(tribunal="TRE-RJ"), P.Alvo("tse"), ["Acórdão"], None),
+    (_dec(tipo_decisao="Resolução"), P.Alvo("tres"), ["Acórdão"], None),
+    (_dec(ano_eleicao="2022"), P.Alvo("tres"), ["Acórdão"], 2024),
+])
+def test_conferir_filtros_acusa_ajuste_sem_efeito(decisao, alvo, tipos, ano):
+    # I2 — o backend já ignorou calado um filtro (`tribunais`) no spike.
+    with pytest.raises(P.ErroSJUR, match="filtro"):
+        P.conferir_filtros([decisao], alvo=alvo, tipos=tipos, ano_eleicao=ano)
+
+
+def test_parametro_invalido_e_classe_propria():
+    # M2 — erro de parâmetro não se confunde com ValueError de JSON quebrado.
+    with pytest.raises(P.ParametroInvalido):
+        P.normalizar_tribunal("TRE-XX")
+    with pytest.raises(P.ParametroInvalido):
+        P.normalizar_tipos("monocratica")
+    assert issubclass(P.ParametroInvalido, ValueError)
