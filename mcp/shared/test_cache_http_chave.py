@@ -67,6 +67,27 @@ def test_operadores_diferentes_nao_colidem():
     assert _k("BPC e assistencia") != _k("BPC ou assistencia")
 
 
+def test_caixa_do_operador_nao_colide():
+    # Retro de 16/10/2026: no CJF (e no SJUR) operador em minúsculo é TERMO
+    # literal — `medicamento e uniao` encolhe ou zera, `medicamento E uniao` não.
+    # Colidindo, o zero da busca mal escrita voltava para a corrigida.
+    assert _k("medicamento E uniao") != _k("medicamento e uniao")
+    assert _k("contas NAO partido") != _k("contas nao partido")
+    assert _k("x AND y") != _k("x and y")
+
+
+def test_ordem_entre_e_e_ou_preserva_a_precedencia():
+    # `a E b OU c` e `a OU b E c` agrupam diferente; ordenar os tokens as igualava.
+    assert _k("a E b OU c") != _k("a OU b E c")
+    assert _k("a e b ou c") != _k("a ou b e c")
+    assert _k("x AND y OR z") != _k("x OR y AND z")
+
+
+def test_caixa_do_termo_comum_continua_livre_com_operador():
+    # Só a caixa do OPERADOR se preserva; a do termo segue normalizada.
+    assert _k("Medicamento E União") == _k("medicamento E uniao")
+
+
 def test_tamanho_continua_na_chave():
     # Servir 3 resultados a quem pediu 10 seria regressão silenciosa.
     assert _k("prescrição", tamanho=3) != _k("prescrição", tamanho=10)

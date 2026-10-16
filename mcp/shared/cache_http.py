@@ -131,11 +131,17 @@ _CAMPOS_TEXTO = frozenset({
     "query", "busca", "buscaGeral", "termo", "termos", "livre", "texto",
 })
 
-# Operadores cuja presença torna a ordem dos tokens significativa.
+# Operadores cuja presença torna a ordem dos tokens significativa. E/OU/AND/OR
+# entram desde 16/10/2026: `a E b OU c` e `a OU b E c` agrupam diferente, e
+# ordenar os tokens fazia as duas colidirem.
 _RE_ORDEM_SIGNIFICATIVA = re.compile(
-    r'["()]|(?:^|\s)(?:nao|não|not|adj\d*|prox\d*|com\d*|mesmo\d*)(?:\s|$)|(?:^|\s)-\S',
+    r'["()]|(?:^|\s)(?:e|ou|and|or|nao|não|not|adj\d*|prox\d*|com\d*|mesmo\d*)(?:\s|$)|(?:^|\s)-\S',
     re.IGNORECASE,
 )
+# Operador em MAIÚSCULO conserva a caixa na chave: no CJF e no SJUR o operador
+# minúsculo é termo literal (`a e b` encolhe ou zera, `a E b` não), e colidindo
+# o zero da busca mal escrita voltava, do cache, para a busca corrigida.
+_OPERADORES_MAIUSCULOS = frozenset({"E", "OU", "NAO", "AND", "OR", "NOT"})
 _RE_PONTUACAO = re.compile(r"[^0-9a-z\s*$+\-]", re.IGNORECASE)
 
 
@@ -149,10 +155,10 @@ def normalizar_texto_busca(texto: str) -> str:
     if not isinstance(texto, str) or not texto.strip():
         return texto
     ordem_importa = bool(_RE_ORDEM_SIGNIFICATIVA.search(texto))
-    s = unicodedata.normalize("NFD", texto.lower())
+    s = unicodedata.normalize("NFD", texto)
     s = "".join(c for c in s if not unicodedata.combining(c))
     s = _RE_PONTUACAO.sub(" ", s)
-    tokens = s.split()
+    tokens = [t if t in _OPERADORES_MAIUSCULOS else t.lower() for t in s.split()]
     if not ordem_importa:
         tokens = sorted(set(tokens))
     return " ".join(tokens)
