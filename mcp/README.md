@@ -173,6 +173,21 @@ STF, STJ, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6
 
 ---
 
+## Testes
+
+A partir da raiz do repositorio, com o **Python do sistema** (o `.venv` do repo nao tem `mcp` nem `curl_cffi`, e a coleta falha nos servidores):
+
+```bash
+python -m pytest tests -q -m "not rede" -p no:cacheprovider   # suite offline, segundos
+python -m pytest mcp/shared -q -p no:cacheprovider             # modulos compartilhados (cache, CJF, TLS)
+python -m pytest tests -q -m rede -p no:cacheprovider          # ao vivo: vai aos portais
+```
+
+- **`rede` fica fora da corrida padrao.** Ele vai aos portais pela rede, e os testes do `eleitoral-jurisprudencia` **abrem uma janela do Edge** (busca do SJUR por CDP). Vermelho nele e primeiro hipotese de terceiro (captcha, portal fora), nao de regressao: ler a mensagem do `<erro>` antes de concluir.
+- **Os testes nao gravam no log de producao das queries.** O `tests/conftest.py` liga `DPU_QUERY_LOG_DESLIGADO=1`; sem ele, cada corrida gravava buscas de teste em `~/.claude/DPU/logs/jurisprudencia_queries.jsonl`, o log que mede o uso real das bases. Trava: `tests/test_isolamento_log_de_queries.py`.
+
+---
+
 ## Fontes
 
 | MCP | URL |
