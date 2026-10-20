@@ -95,6 +95,32 @@ def test_busca_valida_volta_aparada():
         'deserção e ("estado de necessidade" ou ameaça)'
 
 
+# ---------------- operador "não" ----------------
+
+@pytest.mark.parametrize("busca, esperado", [
+    ("deserção nao furto", "deserção não furto"),
+    ("deserção NAO furto", "deserção não furto"),
+    ("deserção e (nao furto)", "deserção e (não furto)"),
+])
+def test_nao_sem_acento_vira_operador(busca, esperado):
+    # Medido em 20/10/2026: "nao" é termo para o portal (7 documentos contra
+    # 4.664 de "não"); a busca encolheria calada.
+    assert P.normalizar_operadores(busca) == (esperado, True)
+
+
+@pytest.mark.parametrize("busca", [
+    'deserção e "nao comparecimento"',  # dentro de aspas é texto
+    "deserção não furto",
+    "nação e naoexiste e nao-alvo",       # palavra que contém "nao"
+])
+def test_nao_fora_do_operador_fica(busca):
+    assert P.normalizar_operadores(busca) == (busca, False)
+
+
+def test_montar_params_ja_corrige():
+    assert P.montar_params("deserção nao furto")["q"] == "deserção não furto"
+
+
 # ---------------- parâmetros ----------------
 
 def test_params_padrao_so_jurisprudencia():

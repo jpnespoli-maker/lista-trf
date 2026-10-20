@@ -97,6 +97,8 @@ def _buscar(busca: str, relator: str, classe: str, data_inicio: str,
 
     total, docs = stm_client.buscar(params)
     meta: dict = {"params": params}
+    if params["q"] != busca.strip():
+        meta["operador_corrigido"] = params["q"]
     if total is None:
         if docs:
             raise stm_client.PortalSTMIndisponivel(
@@ -128,6 +130,11 @@ def _cabecalho(busca: str, total: int, n: int, inicio: int, meta: dict) -> List[
     filtros = {k: v for k, v in meta.get("params", {}).items() if k.startswith("fq_")}
     if filtros:
         linhas.append("Filtros: " + "; ".join(f"{k[3:]}={v}" for k, v in filtros.items()))
+    if meta.get("operador_corrigido"):
+        linhas.append(
+            "OPERADOR CORRIGIDO: o portal só reconhece a negação com acento; "
+            f'"nao" viraria termo da busca. Query enviada: "{meta["operador_corrigido"]}"'
+        )
     if meta.get("zero_com_controle"):
         linhas.append(AVISO_ZERO)
     elif total and not n:
@@ -173,9 +180,10 @@ def buscar_jurisprudencia_stm(
     NÃO TRAZ: decisões das Auditorias (1ª instância); súmulas do STM; IRDR (use
     bnp-api).
 
-    SINTAXE (a do portal; operadores em PORTUGUÊS, minúsculo):
-      e (padrão entre palavras) · ou · não · "frase exata" · "a b"~5 (distância)
-      · ( ) · * (curinga: desert*) · ? (um caractere)
+    SINTAXE (a do portal; operadores em PORTUGUÊS, caixa indiferente):
+      e (padrão entre palavras) · ou · não (COM acento; "nao" é corrigido e
+      avisado) · "frase exata" · "a b"~5 (distância) · ( ) · * (curinga:
+      desert*) · ? (um caractere)
       Ex.: deserção e "estado de necessidade"
            deserção e (agiota ou usura) não furto
       Ver ajuda_sintaxe_stm().
@@ -402,10 +410,12 @@ JURISPRUDÊNCIA DO STM — {P.BASE_URL}
 ALCANCE: acórdãos do Superior Tribunal Militar. NÃO traz decisões das
 Auditorias (1ª instância), súmulas do STM nem IRDR (este, no bnp-api).
 
-OPERADORES (em português, minúsculo; os mesmos da ajuda do portal):
+OPERADORES (em português, caixa indiferente; os mesmos da ajuda do portal):
   e        — todas as palavras (é o padrão: "deserção ameaça" = deserção e ameaça)
   ou       — qualquer uma                 deserção e (agiota ou usura)
-  não      — exclui                       deserção não furto
+  não      — exclui; SÓ COM ACENTO        deserção não furto
+             ("nao" sem acento o portal lê como termo e a busca encolhe calada:
+             4.664 contra 7 documentos; a tool o corrige e avisa no cabeçalho)
   "..."    — expressão exata              "estado de necessidade"
   "..."~n  — palavras a até n de distância "termo deserção"~5
   ( )      — agrupa                       (insubmissão ou deserção) e "sursis"

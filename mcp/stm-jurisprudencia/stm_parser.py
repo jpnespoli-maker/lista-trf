@@ -94,6 +94,26 @@ def validar_busca(busca: str) -> str:
     return busca
 
 
+_RE_NAO_SEM_ACENTO = re.compile(r"(?<![\w-])nao(?![\w-])", re.I)
+
+
+def normalizar_operadores(busca: str) -> tuple[str, bool]:
+    """Troca o operador ``nao`` sem acento, fora de aspas, por ``não``.
+
+    O portal só reconhece a negação acentuada (``não``/``NÃO``); ``nao`` vira
+    TERMO da busca, e a consulta encolhe calada — medido em 20/10/2026:
+    "deserção não furto" 4.664 documentos, "deserção nao furto" 7. Os demais
+    operadores não dependem de caixa (``e``/``E``, ``ou``/``OU``).
+    """
+    partes = busca.split('"')
+    trocou = False
+    for i in range(0, len(partes), 2):  # índices pares estão fora de aspas
+        novo = _RE_NAO_SEM_ACENTO.sub("não", partes[i])
+        trocou |= novo != partes[i]
+        partes[i] = novo
+    return '"'.join(partes), trocou
+
+
 def data_solr(valor: str, *, fim: bool) -> str:
     """``dd/mm/aaaa`` ou ``aaaa-mm-dd`` → instante Solr; vazio → ``*``."""
     valor = (valor or "").strip()
@@ -134,7 +154,7 @@ def montar_params(
     params = {
         "search_filter_option": "jurisprudencia",
         "search_filter": "tudo",
-        "q": validar_busca(busca),
+        "q": normalizar_operadores(validar_busca(busca))[0],
         "order": normalizar_ordem(ordem),
         "start": str(max(0, int(inicio))),
         "rows": str(max(1, int(quantidade))),

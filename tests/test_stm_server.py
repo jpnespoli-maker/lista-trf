@@ -119,6 +119,18 @@ def test_parametro_invalido_nao_sai(portal, kw):
     assert portal["chamadas"] == []
 
 
+def test_nao_sem_acento_e_corrigido_e_avisado(portal):
+    portal["respostas"]["deserção não furto"] = _fixture("busca_3_paineis.html")
+    out = S.buscar_jurisprudencia_stm("deserção nao furto")
+    assert portal["chamadas"][0][1]["q"] == "deserção não furto"
+    assert "OPERADOR CORRIGIDO" in out
+
+
+def test_busca_correta_nao_ganha_aviso(portal):
+    portal["respostas"]["deserção"] = _fixture("busca_3_paineis.html")
+    assert "OPERADOR CORRIGIDO" not in S.buscar_jurisprudencia_stm("  deserção ")
+
+
 def test_relatorio_traz_ementa_integral(portal):
     portal["respostas"]["deserção"] = _fixture("busca_3_paineis.html")
     out = S.relatorio_jurisprudencia_stm("deserção", max_resultados=3)

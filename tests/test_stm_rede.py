@@ -47,6 +47,13 @@ def test_zero_ao_vivo_sai_com_aviso():
     assert "ZERO RESULTADOS" in out, out[:300]
 
 
+def test_nao_sem_acento_da_o_mesmo_total_que_com_acento():
+    totais = [re.search(r"total na base: (\d+)", S.buscar_jurisprudencia_stm(q, max_resultados=1))
+              for q in ("deserção não furto", "deserção nao furto")]
+    assert all(totais) and totais[0].group(1) == totais[1].group(1)
+    assert int(totais[0].group(1)) > 100
+
+
 def test_filtros_ao_vivo():
     out = S.buscar_jurisprudencia_stm("deserção", relator="CARLOS VUYK DE AQUINO",
                                       data_inicio="01/01/2026", max_resultados=5)
