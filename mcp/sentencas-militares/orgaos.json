@@ -1,0 +1,334 @@
+{
+ "_fonte": "bancosentencas.pdpj.jus.br, bundle 239.19de6cb8b0cd8f28.js (versão 1.0.8), extraído em 20/10/2026. Os ids são os que a API recebe em ids_orgaos.",
+ "tribunais": {
+  "9": "Justiça Militar do Alagoas",
+  "10": "Justiça Militar do Amazonas",
+  "12": "Justiça Militar do Bahia",
+  "13": "Justiça Militar do Ceará",
+  "15": "Justiça Militar do Espírito Santo",
+  "16": "Justiça Militar do Goiás",
+  "17": "Justiça Militar do Maranhão",
+  "19": "Justiça Militar do Mato Grosso do Sul",
+  "20": "Justiça Militar do Mato Grosso",
+  "21": "Justiça Militar do Pará",
+  "22": "Justiça Militar do Paraíba",
+  "23": "Justiça Militar do Pernambuco",
+  "25": "Justiça Militar do Paraná",
+  "26": "Justiça Militar do Rio de Janeiro",
+  "28": "Justiça Militar do Rondônia",
+  "29": "Justiça Militar do Roraima",
+  "31": "Justiça Militar do Santa Catarina",
+  "34": "Justiça Militar do Tocantins",
+  "12645": "Justiça Militar do Rio Grande do Sul",
+  "13309": "Justiça Militar da União",
+  "13384": "Justiça Militar de São Paulo",
+  "13389": "Justiça Militar de Minas Gerais"
+ },
+ "orgaos": [
+  {
+   "id": 32693,
+   "descricao": "JMU - 1ª Auditoria da 1ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32694,
+   "descricao": "JMU - 2ª Auditoria da 1ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32695,
+   "descricao": "JMU - 3ª Auditoria da 1ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32696,
+   "descricao": "JMU - 4ª Auditoria da 1ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32697,
+   "descricao": "JMU - 1ª Auditoria da 2ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32698,
+   "descricao": "JMU - 2ª Auditoria da 2ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32699,
+   "descricao": "JMU - 1ª Auditoria da 3ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32700,
+   "descricao": "JMU - 2ª Auditoria da 3ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32701,
+   "descricao": "JMU - 3ª Auditoria da 3ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32702,
+   "descricao": "JMU - Auditoria da 4ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32703,
+   "descricao": "JMU - Auditoria da 5ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32704,
+   "descricao": "JMU - Auditoria da 6ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32705,
+   "descricao": "JMU - Auditoria da 7ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32706,
+   "descricao": "JMU - Auditoria da 8ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32707,
+   "descricao": "JMU - Auditoria da 9ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32708,
+   "descricao": "JMU - Auditoria da 10ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32709,
+   "descricao": "JMU - 1ª Auditoria da 11ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32710,
+   "descricao": "JMU - 2ª Auditoria da 11ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 32711,
+   "descricao": "JMU - Auditoria da 12ª CJM",
+   "tribunal": 13309
+  },
+  {
+   "id": 8192,
+   "descricao": "Vara da Auditoria Militar - Maceió/AL",
+   "tribunal": 9
+  },
+  {
+   "id": 4060,
+   "descricao": "Vara da Auditoria Militar - Manaus/AM",
+   "tribunal": 10
+  },
+  {
+   "id": 4435,
+   "descricao": "Vara da Auditoria Militar - Salvador/BA",
+   "tribunal": 12
+  },
+  {
+   "id": 8326,
+   "descricao": "Vara da Auditoria Militar - Fortaleza/CE",
+   "tribunal": 13
+  },
+  {
+   "id": 4182,
+   "descricao": "Vara de Auditoria Militar - Vitória/ES",
+   "tribunal": 15
+  },
+  {
+   "id": 11435,
+   "descricao": "Vara da Auditoria Militar - Goiânia/GO",
+   "tribunal": 16
+  },
+  {
+   "id": 3012,
+   "descricao": "Vara da Auditoria Militar - São Luís/MA",
+   "tribunal": 17
+  },
+  {
+   "id": 14141,
+   "descricao": "JME/MG - 1ª Auditoria",
+   "tribunal": 13389
+  },
+  {
+   "id": 14142,
+   "descricao": "JME/MG - 2ª Auditoria",
+   "tribunal": 13389
+  },
+  {
+   "id": 14143,
+   "descricao": "JME/MG - 3ª Auditoria",
+   "tribunal": 13389
+  },
+  {
+   "id": 81647,
+   "descricao": "JME/MG - 4ª Auditoria",
+   "tribunal": 13389
+  },
+  {
+   "id": 81648,
+   "descricao": "JME/MG - 5ª Auditoria",
+   "tribunal": 13389
+  },
+  {
+   "id": 3815,
+   "descricao": "Vara da Auditoria Militar - Campo Grande/MS",
+   "tribunal": 19
+  },
+  {
+   "id": 6386,
+   "descricao": "Vara da Auditoria Militar - Cuiabá/MT",
+   "tribunal": 20
+  },
+  {
+   "id": 4504,
+   "descricao": "Vara da Auditoria Militar - Belém/PA",
+   "tribunal": 21
+  },
+  {
+   "id": 84227,
+   "descricao": "Vara da Auditoria Militar do Pará",
+   "tribunal": 21
+  },
+  {
+   "id": 6036,
+   "descricao": "Vara da Auditoria Militar - João Pessoa/PB",
+   "tribunal": 22
+  },
+  {
+   "id": 6773,
+   "descricao": "Vara da Auditoria Militar - Recife/PE",
+   "tribunal": 23
+  },
+  {
+   "id": 11726,
+   "descricao": "Vara da Auditoria Militar - Curitiba/PR",
+   "tribunal": 25
+  },
+  {
+   "id": 26457,
+   "descricao": "Vara da Auditoria Militar - Curitiba/PR (Cível)",
+   "tribunal": 25
+  },
+  {
+   "id": 7346,
+   "descricao": "Vara da Auditoria Militar - Rio de Janeiro/RJ",
+   "tribunal": 26
+  },
+  {
+   "id": 81314,
+   "descricao": "Vara da Auditoria Militar do Rio de Janeiro",
+   "tribunal": 26
+  },
+  {
+   "id": 13231,
+   "descricao": "JME/RS - 1ª Auditoria",
+   "tribunal": 12645
+  },
+  {
+   "id": 13232,
+   "descricao": "JME/RS - 2ª Auditoria",
+   "tribunal": 12645
+  },
+  {
+   "id": 13234,
+   "descricao": "JME/RS - Auditoria de Santa Maria",
+   "tribunal": 12645
+  },
+  {
+   "id": 13235,
+   "descricao": "JME/RS - Auditoria de Passo Fundo",
+   "tribunal": 12645
+  },
+  {
+   "id": 4452,
+   "descricao": "Vara da Auditoria Militar - Porto Velho/RO",
+   "tribunal": 28
+  },
+  {
+   "id": 79093,
+   "descricao": "Vara da Auditoria Militar - Porto Velho/RO (Gabinete)",
+   "tribunal": 28
+  },
+  {
+   "id": 2771,
+   "descricao": "1ª Vara da Auditoria Militar de Roraima",
+   "tribunal": 29
+  },
+  {
+   "id": 13809,
+   "descricao": "2ª Vara da Auditoria Militar de Roraima",
+   "tribunal": 29
+  },
+  {
+   "id": 87626,
+   "descricao": "1ª Vara da Auditoria Militar de Roraima (Gabinete)",
+   "tribunal": 29
+  },
+  {
+   "id": 87627,
+   "descricao": "2ª Vara da Auditoria Militar de Roraima (Gabinete)",
+   "tribunal": 29
+  },
+  {
+   "id": 87714,
+   "descricao": "1ª Vara da Auditoria Militar de Roraima (Secretaria)",
+   "tribunal": 29
+  },
+  {
+   "id": 87715,
+   "descricao": "2ª Vara da Auditoria Militar de Roraima (Secretaria)",
+   "tribunal": 29
+  },
+  {
+   "id": 81338,
+   "descricao": "Vara da Auditoria Militar - Santa Catarina/SC",
+   "tribunal": 31
+  },
+  {
+   "id": 15661,
+   "descricao": "JME/SP - 1ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 17970,
+   "descricao": "JME/SP - 2ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 15662,
+   "descricao": "JME/SP - 3ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 15663,
+   "descricao": "JME/SP - 4ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 29004,
+   "descricao": "JME/SP - 5ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 29005,
+   "descricao": "JME/SP - 6ª Auditoria",
+   "tribunal": 13384
+  },
+  {
+   "id": 5201,
+   "descricao": "Vara da Auditoria Militar - Palmas/TO",
+   "tribunal": 34
+  }
+ ]
+}

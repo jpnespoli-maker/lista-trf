@@ -1,0 +1,60 @@
+{
+ "sentencas": [
+  {
+   "num_processo": "7000001-11.2026.7.01.0001",
+   "id_sentenca": "00000000-0000-5000-8000-000000000001",
+   "des_assuntos": [],
+   "des_assunto_principal": "Furto ",
+   "des_orgao": "3ª AUDITORIA DA 1ª CJM",
+   "data_juntada": "2026-08-13",
+   "des_classe": "Ação Penal Militar - Procedimento Ordinário",
+   "texto": "PODER JUDICIÁRIO\nJUSTIÇA MILITAR DA UNIÃO\nSENTENÇA\nTrata-se de ação penal militar em que o Ministério Público Militar imputa ao acusado [PARTE] o crime de deserção, previsto no art. 187 do Código Penal Militar. A defesa sustentou o estado de necessidade, alegando ameaças sofridas fora da organização militar. O Conselho Permanente de Justiça, por maioria, reconheceu a inexigibilidade de conduta diversa e ABSOLVEU o acusado.\nFundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. Fundamentação. ",
+   "des_tribunal": "STM",
+   "ids_assuntos": [],
+   "id_assunto_principal": 11163,
+   "@timestamp": 1786647920,
+   "id_orgao": 32695,
+   "id_classe": 11037
+  },
+  {
+   "num_processo": "7000002-22.2026.7.01.0001",
+   "id_sentenca": "00000000-0000-5000-8000-000000000002",
+   "des_assuntos": [],
+   "des_assunto_principal": "Ingresso clandestino",
+   "des_orgao": "4AUDITORIA DA 1ª CJM",
+   "data_juntada": "2025-12-19",
+   "des_classe": "Ação Penal Militar - Procedimento Ordinário",
+   "texto": "SENTENÇA\nO acusado [PARTE] foi denunciado por furto (art. 240 do CPM). A instrução não comprovou a autoria. Absolvição com fundamento no art. 439, alínea e, do CPPM.\n",
+   "des_tribunal": "STM",
+   "ids_assuntos": [],
+   "id_assunto_principal": 11330,
+   "@timestamp": 1766150359,
+   "id_orgao": 32696,
+   "id_classe": 11037
+  },
+  {
+   "num_processo": "7000003-33.2026.7.01.0001",
+   "id_sentenca": "00000000-0000-5000-8000-000000000003",
+   "des_assuntos": [
+    "Crime Tentado",
+    "Dano em aparelhos e instalações "
+   ],
+   "des_assunto_principal": "Incêndio",
+   "des_orgao": "1ª AUDITORIA DA 1ª CJM",
+   "data_juntada": "2025-12-02",
+   "des_classe": "Ação Penal Militar - Procedimento Ordinário",
+   "texto": "SENTENÇA\nAção penal militar por deserção. Condenação à pena mínima de seis meses de detenção, com o benefício previsto em lei afastado. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. Dosimetria. ",
+   "des_tribunal": "STM",
+   "ids_assuntos": [
+    11071,
+    11169
+   ],
+   "id_assunto_principal": 11189,
+   "@timestamp": 1764691641,
+   "id_orgao": 32693,
+   "id_classe": 11037
+  }
+ ],
+ "total": 45,
+ "status": 200
+}
