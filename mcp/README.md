@@ -12,6 +12,7 @@ O sistema de analise automatizada (Claude Code) depende de 3 servidores MCP para
 | `trf-jurisprudencia` | eProc TRF2/TRF4/TRF6 | Turmas Recursais dos JEFs e TRU (Turma Regional de Uniformizacao) — acervo que a base unificada do CJF nao indexa. TRF2 = RJ/ES |
 | `trf1-jurisprudencia` | CJF Regional 1a Regiao | Fonte `TRF1` (tribunal, duplica a unificada) e fonte `JEF1` = **Turmas Recursais**, unico acervo de TR do projeto. So existe para a 1a Regiao (`/trf2`..`/trf6` respondem 404) |
 | `eleitoral-jurisprudencia` | SJUR (TSE) | Jurisprudencia da Justica Eleitoral: TSE e os 27 TREs. Busca por Edge real via CDP (a API exige o hCaptcha invisivel do portal; ~11 s por busca); inteiro teor por HTTP. Unica base do projeto com TSE/TRE |
+| `stm-jurisprudencia` | Consulta Judicial Unificada da JMU | Acordaos do Superior Tribunal Militar, com ementa integral e inteiro teor (sem login). HTTP simples, ~1-3 s por busca. Nao traz decisoes das Auditorias, sumulas do STM (o DSpace nao completa o TLS pelo cliente) nem IRDR (esta no `bnp-api`). O portal devolve a mesma pagina para zero e para consulta recusada: a busca pre-valida a sintaxe e, dando zero, roda consulta de controle. `robots.txt` veda robos: so consulta sob demanda, com cache |
 
 ## Instalacao
 

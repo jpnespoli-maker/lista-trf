@@ -1,0 +1,12 @@
+# Dependências diretas do MCP stm-jurisprudencia
+# (venv: mcp-venvs/stm-jurisprudencia, Python 3.11)
+mcp==1.27.0
+# As mesmas do venv do trf1-jurisprudencia, em produção. O
+# IncompleteFieldDefinitionWarning no import do FastMCP sai nos dois venvs e é
+# inócuo (vem do mcp 1.27 com o pydantic-settings).
+pydantic==2.13.4
+pydantic-settings==2.15.0
+requests==2.34.2
+beautifulsoup4==4.14.3
+# shared/tls_sistema.py monta o bundle de CA a partir do certifi.
+certifi==2026.7.22

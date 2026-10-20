@@ -1,0 +1,760 @@
+<!DOCTYPE html>
+
+<html lang="pt-br">
+<!-- Head -->
+<head>
+<title>Consulta Judicial Unificada | JMU</title>
+<!-- Required meta tags -->
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1, shrink-to-fit=no" name="viewport"/>
+<meta content="IE=edge" http-equiv="X-UA-Compatible"/>
+<!-- Indexing -->
+<meta content="Consulta Judicial Unificada | JMU" name="title"/>
+<meta content="A Justiça Militar da União é uma justiça especializada que julga os crimes militares previstos no Código Penal Militar (CPM), tendo como principais jurisdicionados os militares das Forças Armadas e, em certos casos, até civis." name="description"/>
+<meta content="stm, jmu, justiça militar da união, superior tribunal militar, justiça militar, consulta processual, jurisprudência, jmu consulta processual, stm consulta processual, jmu jurisprudência, stm jurisprudência, ministros jmu" name="keywords"/>
+<meta content="noindex, nofollow" name="robots"/>
+<meta content="Portuguese" name="language"/>
+<meta content="Justiça Militar da União" name="author"/>
+<!-- Icon -->
+<link href="images/jmu.ico" rel="shortcut icon" type="image/x-icon"/>
+<!-- CSS -->
+<link href="/css/bootstrap-3.3.7.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/bootstrap-theme-3.3.7.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/bootstrap-chosen.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/bootstrap-datepicker.standalone.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/open-iconic-bootstrap.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/fonte.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/introjs.css" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/style.css?v=20210903" media="screen" rel="stylesheet" type="text/css"/>
+<link href="/css/print.css?v=20210903" media="print" rel="stylesheet" type="text/css"/>
+<!-- HTML5 shim and Respond.js IE8 support of HTML5 elements and media queries -->
+<!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/libs/html5shiv/3.7.0/html5shiv.js"></script>
+    <script src="https://oss.maxcdn.com/libs/respond.js/1.4.2/respond.min.js"></script>
+    <![endif]-->
+<!-- Scripts Javascript -->
+<!-- jQuery -->
+
+<!-- jQuery Select -->
+
+<!-- jQuery Mask -->
+
+<!-- Bootstrap Collapse -->
+
+<!-- Bootstrap Core JavaScript -->
+
+<!-- Bootstrap Datepicker -->
+
+
+<!-- Intro.js -->
+
+<!-- Scripts -->
+
+
+
+
+
+<!-- <script src="js/google_analytics.js"></script>  -->
+<!-- Global site tag (gtag.js) - Google Analytics -->
+
+
+</head>
+<body>
+
+<!-- Header -->
+<header class="container-fluid">
+<div class="row">
+<p>
+<a href="https://jurisprudencia.stm.jus.br" id="header-url"><img alt="" src="images/jmu-sistemas.png"/><span id="header-title"></span> </a>
+<span class="pull-right header-menu hidden-xs">
+<a href="javascript:void(0);" onclick="startTutorial();"><span aria-hidden="true" class="oi oi-compass"></span> Como Funciona?</a>
+<a href="https://tesjmu.stm.jus.br/portalthes/" target="_blank"><span aria-hidden="true" class="oi oi-sun"></span> Tesauro</a>
+<a href="javascript:void(0);" onclick="tracker.functions.faleConosco(this);"><span aria-hidden="true" class="oi oi-thumb-up"></span> Pesquisa de Satisfação</a>
+</span>
+</p>
+</div>
+</header>
+
+<!-- Conteudo -->
+<div class="topo">
+<div class="gridbox">
+<!-- Busca Textual -->
+<div class="container search-space">
+<form action="consulta.php" method="GET" name="form-search" onsubmit="return processSearch()">
+<div class="row">
+<div class="form-group col-lg-8 col-md-10 passo-1">
+<!-- Opção de Busca -->
+<div class="passo-2" style="height: 38px;">
+<ul class="tabs-nav">
+<li class="tab-active"><a aria-label="Consulta Processual" data-label="Processos" data-value="feitos" href="#tab-1" rel="nofollow">Processos</a>
+</li>
+<li class="tab-active"><a aria-label="Consulta de Jurisprudência" data-label="Jurisprudência" data-value="jurisprudencia" href="#tab-2" rel="nofollow">Jurisprudência</a>
+</li>
+<li class="tab-active"><a aria-label="IRDR" data-label="IRDR" data-value="irdr" href="#tab-3" rel="nofollow">IRDR</a>
+</li>
+<li class="tab-active"><a aria-label="revista" data-label="revista" data-value="revista" href="#tab-4" rel="nofollow">Revista</a>
+</li>
+</ul>
+</div>
+<!-- Escolha -->
+<div class="tabs-stage passo-3 passo-4 passo-5">
+<div class="tabs-option" id="tab-1" style="display: block;">
+<div class="input-group">
+<!-- Filtro -->
+<div class="input-group-btn">
+<button aria-expanded="false" aria-haspopup="true" class="btn btn-default dropdown-toggle" data-toggle="dropdown" type="button">
+<span class="hidden-xs"></span><span id="search_filter_label__feitos">Número do Processo</span>
+<span class="caret"></span>
+</button>
+<ul aria-label="Consultar por:" class="dropdown-menu filter-menu" role="menu">
+<li><a data-id="numero" data-name="Número do Processo" href="#" role="menuitem">Número do Processo</a></li>
+<li><a data-id="nome_parte" data-name="Nome da Parte" href="#" role="menuitem">Nome da Parte</a></li>
+<li><a data-id="cpf_parte" data-name="CPF/CNPJ da Parte" href="#" role="menuitem">CPF/CNPJ da Parte</a></li>
+<li><a data-id="nome_representante" data-name="Nome do Advogado" href="#" role="menuitem">Nome do Advogado</a></li>
+<li><a data-id="oab_representante" data-name="OAB do Advogado" href="#" role="menuitem">OAB do Advogado</a></li>
+<li class="divider"></li>
+<li><a data-id="tudo" data-name="Todos os Campos" href="#" role="menuitem">Todos os Campos</a></li>
+</ul>
+<input data-id="numero" data-name="Número do Processo" id="search_filter_active__feitos" type="hidden"/>
+</div> <!-- Entrada -->
+<div class="search-group">
+<input aria-labelledby="search_filter_label__feitos" autocomplete="off" class="form-control" id="search_input__feitos" name="search_input" placeholder="" type="search" value=""/>
+<!-- Conectores -->
+<div class="collapse out con-group" id="connector__feitos">
+<span>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('E');" type="button">E</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('OU');" type="button">OU</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('NÃO');" type="button">NÃO</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('*');" type="button">*</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('?');" type="button">?</button>
+</span> <span class="connector_right"><a class="link" href="#" id="link_tips_feitos">Como Usar os Operadores?</a></span>
+</div></div> <!-- Submit -->
+<div class="input-group-btn">
+<button aria-label="Consultar Processos" class="btn btn-danger" type="submit"><span class="glyphicon glyphicon-search"></span></button>
+</div>
+</div>
+</div>
+<div class="tabs-option" id="tab-2" style="display: none;">
+<div class="input-group">
+<!-- Filtro -->
+<div class="input-group-btn">
+<button aria-expanded="false" aria-haspopup="true" class="btn btn-default dropdown-toggle" data-toggle="dropdown" type="button">
+<span class="hidden-xs"></span><span id="search_filter_label__jurisprudencia">Número do Processo</span>
+<span class="caret"></span>
+</button>
+<ul aria-label="Consultar por:" class="dropdown-menu filter-menu" role="menu">
+<li><a data-id="ementa" data-name="Ementa" href="#" role="menuitem">Ementa</a></li>
+<li><a data-id="inteiro_teor" data-name="Inteiro Teor" href="#" role="menuitem">Inteiro Teor</a></li>
+<li><a data-id="numero" data-name="Número do Processo" href="#" role="menuitem">Número do Processo</a></li>
+<li><a data-id="referencia_legislativa" data-name="Referência Legislativa" href="#" role="menuitem">Referência Legislativa</a></li>
+<li class="divider"></li>
+<li><a data-id="tudo" data-name="Todos os Campos" href="#" role="menuitem">Todos os Campos</a></li>
+</ul>
+<input data-id="numero" data-name="Número do Processo" id="search_filter_active__jurisprudencia" type="hidden"/>
+</div> <!-- Entrada -->
+<div class="search-group">
+<input aria-labelledby="search_filter_label__jurisprudencia" autocomplete="off" class="form-control" id="search_input__jurisprudencia" name="search_input" placeholder="" type="search" value=""/>
+<!-- Conectores -->
+<div class="collapse out con-group" id="connector__jurisprudencia">
+<span>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('E');" type="button">E</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('OU');" type="button">OU</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('NÃO');" type="button">NÃO</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('*');" type="button">*</button>
+<button class="btn btn-default btn-xs custom-tooltip" onclick="javascript:seleciona_operador('?');" type="button">?</button>
+</span> <span class="connector_right"><a class="link" href="#" id="link_tips_jurisprudencia">Como Usar os Operadores?</a></span>
+</div></div> <!-- Submit -->
+<div class="input-group-btn">
+<button aria-label="Consultar Jurisprudência" class="btn btn-danger" type="submit"><span class="glyphicon glyphicon-search"></span></button>
+</div>
+</div>
+</div>
+<div class="tabs-option" id="tab-3" style="display: none;">
+</div>
+<div class="tabs-option" id="tab-4" style="display: none;">
+                        A revista foi aberta em uma nova janela
+                    </div>
+</div>
+</div>
+</div>
+<input id="search_filter_option" name="search_filter_option" type="hidden" value="jurisprudencia"/>
+<input name="q" type="hidden" value=""/>
+<input name="q_or" type="hidden" value=""/>
+<input name="search_filter" type="hidden" value="tudo"/>
+</form>
+</div>
+<br/>
+
+<!--Dicas -->
+<!-- Dicas de Busca -->
+<div class="container collapse" id="tips">
+<br/>
+<button class="close" id="button_close_tips" type="button"><span aria-hidden="true">×</span><span class="sr-only">Close</span></button>
+<div class="row space-h3">
+<h3>Dicas de Uso dos Operadores</h3>
+</div>
+<hr/>
+<div class="row">
+<div class="col-md-12">
+<p>Ao solicitar a pesquisa por 'Todos os Campos', é possível que o usuário utilize operadores: palavras e símbolos que permitem ampliar ou restringir o alcance da pesquisa. Os seguintes operadores podem ser utilizados:</p>
+</div>
+</div>
+<!-- Carousel -->
+<div class="carousel slide" data-interval="false" data-ride="carousel" id="quote-carousel">
+<!-- Indicators -->
+<ol class="carousel-indicators">
+<li class="active" data-slide-to="0" data-target="#quote-carousel"></li>
+<li data-slide-to="1" data-target="#quote-carousel"></li>
+<li data-slide-to="2" data-target="#quote-carousel"></li>
+<li data-slide-to="3" data-target="#quote-carousel"></li>
+</ol>
+<!-- Wrapper for slides -->
+<div class="carousel-inner">
+<div class="item active">
+<div class="row">
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>E</b></h4>
+<p>Todas as palavras ligadas pelo operador "e" devem estar necessariamente contidas no documento. O "e" é o operador padrão da ferramenta de pesquisa. Portanto, quando a expressão de busca é composta por mais de uma palavra, pressupõe-se que todas elas devam aparecer no documento.</p>
+<hr/>
+<p><b>Exemplo:<br/></b> <span>militar furto caserna</span> é o mesmo que <span>militar e furto e caserna</span></p>
+<p><b>Retorno do Exemplo:<br/></b>Todos os documentos que contenham as palavras <span>militar</span>, <span>furto</span> e <span>caserna</span></p>
+</div>
+</div>
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>OU</b></h4>
+<p>O operador "ou" é empregado para pesquisar palavras alternativas. Ao utilizá-lo, o usuário indica que basta que uma das palavras esteja presente no documento.</p>
+<hr/>
+<p><b>Exemplo:<br/></b> <span>furto ou recurso</span></p>
+<p><b>Retorno do Exemplo:<br/></b>Todos os documentos que contenham a palavra <span>furto</span> ou que possuam a palavra <span>recurso</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="item">
+<div class="row">
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>NÃO</b></h4>
+<p>O operador "não" tem a função de descartar documentos que contenham determinadas palavras. Para tanto, deve-se posicionar o operador imediatamente antes da palavra que se pretende excluir.</p>
+<hr/>
+<p><b>Exemplo:<br/></b> <span>furto não infração</span></p>
+<p><b>Retorno do Exemplo:<br/></b>Todos os documentos que contenham a palavra <span>furto</span> e não contenham a palavra <span>infração</span></p>
+</div>
+</div>
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>" "</b></h4>
+<p>Utilizado para agrupar dois ou mais termos a serem pesquisados ou para transformar um operador em palavra a ser pesquisada.</p>
+<hr/>
+<p><b>Exemplo 1:<br/></b> <span>"direito constitucional"</span></p>
+<p><b>Retorno do Exemplo 1:<br/></b>Todos os documentos que contenham o termo <span>direito constitucional</span></p>
+<p><b>Exemplo 2:<br/></b> <span>acordo "não" previsto</span></p>
+<p><b>Retorno do Exemplo 2:<br/></b>Todos os documentos que contenham as palavras <span>acordo</span>, <span>não</span> e <span>previsto</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="item">
+<div class="row">
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>" "~n</b></h4>
+<p>Os operadores til e aspas duplas, quando combinados, permitem ao usuário especificar a distância máxima admitida entre as palavras buscadas. Para tanto, é preciso colocar as palavras (duas ou mais) entre aspas duplas, acrescentar o til logo após e, por fim, indicar imediatamente o número máximo de palavras interpostas.</p>
+<hr/>
+<p><b>Exemplo:<br/></b> <span>"detenção civil"~2</span></p>
+<p><b>Retorno do Exemplo:<br/></b>Todos os documentos que contenham a palavra <span>detenção</span> e a palavra <span>civil</span> com a quantidade máxima de 2 termos entre <span>detenção</span> e <span>civil</span>. <a class="link" data-original-title="No texto DETENÇÃO PARA O CIVIL a distância é 2, no texto DETENÇÃO DO CIVIL, a distância é 1 e no texto DETENÇÃO CIVIL a distância é 1. Todos os documentos com esses textos serão retornados. Já no texto DETENÇÃO JUNTO COM O CIVIL, a distância é 3 e os documentos com esse texto não serão retornados." data-placement="top" data-toggle="tooltip" href="#">Mais detalhes...</a></p>
+</div>
+</div>
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>( )</b></h4>
+<p>Os parênteses servem para especificar a ordem de execução das operações caso o usuário utilize vários operadores distintos, de forma simultânea, em uma mesma expressão de busca.</p>
+<hr/>
+<p><b>Exemplo:<br/></b> <span>detenção ou (codigo NÃO penal)</span></p>
+<p><b>Retorno do Exemplo:<br/></b>Todos os documentos que contenham a palavra <span>detenção</span>ou que contenham a palavra <span>código</span> e, ao mesmo tempo, não contenham a palavra <span>penal</span></p>
+</div>
+</div>
+</div>
+</div>
+<div class="item">
+<div class="row">
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>*</b></h4>
+<p>Substitui caracteres desconhecidos ou que não se deseja determinar. Pode ser utilizado no início, meio ou no fim da palavra.</p>
+<hr/>
+<p><b>Exemplo 1:<br/></b> <span>de*cao</span> (deserção, descrição, designação...)</p>
+<p><b>Exemplo 2:<br/></b> <span>constitui*</span> (constitui, constituir, constituído, constituição...)</p>
+</div>
+</div>
+<div class="col-md-6">
+<div class="well">
+<h4 class="text-center"><b>?</b></h4>
+<p>Substitui um único caractere que deverá estar na palavra. Pode ser utilizado no início, meio e/ou no fim da palavra. Cada interrogação corresponde a um caractere.</p>
+<hr/>
+<p><b>Exemplo 1:<br/></b> <span>constituíd?</span> (constituído, constituída...)</p>
+<p><b>Exemplo 2:<br/></b> <span>em?argos</span> (embargos...)</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Left and right controls -->
+<a class="left carousel-control" data-slide="prev" href="#quote-carousel">
+<span class="glyphicon glyphicon-chevron-left"></span>
+<span class="sr-only">Previous</span>
+</a>
+<a class="right carousel-control" data-slide="next" href="#quote-carousel">
+<span class="glyphicon glyphicon-chevron-right"></span>
+<span class="sr-only">Next</span>
+</a>
+</div>
+</div>
+<div class="container" style="background-color: #fff; margin-bottom: -2px; color: #444; background-color: #fff; border-radius: 6px 6px 0 0;">
+<!-- Escolher Filtros -->
+<!-- Filtros Ativos e Paginação -->
+</div> </div>
+</div>
+<div class="jumbotron" id="divBuscaAvancada">
+<!-- Busca Avançada -->
+<div class="container">
+<!-- Error -->
+<div class="row" id="sumulas" style="display: none;">
+<div class="col-sm-8">
+<div class="alert alert-info">
+<a href="https://www.stm.jus.br/servicos-stm/juridico/sumulas-ref">Procurando pelas Súmulas? Clique aqui.</a>
+</div>
+</div>
+</div>
+<div class="row space-h3 passo-6">
+<h3>Pesquisa Avançada de <span id="advsearch-label"></span></h3>
+</div>
+<hr/>
+<div class="row">
+<div class="col-sm-12">
+<form action="consulta.php" id="form-advsearch" name="form-advsearch" onsubmit="return processAdvsearch()">
+<div class="form-horizontal">
+<!-- Busca Avançada de Processos -->
+<div id="fields-feitos" style="display: none;">
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fq_chave">Chave de Acesso</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="fq_chave" name="fq_chave" placeholder="Informe a chave de acesso (processos sigilosos)" type="password"/>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_numero_processo">Número</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" data-tipo="numero_processo" id="fqx_numero_processo" name="fqx_numero_processo" placeholder="Informe o número do processo completo ou parcial" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-cjm">Circunscrição</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontada a circunscrição " data-placeholder="Escolha uma circunscrição..." id="select-feitos-cjm" name="fq_cjm">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-orgao">Orgão</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o orgão " data-placeholder="Escolha um orgão..." id="select-feitos-orgao" name="fq_orgao">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-conselho">Conselho</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o conselho " data-placeholder="Escolha um conselho..." id="select-feitos-conselho" name="fq_conselho">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-classe">Classe</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontada a classe " data-placeholder="Escolha uma classe..." id="select-feitos-classe" name="fq_classe">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_data_autuacao_inicio1">Data de Autuação</label>
+<div class="col-md-5 col-sm-8">
+<div class="input-group input-daterange">
+<div class="input-group-addon" id="data_autuacao_inicio_label1">a partir de</div>
+<input aria-labelledby="data_autuacao_inicio_label1" class="form-control" id="fqx_data_autuacao_inicio1" name="fqx_data_autuacao_inicio" type="text"/>
+<div class="input-group-addon" id="data_autuacao_fim_label1">até</div>
+<input aria-labelledby="data_autuacao_fim_label1" class="form-control" name="fqx_data_autuacao_fim" type="text"/>
+</div>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-assunto_pesquisa">Assunto</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o assunto " data-placeholder="Escolha um assunto..." id="select-feitos-assunto_pesquisa" name="fq_assunto_pesquisa">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-feitos-situacao">Situação</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontada a situação " data-placeholder="Escolha uma situação..." id="select-feitos-situacao" name="fq_situacao">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="parte_input">Nome da Parte</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="parte_input" name="fqx_parte_nome" placeholder="Informe o nome, sobrenome, parte do nome ou nome completo" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="parte_cpf_input">CPF/CNPJ da Parte</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="parte_cpf_input" name="fqx_parte_cpf" placeholder="Informe somente os números do CPF/CNPJ" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="representante_input">Nome do Advogado</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="representante_input" name="fqx_representante_nome" placeholder="Informe o nome, sobrenome, parte do nome ou nome completo" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="oab_representante_input">OAB do Advogado</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="oab_representante_input" name="fqx_oab_representante" placeholder="Informe o número da inscrição na OAB (Ex: DF0000000)" type="text"/></div>
+</div> </div>
+<div id="fields-jurisprudencia" style="display: none;">
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_numero_jurisprudencia">Número</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" data-tipo="numero_processo" id="fqx_numero_jurisprudencia" name="fqx_numero_jurisprudencia" placeholder="Informe o número do processo completo ou parcial" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="ementa_input">Ementa</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="ementa_input" name="fqx_ementa" placeholder="Informe a palavra chave da ementa" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="inteiro_teor_input">Inteiro Teor</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="inteiro_teor_input" name="fqx_inteiro_teor" placeholder="Informe a palavra chave do inteiro teor" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="referencia_legislativa_input">Referência Legislativa</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="referencia_legislativa_input" name="fqx_referencia_legislativa" placeholder="Informe a palavra chave da referência legislativa" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="notas_input">Notas</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="notas_input" name="fqx_notas" placeholder="Informe a palavra chave da nota" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="notas_input">Indexação</label>
+<div class="col-md-5 col-sm-8">
+<input class="form-control" id="indexacao_input" name="fqx_indexacao" placeholder="Informe a palavra chave da indexação" type="text"/></div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-jurisprudencia-classe">Classe</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontada a classe " data-placeholder="Escolha uma classe..." id="select-jurisprudencia-classe" name="fq_classe">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-jurisprudencia-assunto_pesquisa">Assunto</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o assunto " data-placeholder="Escolha uma assunto..." id="select-jurisprudencia-assunto_pesquisa" name="fq_assunto_pesquisa">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-jurisprudencia-ministro_relator">Relator</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o relator " data-placeholder="Escolha um relator..." id="select-jurisprudencia-ministro_relator" name="fq_ministro_relator">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-jurisprudencia-ministro_relator_acordao">Relator do Acórdão</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o relator do acórdão " data-placeholder="Escolha um relator do acórdão..." id="select-jurisprudencia-ministro_relator_acordao" name="fq_ministro_relator_acordao">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="select-jurisprudencia-ministro_revisor">Revisor</label>
+<div class="col-md-5 col-sm-8">
+<span class="input-group-btn">
+<select class="form-control chosen-select" data-no_results_text="Não foi encontado o revisor " data-placeholder="Escolha um revisor..." id="select-jurisprudencia-ministro_revisor" name="fq_ministro_revisor">
+</select>
+</span>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_data_autuacao_inicio2">Data de Autuação</label>
+<div class="col-md-5 col-sm-8">
+<div class="input-group input-daterange">
+<div class="input-group-addon" id="data_autuacao_inicio_label2">a partir de</div>
+<input aria-labelledby="data_autuacao_inicio_label2" class="form-control" id="fqx_data_autuacao_inicio2" name="fqx_data_autuacao_inicio" type="text"/>
+<div class="input-group-addon" id="data_autuacao_fim_label2">até</div>
+<input aria-labelledby="data_autuacao_fim_label2" class="form-control" name="fqx_data_autuacao_fim" type="text"/>
+</div>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_data_publicacao_inicio">Data de Publicação</label>
+<div class="col-md-5 col-sm-8">
+<div class="input-group input-daterange">
+<div class="input-group-addon" id="data_publicacao_inicio_label">a partir de</div>
+<input aria-labelledby="data_publicacao_inicio_label" class="form-control" id="fqx_data_publicacao_inicio" name="fqx_data_publicacao_inicio" type="text"/>
+<div class="input-group-addon" id="data_publicacao_fim_label">até</div>
+<input aria-labelledby="data_publicacao_fim_label" class="form-control" name="fqx_data_publicacao_fim" type="text"/>
+</div>
+</div>
+</div>
+<div class="form-group">
+<label class="control-label col-md-2 col-sm-3" for="fqx_data_decisao_inicio">Data de Julgamento</label>
+<div class="col-md-5 col-sm-8">
+<div class="input-group input-daterange">
+<div class="input-group-addon" id="data_decisao_inicio_label">a partir de</div>
+<input aria-labelledby="data_decisao_inicio_label" class="form-control" id="fqx_data_decisao_inicio" name="fqx_data_decisao_inicio" type="text"/>
+<div class="input-group-addon" id="data_decisao_fim_label">até</div>
+<input aria-labelledby="data_decisao_fim_label" class="form-control" name="fqx_data_decisao_fim" type="text"/>
+</div>
+</div>
+</div> </div>
+<div class="form-group">
+<br/>
+<div class="col-sm-offset-3 col-sm-5">
+<input name="q" type="hidden">
+<input name="search_filter" type="hidden" value="busca_avancada">
+<input id="search_filter_option" name="search_filter_option" type="hidden" value="jurisprudencia"/>
+<button class="btn btn-primary" id="submit-advsearch" type="submit">Buscar
+                                </button>
+</input></input></div>
+</div>
+</div>
+</form>
+</div>
+</div>
+</div>
+</div>
+<div class="jumbotron hide" id="divIRDR">
+<div class="container">
+<div class="jumbotron">
+<div class="container">
+<div class="panel panel-default">
+<div class="panel-heading">
+<div class="text-center">
+<h5><strong>Número do Tema: 1</strong></h5>
+</div>
+</div>
+<div class="panel-body">
+<div class="table-responsive">
+<table class="table table-condensed" style="border: 0px;">
+<!--<tr>
+                            <td><label>Número do Tema:</label></td>
+                            <td colspan="4">1</td>
+                        </tr>-->
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Situação:</label></td>
+<td colspan="4" style="border: 0px;">Transitado em julgado</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Ramo do Direito:</label></td>
+<td colspan="4" style="border: 0px;">
+<ul>
+<li>DIREITO PROCESSUAL PENAL MILITAR</li>
+</ul>
+</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Controvérsia:</label></td>
+<td colspan="4" style="white-space: pre-wrap;">Controvérsia jurídica acerca da competência para o julgamento de ex-militares que cometeram.</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Tese Fixada:</label></td>
+<td colspan="4" style="white-space: pre-wrap;">Compete aos Conselhos Especial e Permanente de Justiça o julgamento de civis que praticaram crimes militares na condição de militares das Forças Armadas.</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Observações:</label></td>
+<td colspan="4" style="white-space: pre-wrap;"></td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Processos:</label></td>
+<td colspan="4" style="border: 0px;">
+<div>
+<a href="https://eproc2g.stm.jus.br/eproc_2g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000425-51.2019.7.00.0000" target="_blank">
+                                            7000425-51.2019.7.00.0000/STM
+                                        </a>
+</div>
+<div>
+<a href="https://eproc1g.stm.jus.br/eproc_1g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000013-12.2019.7.03.0203" target="_blank">
+                                            7000013-12.2019.7.03.0203/RS
+                                        </a>
+</div>
+</td>
+</tr>
+<!--<tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processo IRDR:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                            </td>
+                        </tr>
+                        <tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processos Representativos:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                                    <div></div>
+                                                            </td>
+                        </tr>
+                        <tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processos REsp/RE:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                            </td>
+                        </tr>-->
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Datas:</label></td>
+<td class="text-center" style="border: 0px;"><label>Afetação</label></td>
+<td class="text-center" style="border: 0px;"><label>Julgamento</label></td>
+<td class="text-center" style="border: 0px;"><label>Acórdão Publicado</label></td>
+<td class="text-center" style="border: 0px;"><label>Trânsito Julgado</label></td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"> </td>
+<td class="text-center" style="border: 0px;">16/05/2019</td>
+<td class="text-center" style="border: 0px;">23/08/2019</td>
+<td class="text-center" style="border: 0px;">05/09/2019</td>
+<td class="text-center" style="border: 0px;">17/12/2020</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+<div class="panel panel-default">
+<div class="panel-heading">
+<div class="text-center">
+<h5><strong>Número do Tema: 2</strong></h5>
+</div>
+</div>
+<div class="panel-body">
+<div class="table-responsive">
+<table class="table table-condensed" style="border: 0px;">
+<!--<tr>
+                            <td><label>Número do Tema:</label></td>
+                            <td colspan="4">2</td>
+                        </tr>-->
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Situação:</label></td>
+<td colspan="4" style="border: 0px;">Admitido</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Ramo do Direito:</label></td>
+<td colspan="4" style="border: 0px;">
+<ul>
+<li>DIREITO PROCESSUAL PENAL MILITARAcordo de Não Persecução Penal / DIREITO PROCESSUAL PENAL</li>
+</ul>
+</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Controvérsia:</label></td>
+<td colspan="4" style="white-space: pre-wrap;">CABIMENTO DO ACORDO DE NÃO PERSECUÇÃO PENAL (ANPP) E DO SURSIS PROCESSUAL AOS RÉUS CIVIS NO ÂMBITO DOS PROCESSOS DE COMPETÊNCIA DA JUSTIÇA MILITAR DA UNIÃO.</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Tese Fixada:</label></td>
+<td colspan="4" style="white-space: pre-wrap;">O ACORDO DE NÃO PERSECUÇÃO PENAL (ANPP), PREVISTO NO ART. 28-A DO CÓDIGO DE PROCESSO PENAL (CPP), E O "SURSIS" PROCESSUAL, PREVISTO NO ART. 89 DA LEI Nº 9.099/95, NÃO SE APLICAM NA JUSTIÇA MILITAR DA UNIÃO, INDEPENDENTEMENTE DA CONDIÇÃO  DE CIVIL OU DE MILITAR DO ACUSADO</td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Observações:</label></td>
+<td colspan="4" style="white-space: pre-wrap;"></td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Processos:</label></td>
+<td colspan="4" style="border: 0px;">
+<div>
+<a href="https://eproc2g.stm.jus.br/eproc_2g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000457-17.2023.7.00.0000" target="_blank">
+                                            7000457-17.2023.7.00.0000/STM
+                                        </a>
+</div>
+<div>
+<a href="https://eproc1g.stm.jus.br/eproc_1g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000203-09.2022.7.12.0012" target="_blank">
+                                            7000203-09.2022.7.12.0012/AM
+                                        </a>
+</div>
+<div>
+<a href="https://eproc1g.stm.jus.br/eproc_1g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000057-36.2020.7.12.0012" target="_blank">
+                                            7000057-36.2020.7.12.0012/AM
+                                        </a>
+</div>
+<div>
+<a href="https://eproc2g.stm.jus.br/eproc_2g_prod/externo_controlador.php?acao=processo_seleciona_publica&amp;acao_origem=busca_processos&amp;num_processo=7000491-26.2022.7.00.0000" target="_blank">
+                                            7000491-26.2022.7.00.0000/STM
+                                        </a>
+</div>
+</td>
+</tr>
+<!--<tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processo IRDR:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                            </td>
+                        </tr>
+                        <tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processos Representativos:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                                    <div></div>
+                                                            </td>
+                        </tr>
+                        <tr style="border: 0px;">
+                            <td style="border: 0px;"><label>Processos REsp/RE:</label></td>
+                            <td style="border: 0px;" colspan="4">
+                                                            </td>
+                        </tr>-->
+<tr style="border: 0px;">
+<td style="border: 0px;"><label>Datas:</label></td>
+<td class="text-center" style="border: 0px;"><label>Afetação</label></td>
+<td class="text-center" style="border: 0px;"><label>Julgamento</label></td>
+<td class="text-center" style="border: 0px;"><label>Acórdão Publicado</label></td>
+<td class="text-center" style="border: 0px;"><label>Trânsito Julgado</label></td>
+</tr>
+<tr style="border: 0px;">
+<td style="border: 0px;"> </td>
+<td class="text-center" style="border: 0px;">29/11/2023</td>
+<td class="text-center" style="border: 0px;">19/11/2024</td>
+<td class="text-center" style="border: 0px;">25/02/2025</td>
+<td class="text-center" style="border: 0px;">01/01/1970</td>
+</tr>
+</table>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<div class="container-fluid">
+<div class="row footer">
+<legend></legend>
+<p><img alt="JMU" src="images/jmu-sistemas-rodape.png"/> Consulta Judicial Unificada<span class="pull-right"> <a class="link" href="https://www.stm.jus.br/">stm.jus.br</a></span></p>
+</div>
+</div>
+</body>
+</html>
