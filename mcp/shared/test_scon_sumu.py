@@ -332,15 +332,22 @@ class TestRoteamentoSumu:
         assert chamadas == ["processo.stj.jus.br", "scon.stj.jus.br", "cdp"]
         assert "via navegador (CDP)" in saida
 
-    def test_acor_padrao_continua_no_cjf(self, srv, monkeypatch):
-        def _proibido(*_a, **_k):
-            raise AssertionError("ACOR sem forcar_scon nao vai ao SCON")
+    def test_acor_padrao_vai_ao_processo(self, srv, monkeypatch):
+        # Registra em vez de levantar: o servidor engole a exceção da rota e
+        # cai no fallback, e um AssertionError aqui passaria em silêncio.
+        def _cjf(*_a, **_k):
+            chamadas.append("cjf")
+            return "<!-- STJ via CJF Unificada -->", 1
 
-        monkeypatch.setattr(srv, "_pesquisar_scon", _proibido)
-        monkeypatch.setattr(srv, "_rota_cjf", lambda *a, **k: ("<!-- STJ via CJF Unificada -->", 1))
+        chamadas = []
+        _pesquisa_dublada(
+            monkeypatch, srv, {"processo.stj.jus.br": _ler("scon_resumo_acor.html")}, chamadas
+        )
+        monkeypatch.setattr(srv, "_rota_cjf", _cjf)
         _sem_cache_nem_log(monkeypatch, srv)
         saida = srv.buscar_jurisprudencia_stj("bem de familia", base="ACOR")
-        assert saida.startswith("<!-- STJ via CJF Unificada")
+        assert chamadas == ["processo.stj.jus.br"]
+        assert saida.startswith("<!-- STJ/SCON (processo.stj.jus.br) | Base: Acórdãos")
 
     def test_acor_forcar_scon_vai_ao_processo(self, srv, monkeypatch):
         chamadas = []

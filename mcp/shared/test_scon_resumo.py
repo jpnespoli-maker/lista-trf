@@ -59,6 +59,13 @@ class TestParseSconResumo:
         numeros = " | ".join(r.numero for r in res)
         assert "1859057" in numeros
 
+    def test_numero_com_espaco_comum(self, srv, html):
+        """A fixture separa classe e número com U+00A0 (22/10/2026); a citação
+        "AgInt no AREsp 2787805" se confere por texto e não casaria com ele."""
+        res, _t = srv._parse_scon_resumo(html, "ACOR", 4000)
+        assert all("\xa0" not in r.numero for r in res)
+        assert "AgInt no AREsp 2787805" in [r.numero for r in res]
+
     def test_relator_sem_matricula(self, srv, html):
         res, _t = srv._parse_scon_resumo(html, "ACOR", 4000)
         relatores = [r.relator for r in res]

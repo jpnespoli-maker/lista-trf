@@ -83,15 +83,32 @@ def test_numero_vai_ao_scon_com_qualificador_num(srv, monkeypatch):
     assert "cjf" not in chamadas
 
 
-def test_busca_tematica_segue_na_cjf(srv, monkeypatch):
+def test_busca_tematica_vai_ao_scon(srv, monkeypatch):
+    """Desde 22/10/2026 o SCON é a rota primária também em ACOR temático: a CJF
+    não tem STJ pós-2019 e, refeita como SPA, deixou de responder ao cliente."""
     chamadas = {}
     monkeypatch.setattr(srv, "_rota_scon_http",
-                        lambda *a, **k: chamadas.setdefault("scon", True) and ("", 0, ""))
+                        lambda q, *a, **k: (chamadas.setdefault("scon", q),
+                                            ("<r/>", 1, "processo.stj.jus.br"))[1])
     monkeypatch.setattr(srv, "_rota_cjf",
-                        lambda q, *a, **k: (chamadas.setdefault("cjf", q), ("<r/>", 1))[1])
+                        lambda *a, **k: chamadas.setdefault("cjf", True) and ("", 0))
     srv.buscar_jurisprudencia_stj("honorarios e omiss$")
-    assert chamadas.get("cjf") == "honorarios e omiss$"
-    assert "scon" not in chamadas
+    assert chamadas.get("scon") == "honorarios e omiss$"
+    assert "cjf" not in chamadas
+
+
+def test_cjf_so_entra_quando_o_scon_falha(srv, monkeypatch):
+    def _scon_fora(*_a, **_k):
+        raise RuntimeError("processo.stj.jus.br: timeout | scon.stj.jus.br: 403")
+
+    chamadas = {}
+    monkeypatch.setattr(srv, "_rota_scon_http", _scon_fora)
+    monkeypatch.setattr(srv, "cdp_edge", None)
+    monkeypatch.setattr(srv, "_rota_cjf",
+                        lambda q, *a, **k: (chamadas.setdefault("cjf", k), ("<cjf/>", 1))[1])
+    saida = srv.buscar_jurisprudencia_stj("honorarios e omiss$")
+    assert saida == "<cjf/>"
+    assert "timeout" in chamadas["cjf"]["apos_falha_scon"]
 
 
 def test_rota_cjf_declara_a_cobertura(srv, monkeypatch):
@@ -99,4 +116,4 @@ def test_rota_cjf_declara_a_cobertura(srv, monkeypatch):
     monkeypatch.setattr(srv, "relaxar_cjf", lambda q: None)
     saida, n = srv._rota_cjf("honorarios", 5, 100)
     assert n == 0
-    assert "COBERTURA" in saida and "2019" in saida and "forcar_scon" in saida
+    assert "COBERTURA" in saida and "2019" in saida and "SCON" in saida

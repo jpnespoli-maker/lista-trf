@@ -1,8 +1,9 @@
 """
 MCP Server: STJ Jurisprudência
 
-ACÓRDÃOS (ACOR)   → CJF Unificada com filtro tribunais=STJ
-                    (https://jurisprudencia.cjf.jus.br/unificada/index.xhtml)
+ACÓRDÃOS (ACOR)   → SCON por HTTP no host processo.stj.jus.br, depois
+                    scon.stj.jus.br, depois CDP; CJF Unificada como fallback
+                    (desde 22/10/2026 — ver a nota em `buscar_jurisprudencia_stj`)
 SÚMULAS (SUMU)    → SCON por HTTP no host processo.stj.jus.br (sem Cloudflare),
                     depois scon.stj.jus.br por HTTP, depois CDP
                     (https://processo.stj.jus.br/SCON/pesquisar.jsp?b=SUMU)
@@ -25,9 +26,11 @@ ACOR (forcar_scon ou fallback), e o comentário inicial declara qual host
 respondeu. A lista de súmulas tem layout próprio (`.gridSumula`) — ver
 `_parse_sumulas_html`.
 
-A API pública continua sendo `buscar_jurisprudencia_stj(query, base, tamanho)`,
-agora com `forcar_scon` para pedir o SCON explicitamente em ACOR. O comentário
-inicial da resposta declara qual fonte respondeu de fato.
+SCON PRIMEIRO TAMBÉM EM ACOR (22/10/2026): a CJF Unificada virou SPA e deixou de
+servir o ViewState (toda chamada falhava em ~33 s), e já não tinha STJ posterior
+a ~dez/2019; o host processo.stj.jus.br responde em ~1 s com o acervo inteiro.
+O `forcar_scon` segue na assinatura, sem efeito. O comentário inicial da
+resposta declara qual fonte respondeu de fato.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -38,6 +41,7 @@ from typing import List, Tuple, Any, Optional
 from tenacity import retry, wait_exponential, stop_after_attempt
 import sys
 from pathlib import Path
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from shared import tls_sistema
@@ -125,6 +129,22 @@ SCON_HEADERS = {
     "Referer": SCON_HOME,
 }
 
+# O SCON e o portal do Informativo leem a querystring em ISO-8859-1. Enviada em
+# UTF-8 (o padrão do cliente), toda busca com acento dava FALSO ZERO, sem erro —
+# medido em 22/10/2026: "saúde e cirurgia" = 0 em UTF-8 e 1.113 em Latin-1;
+# INFJ "defensoria pública" = 0 × 164. Aspas e travessões tipográficos não
+# existem em Latin-1 e viram os equivalentes ASCII, para a frase exata sobreviver.
+_TIPOGRAFIA_PARA_ASCII = str.maketrans({
+    "“": '"', "”": '"', "„": '"',
+    "‘": "'", "’": "'", "–": "-", "—": "-",
+})
+
+
+def _url_latin1(url: str, params: dict) -> str:
+    valores = {k: str(v).translate(_TIPOGRAFIA_PARA_ASCII) for k, v in params.items()}
+    return f"{url}?{urlencode(valores, encoding='iso-8859-1', errors='ignore')}"
+
+
 BASES_VALIDAS = {
     "ACOR": "Acórdãos",
     "SUMU": "Súmulas",
@@ -156,7 +176,8 @@ _INFORMATIVO_TIMEOUT_S = 20
 # O cliente não envia filtro de data; o TRF4, na mesma CJF, vai até 2026.
 AVISO_COBERTURA_CJF_STJ = (
     "COBERTURA: a CJF Unificada não indexa acórdão do STJ posterior a ~dez/2019 "
-    "(medido em 01/10/2026). Jurisprudência recente do STJ: repetir com forcar_scon=True."
+    "(medido em 01/10/2026). Jurisprudência recente do STJ só no SCON, que falhou "
+    "nesta chamada: zero ou só julgado antigo aqui não prova ausência."
 )
 
 # Classe do recurso, como se escreve na citação ("AgInt no AREsp", "EDcl nos EREsp").
@@ -258,7 +279,7 @@ def _pesquisar_scon(
         "l": str(tamanho),
     }
     # curl_cffi/libcurl não lê REQUESTS_CA_BUNDLE — verify explícito.
-    resp = session.get(f"{scon_base}/pesquisar.jsp", params=params,
+    resp = session.get(_url_latin1(f"{scon_base}/pesquisar.jsp", params),
                        timeout=_SCON_TIMEOUT_S,
                        headers={"Referer": f"{scon_base}/"},
                        verify=tls_sistema.caminho_bundle())
@@ -600,14 +621,72 @@ def _parse_scon_resumo(
                 fonte="STJ",
                 tipo=tipo,
                 orgao="Superior Tribunal de Justiça",
-                numero=" ".join(numero_partes).strip(),
+                # O portal separa classe e número com U+00A0 ("REsp\xa01872321"),
+                # e quem confere a citação por texto não o casaria.
+                numero=" ".join(" ".join(numero_partes).split()),
                 relator=relator,
                 data=data,
                 extra=extra,
             )
         )
 
+    if not resultados:
+        doc = _parse_scon_documento(soup, base, max_tokens_ementa)
+        if doc is not None:
+            resultados.append(doc)
+
     return resultados, total
+
+
+_RE_DOC_NUMERO = re.compile(r"^(.+?\d)\s*/\s*[A-Z]{2}\b")
+_RE_DOC_PUBLICACAO = re.compile(r"\b(DJEN|DJe|DJ)\s+(\d{2}/\d{2}/\d{4})")
+
+
+def _parse_scon_documento(
+    soup, base: str, max_tokens_ementa: int
+) -> Optional[BaseResultadoJuridico]:
+    """Página de DOCUMENTO ÚNICO do SCON (busca com 1 resultado só).
+
+    Com um único acórdão o SCON não monta a lista: abre o próprio documento,
+    em `.documento` com pares `.docTitulo`/`.docTexto` (Processo, Relator, Órgão
+    Julgador, Data do Julgamento, Data da Publicação/Fonte, Ementa). Era o
+    "reportou 1 documento(s) mas o parser extraiu 0" de toda busca por número
+    em 21-22/10/2026 (REsp 2222722). Aqui a ementa vem INTEGRAL.
+    """
+    doc = soup.select_one(".documento")
+    if doc is None:
+        return None
+    campos: dict = {}
+    for par in doc.select(".paragrafoBRS"):
+        titulo_el = par.select_one(".docTitulo")
+        texto_el = par.select_one(".docTexto")
+        if titulo_el is None or texto_el is None:
+            continue
+        rotulo = " ".join(titulo_el.get_text(" ", strip=True).split())
+        campos.setdefault(rotulo, texto_el.get_text("\n", strip=True))
+    processo = " ".join(campos.get("Processo", "").split())
+    if not processo:
+        return None
+
+    m_num = _RE_DOC_NUMERO.match(processo)
+    m_pub = _RE_DOC_PUBLICACAO.search(campos.get("Data da Publicação/Fonte", ""))
+    relator = re.sub(r"\s*\(\d+\)\s*$", "", " ".join(campos.get("Relator", "").split()))
+    extra = {"base": base}
+    julgamento = campos.get("Data do Julgamento", "").strip()
+    if julgamento:
+        extra["julgamento"] = julgamento
+    return BaseResultadoJuridico(
+        conteudo=truncar_por_tokens(
+            " ".join(campos.get("Ementa", "").split()), max_tokens=max_tokens_ementa
+        ),
+        fonte="STJ",
+        tipo="ACÓRDÃO" if "Acórdão" in campos else BASES_VALIDAS.get(base, base),
+        orgao=" ".join(campos.get("Órgão Julgador", "").split()) or "Superior Tribunal de Justiça",
+        numero=m_num.group(1) if m_num else processo,
+        relator=relator,
+        data=f"{m_pub.group(1)} {m_pub.group(2)}" if m_pub else "",
+        extra=extra,
+    )
 
 
 _RE_INF_TOTAL = re.compile(r"Notas encontradas:\s*(\d[\d.]*)")
@@ -688,6 +767,10 @@ def _parse_informativo_html(
         orgao = orgao_corrente or "Superior Tribunal de Justiça"
 
         tema = pares.get("Tema", "")
+        # O portal abre a lista com um bloco de edição "(NÃO PUBLICADO)", sem
+        # processo, tema nem destaque (CNOT=000000) — não é nota (22/10/2026).
+        if not numero and not tema and not pares.get("Destaque"):
+            continue
         conteudo = truncar_por_tokens(pares.get("Destaque") or tema, max_tokens=max_tokens_ementa)
 
         extra = {"base": "INFJ"}
@@ -725,7 +808,7 @@ def _pesquisar_informativo(query: str, tamanho: int) -> str:
         "p": "true", "l": str(tamanho), "i": "1",
     }
     sess = _criar_session_scon()
-    resp = sess.get(INFORMATIVO_PESQUISAR, params=params,
+    resp = sess.get(_url_latin1(INFORMATIVO_PESQUISAR, params),
                     timeout=_INFORMATIVO_TIMEOUT_S,
                     verify=tls_sistema.caminho_bundle())
     resp.raise_for_status()
@@ -772,13 +855,11 @@ def _rota_scon_cdp(
     if cdp_edge is None:
         raise RuntimeError("shared.cdp_edge indisponível (playwright não instalado)")
 
-    from urllib.parse import urlencode
-
     params = {
         "acao": "pesquisar", "novaConsulta": "true", "i": "1", "b": base,
         "livre": query, "tipo_visualizacao": "RESUMO", "p": "true", "O": "JT",
     }
-    url_alvo = f"{SCON_PESQUISAR}?{urlencode(params)}"
+    url_alvo = _url_latin1(SCON_PESQUISAR, params)
 
     # `tipo_visualizacao=RESUMO` é obrigatório: sem ele a lista volta VAZIA
     # (medido em 24/08/2026 — a visualização cheia depende de estado de sessão
@@ -869,25 +950,22 @@ def buscar_jurisprudencia_stj(
         tamanho: Número de resultados por página (1–40, padrão 10)
         max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
                            Aumente para obter ementa mais longa/íntegra.
-        forcar_scon: Tenta o SCON primeiro mesmo em ACOR. Default False —
-                     acórdãos vão direto ao CJF Unificada. Use quando quiser
-                     especificamente a ficha do SCON (sai pelo host
-                     processo.stj.jus.br; ementa TRUNCADA na visualização
-                     RESUMO, sinalizada em `ementa_truncada`).
+        forcar_scon: Mantido por compatibilidade; sem efeito desde 22/10/2026,
+                     porque o SCON já é a rota primária de toda base.
 
     Returns:
         XML estruturado com os resultados encontrados.
         O comentário inicial declara qual fonte respondeu de fato.
 
     Notas:
-        ACOR (acórdãos) é servido pelo CJF Unificada com filtro tribunais=STJ,
-        que responde em ~1,3 s; o SCON entra como fallback se o CJF falhar.
-        A CJF NÃO TEM acórdão do STJ posterior a ~dez/2019 (medido em
-        01/10/2026): para jurisprudência recente, forcar_scon=True. Busca que é
-        só número de recurso ("REsp 2.098.934/RO", "2098934") vai sozinha ao
-        SCON, com o qualificador .NUM., que traz o processo e não quem o cita.
-        SUMU existe apenas no SCON — ali ele é tentado primeiro, por HTTP, no
-        host processo.stj.jus.br (sem Cloudflare) e depois no scon.stj.jus.br.
+        Toda base vai primeiro ao SCON, por HTTP, no host processo.stj.jus.br
+        (sem Cloudflare, ~1 s, acervo inteiro), depois no scon.stj.jus.br. Em
+        ACOR a lista vem na visualização RESUMO, com a ementa TRUNCADA
+        (sinalizada em `ementa_truncada`); busca com resultado único traz a
+        ementa integral. O CJF Unificada é só fallback de ACOR, e NÃO TEM
+        acórdão do STJ posterior a ~dez/2019. Busca que é só número de recurso
+        ("REsp 2.098.934/RO", "2098934") vai com o qualificador .NUM., que traz
+        o processo e não quem o cita.
         Cada súmula traz verbete, órgão, data, ramo e, se não vigora mais,
         tipo "Súmula (CANCELADA)"/"(REVOGADA)" com a nota em `situacao`;
         alteração de redação vai em `observacao`. INFJ vai ao portal do
@@ -917,15 +995,16 @@ def buscar_jurisprudencia_stj(
     cache_hit = False
     n_results = 0
     erro_final: Optional[str] = None
-    # `scon_primeiro`: o SCON é insubstituível em SUMU/INFJ (o CJF não cobre
-    # súmula nem informativo) e opcional em ACOR. Fora desses casos ele entra
-    # como fallback, não como pedágio de entrada.
-    # Busca que é só número de processo vai ao SCON com `.NUM.`: na CJF dava
-    # zero (sem cobertura pós-2019) e no SCON livre trazia quem CITA o número.
+    # O SCON é a rota primária em TODA base (22/10/2026): o host
+    # processo.stj.jus.br responde em ~1 s, sem Cloudflare, com o acervo inteiro;
+    # a CJF não tem STJ posterior a ~dez/2019 e, refeita como SPA, deixou de
+    # servir o ViewState de que o cliente depende. Ela fica como fallback de ACOR.
+    # `forcar_scon` segue aceito por compatibilidade e já não muda a rota.
+    # Busca que é só número de processo vai ao SCON com `.NUM.`: no SCON livre
+    # trazia quem CITA o número.
     numero = _numero_de_processo(query) if base == "ACOR" else None
     query_scon = f"{numero}.NUM." if numero else query
-    scon_primeiro = base != "ACOR" or forcar_scon or bool(numero)
-    rota = "scon" if scon_primeiro else "cjf"
+    rota = "scon"
     try:
         # A1 — cache HTTP. Chave inclui base (e o truncamento, pois o XML
         # cacheado já está truncado) e a preferência de rota, que muda a fonte.
@@ -979,22 +1058,18 @@ def buscar_jurisprudencia_stj(
         # 1) Rota primária. O SCON por HTTP tenta processo.stj.jus.br (sem
         #    Cloudflare) antes de scon.stj.jus.br — ver `_rota_scon_http`.
         try:
-            if scon_primeiro:
-                saida, n_results, host = _rota_scon_http(
-                    query_scon, base, tamanho, max_tokens_ementa
-                )
-                rota = "scon-processo" if host == _host_scon(SCON_PROCESSO_BASE) else "scon"
-            else:
-                saida, n_results = _rota_cjf(query, tamanho, max_tokens_ementa)
+            saida, n_results, host = _rota_scon_http(
+                query_scon, base, tamanho, max_tokens_ementa
+            )
+            rota = "scon-processo" if host == _host_scon(SCON_PROCESSO_BASE) else "scon"
             return _guardar(saida, n_results)
         except Exception as e:
-            rotulo = "SCON" if scon_primeiro else "CJF"
-            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:320]}")
+            erros.append(f"SCON: {type(e).__name__}: {str(e)[:320]}")
 
         # 2) SCON por NAVEGADOR REAL (CDP). Entra sempre que a via HTTP do SCON
         #    falhou nos dois hosts — e é a última saída em SUMU, que o CJF não
         #    cobre.
-        if scon_primeiro and cdp_edge is not None:
+        if cdp_edge is not None:
             try:
                 rota = "scon-cdp"
                 saida, n_results = _rota_scon_cdp(
@@ -1004,43 +1079,23 @@ def buscar_jurisprudencia_stj(
             except Exception as e:
                 erros.append(f"SCON/CDP: {type(e).__name__}: {str(e)[:160]}")
 
-        # 3) Fallback pela outra rota. O CJF não cobre súmula/informativo, então
-        #    quando a primária era SCON por causa da base não há para onde ir.
-        if scon_primeiro and base != "ACOR":
+        # 3) O CJF não cobre súmula: fora de ACOR não há para onde ir.
+        if base != "ACOR":
             erro_final = " | ".join(erros)
             return (
                 f'<erro>Base {base} disponível apenas no SCON, que está indisponível. '
                 f'Detalhes: {erro_final}</erro>'
             )
 
+        # 4) Fallback de ACOR: o CJF, com a cobertura declarada no retorno.
         try:
-            if scon_primeiro:
-                rota = "cjf-fallback"
-                saida, n_results = _rota_cjf(
-                    query, tamanho, max_tokens_ementa, apos_falha_scon=erros[0]
-                )
-            else:
-                rota = "scon-fallback"
-                saida, n_results, _host = _rota_scon_http(
-                    query, base, tamanho, max_tokens_ementa
-                )
+            rota = "cjf-fallback"
+            saida, n_results = _rota_cjf(
+                query, tamanho, max_tokens_ementa, apos_falha_scon=erros[0]
+            )
             return _guardar(saida, n_results)
         except Exception as e:
-            rotulo = "CJF" if scon_primeiro else "SCON"
-            erros.append(f"{rotulo}: {type(e).__name__}: {str(e)[:320]}")
-
-        # 4) Último degrau em ACOR: o SCON pelo navegador real. Chega-se aqui
-        #    quando CJF não tinha o julgado E o SCON recusou por HTTP — que é
-        #    exatamente o caso do AgInt no AREsp 1.859.057/SP (24/08/2026).
-        if not scon_primeiro and cdp_edge is not None:
-            try:
-                rota = "scon-cdp-fallback"
-                saida, n_results = _rota_scon_cdp(
-                    query, base, tamanho, max_tokens_ementa
-                )
-                return _guardar(saida, n_results)
-            except Exception as e:
-                erros.append(f"SCON/CDP: {type(e).__name__}: {str(e)[:160]}")
+            erros.append(f"CJF: {type(e).__name__}: {str(e)[:320]}")
 
         erro_final = " | ".join(erros)
         return f'<erro>Falha em SCON e CJF. {erro_final}</erro>'
@@ -1095,11 +1150,11 @@ DICAS:
   - Resultados ordenados por data de julgamento (mais recentes primeiro)
 
 ROTEAMENTO INTERNO:
-  ACOR vai direto ao CJF Unificada com filtro STJ (~1,3 s) — operadores BRS
-  são convertidos para a sintaxe CJF (e→E, ou→OU, nao→NAO etc.). O SCON entra
-  só como fallback se o CJF falhar; para tentá-lo primeiro use forcar_scon=True.
-  SUMU só existe no SCON e vai a ele primeiro, por HTTP no host
-  processo.stj.jus.br (sem Cloudflare), depois scon.stj.jus.br, depois CDP.
+  ACOR e SUMU vão ao SCON, por HTTP no host processo.stj.jus.br (sem
+  Cloudflare), depois scon.stj.jus.br, depois CDP. Acentos funcionam
+  normalmente. Em ACOR, falhando o SCON, o CJF Unificada entra como fallback,
+  com os operadores BRS convertidos (e→E, ou→OU, nao→NAO etc.) e sem acórdão
+  do STJ posterior a ~dez/2019.
   Súmula cancelada/revogada vem marcada no tipo e em <situacao>.
   INFJ vai ao portal do Informativo de Jurisprudência (processo.stj.jus.br).
   A resposta indica em comentário qual fonte respondeu de fato.
