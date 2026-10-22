@@ -550,7 +550,7 @@ def _recepcao_sync(caso: str) -> str:
 
     resultados = [BaseResultadoJuridico(
         conteudo=r["motivo"],
-        fonte="https://jurisprudencia.cjf.jus.br/unificada/",
+        fonte="https://antiga-jurisprudencia.cjf.jus.br/unificada/",
         tipo="Recepção interna (medição)",
         orgao="STF e STJ, via base unificada do CJF",
         numero=r["caso"],
@@ -563,7 +563,7 @@ def _recepcao_sync(caso: str) -> str:
         resultados.append(BaseResultadoJuridico(
             conteudo=truncar_por_tokens(d["ementa"], 400) if d["ementa"]
             else "(sem ementa no retorno do portal)",
-            fonte="https://jurisprudencia.cjf.jus.br/unificada/",
+            fonte="https://antiga-jurisprudencia.cjf.jus.br/unificada/",
             tipo=d["classe"] or "Acórdão",
             orgao=d["orgao_julgador"] or d["tribunal"],
             numero=d["numero"],

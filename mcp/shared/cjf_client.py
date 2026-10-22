@@ -40,7 +40,18 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from shared.base_juridica import TRIBUNAIS
 
-CJF_URL = "https://jurisprudencia.cjf.jus.br/unificada/index.xhtml"
+# HOST ANTIGO desde 22/10/2026: jurisprudencia.cjf.jus.br virou SPA (Angular,
+# "busca semântica", API JSON em /api/jurisprudencia/pesquisar) e não serve mais
+# o ViewState — toda chamada falhava. O portal JSF de sempre continua em
+# antiga-jurisprudencia.cjf.jus.br, que o próprio site novo indica como "versão
+# antiga do sistema". A API nova NÃO substitui este cliente: medido no mesmo dia,
+# ela só tem os seis TRFs, sem STF nem STJ.
+CJF_URL = "https://antiga-jurisprudencia.cjf.jus.br/unificada/index.xhtml"
+
+_AVISO_SEM_VIEWSTATE = (
+    "ViewState não encontrado em {url}. Se a página for o SPA novo do CJF, o host "
+    "antigo também saiu do ar: ver a nota de CJF_URL em shared/cjf_client.py."
+)
 
 CJF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -82,7 +93,10 @@ class CJFSession:
     def viewstate_is_fresh(self) -> bool:
         return bool(self.viewstate) and (time.monotonic() - self._fetched_at) < _VIEWSTATE_TTL_S
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
+    # `reraise`: sem ele a falha chegava como "RetryError[<Future ...>]", e a
+    # troca do portal pelo SPA (22/10/2026) passou um dia sem causa visível.
+    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
+           reraise=True)
     def obter_viewstate(self) -> str:
         """Obtém ViewState da página inicial e descobre o name do checkbox."""
         resp = self.session.get(CJF_URL, timeout=30)
@@ -102,7 +116,7 @@ class CJFSession:
             self._fetched_at = time.monotonic()
             return self.viewstate
 
-        raise ValueError("ViewState não encontrado na página")
+        raise ValueError(_AVISO_SEM_VIEWSTATE.format(url=CJF_URL))
 
     def _descobrir_checkbox_tribunal(self, html_inicial: str) -> None:
         """Descobre o ``name`` real do checkbox de tribunal no HTML do GET inicial.
@@ -120,7 +134,8 @@ class CJFSession:
                 self.checkbox_tribunal = m.group(1)
                 return
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3))
+    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
+           reraise=True)
     def buscar(self, termo: str, tribunais: List[str]) -> str:
         """Submete a busca e retorna o HTML (partial JSF) da primeira página."""
         if not self.viewstate_is_fresh:
