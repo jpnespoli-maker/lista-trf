@@ -58,11 +58,20 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
+
+from shared import cjf_api
+from shared.cjf_api import PortalJsfIndisponivel
 
 # Host antigo desde 22/10/2026, pela mesma razão do `cjf_client.CJF_URL`: o
 # jurisprudencia.cjf.jus.br virou SPA e /trf1/ deixou de servir o ViewState.
+# Quando este host também virar SPA, a busca segue por `cjf_api.buscar_regional`.
 TRF1_URL = "https://antiga-jurisprudencia.cjf.jus.br/trf1/index.xhtml"
+
+_RETRY_JSF = dict(
+    wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
+    retry=retry_if_not_exception_type(PortalJsfIndisponivel), reraise=True,
+)
 
 TRF1_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -149,8 +158,7 @@ class TRF1Session:
     def viewstate_is_fresh(self) -> bool:
         return bool(self.viewstate) and (time.monotonic() - self._fetched_at) < _VIEWSTATE_TTL_S
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
-           reraise=True)
+    @retry(**_RETRY_JSF)
     def obter_viewstate(self) -> str:
         resp = self.session.get(TRF1_URL, timeout=30)
         resp.raise_for_status()
@@ -167,9 +175,9 @@ class TRF1Session:
                 self._fetched_at = time.monotonic()
                 return self.viewstate
 
-        raise ValueError(
+        raise PortalJsfIndisponivel(
             f"ViewState não encontrado em {TRF1_URL}. Se a página for o SPA novo do "
-            "CJF, o host antigo também saiu do ar: ver a nota de TRF1_URL."
+            "CJF, o host antigo também saiu do ar e a busca segue pela API nova."
         )
 
     def _descobrir_checkbox_fonte(self, html_inicial: str) -> None:
@@ -187,8 +195,7 @@ class TRF1Session:
                 self.checkbox_fonte = m.group(1)
                 return
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
-           reraise=True)
+    @retry(**_RETRY_JSF)
     def buscar(self, termo: str, fontes: List[str], tipos: List[str]) -> str:
         if not self.viewstate_is_fresh:
             self.obter_viewstate()
@@ -495,8 +502,13 @@ def buscar_documentos(
 
     por_fonte: Dict[str, int] = {}
     colhidos: List[List[Dict[str, Any]]] = []
+    via_api = False
     for fonte in fontes:
-        docs_f, total_f = _buscar_uma_fonte(termo, fonte, tipos, cota)
+        try:
+            docs_f, total_f = _buscar_uma_fonte(termo, fonte, tipos, cota)
+        except PortalJsfIndisponivel:
+            docs_f, total_f = cjf_api.buscar_regional(termo, fonte, tipos, cota)
+            via_api = True
         por_fonte[fonte] = total_f
         colhidos.append(docs_f)
 
@@ -518,4 +530,6 @@ def buscar_documentos(
         "sanitizada": removidos,
         "query_enviada": termo,
     }
+    if via_api:
+        meta["via"] = cjf_api.VIA
     return documentos[:max_resultados], meta

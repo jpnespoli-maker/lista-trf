@@ -37,7 +37,7 @@ def srv(monkeypatch):
 def test_avisa_quando_o_stj_esta_na_busca(srv):
     saida = srv.buscar_jurisprudencia_cjf("honorarios", tribunais="STJ,TRF2")
     assert "COBERTURA" in saida and "STJ" in saida and "2019" in saida
-    assert "forcar_scon" in saida
+    assert "stj-jurisprudencia" in saida
 
 
 def test_avisa_no_default_que_inclui_o_stj(srv):

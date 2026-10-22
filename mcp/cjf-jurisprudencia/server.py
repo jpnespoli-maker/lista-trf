@@ -21,7 +21,7 @@ from shared.base_juridica import (
     truncar_por_tokens,
     sanitizar_comentario_xml,
 )
-from shared import cjf_client
+from shared import cjf_api, cjf_client
 from shared.relaxamento import AVISO_RELAXADA, relaxar_cjf
 
 # Onda 2 — cache HTTP de respostas (TTL 7d para CJF).
@@ -54,8 +54,12 @@ mcp = FastMCP("cjf-jurisprudencia")
 # O índice do STJ nesta base para em ~dez/2019 — os demais tribunais seguem atuais.
 AVISO_COBERTURA_STJ = (
     "COBERTURA: esta base não indexa acórdão do STJ posterior a ~dez/2019 "
-    "(medido em 01/10/2026). Jurisprudência recente do STJ: stj-jurisprudencia "
-    "com forcar_scon=True. Os demais tribunais seguem atualizados."
+    "(medido em 01/10/2026). Jurisprudência recente do STJ: stj-jurisprudencia, "
+    "que vai ao SCON. Os demais tribunais seguem atualizados."
+)
+AVISO_VIA_API = (
+    "FONTE: API nova do CJF — o portal antigo está fora. Julgado do STF vem sem "
+    "data nem órgão; conferir no portal do STF antes de citar."
 )
 
 
@@ -121,6 +125,8 @@ def buscar_jurisprudencia_cjf(
         }
         import json as _json
         busca_relaxada: Optional[str] = None
+        aviso_cobertura: Optional[str] = None
+        lista_efetiva = lista_tribunais
         cached = cached_http("cjf-jurisprudencia", cache_key)
         if cached is not None:
             cache_hit = True
@@ -128,10 +134,21 @@ def buscar_jurisprudencia_cjf(
             documentos = payload["docs"]
             totais = payload["totais"]
             busca_relaxada = payload.get("relaxada")
+            aviso_cobertura = payload.get("aviso_cobertura")
         else:
-            documentos, totais = cjf_client.buscar_documentos(
-                busca, lista_tribunais, max_resultados
-            )
+            # Pela API nova (portal antigo fora), tribunal sem cobertura levanta
+            # em vez de virar zero; busca-se nos cobertos e declara-se o resto.
+            try:
+                documentos, totais = cjf_client.buscar_documentos(
+                    busca, lista_efetiva, max_resultados
+                )
+            except cjf_api.SemCoberturaNaApi as exc:
+                if not exc.cobertos:
+                    raise
+                lista_efetiva, aviso_cobertura = exc.cobertos, str(exc)
+                documentos, totais = cjf_client.buscar_documentos(
+                    busca, lista_efetiva, max_resultados
+                )
             # Degradação de recall (auditoria 2026-07-30): a busca conjuntiva
             # zerava em 60,4% das 1.496 chamadas do período. Zerou, reexecuta
             # em OU — o precedente-âncora costuma casar a maioria dos termos,
@@ -140,7 +157,7 @@ def buscar_jurisprudencia_cjf(
                 relaxada = relaxar_cjf(busca)
                 if relaxada:
                     documentos, totais = cjf_client.buscar_documentos(
-                        relaxada, lista_tribunais, max_resultados
+                        relaxada, lista_efetiva, max_resultados
                     )
                     busca_relaxada = relaxada if documentos else None
             # Zero NÃO se cacheia (31/08/2026). Um shard de tribunal às escuras
@@ -155,6 +172,7 @@ def buscar_jurisprudencia_cjf(
                     _json.dumps({
                         "docs": documentos, "totais": totais,
                         "relaxada": busca_relaxada,
+                        "aviso_cobertura": aviso_cobertura,
                     }),
                     ttl_s=7 * 86400,
                 )
@@ -181,8 +199,12 @@ def buscar_jurisprudencia_cjf(
 
         totais_str = ", ".join([f"{k}:{v}" for k, v in totais.items()])
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | Totais: {totais_str} -->\n'
-        if "STJ" in lista_tribunais:
+        if "STJ" in lista_tribunais and not aviso_cobertura:
             meta += f'<!-- {AVISO_COBERTURA_STJ} -->\n'
+        if aviso_cobertura:
+            meta += f'<!-- SEM COBERTURA: {sanitizar_comentario_xml(aviso_cobertura)} -->\n'
+        if any(d.get("via") == cjf_api.VIA for d in documentos):
+            meta += f'<!-- {AVISO_VIA_API} -->\n'
         if busca_relaxada:
             meta += (
                 f'<!-- BUSCA RELAXADA: "{sanitizar_comentario_xml(busca_relaxada)}" '

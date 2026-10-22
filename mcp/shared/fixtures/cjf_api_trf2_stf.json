@@ -1,0 +1,245 @@
+{
+ "results": {
+  "total": {
+   "value": 10000,
+   "relation": "gte"
+  },
+  "hits": [
+   {
+    "_id": "da14892670fcc3a6b7c0d54bbdac47e954416058c5cfe7266820c8a3ba25e586",
+    "_source": {
+     "ORIGEM": "STF - Supremo Tribunal Federal",
+     "OBSERVACOES": "- Acórdão(s) citado(s):\n(PRELIMINAR FORMAL, REPERCUSSÃO GERAL)\nARE 721962 AgR (TP), ARE 733120 AgR (1ªT).\n(SISTEMÁTICA, REPERCUSSÃO GERAL)\nARE 663637 AgR-QO (TP).\n(DEMONSTRAÇÃO FORMAL, RG)\nAI 688760 AgR (1ªT), AI 744686 AgR (TP).\nNúmero de páginas: 11.\nAnálise: 18/11/2014, AUR.\nPI - PIAUÍ",
+     "TIPO_DOCUMENTO": null,
+     "PROCESSO": "672655000070375",
+     "PROCESSO_CITACAO": "672655",
+     "CLASSE": "RE-AgR - AG.REG. NO RECURSO EXTRAORDINÁRIO",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "ROSA WEBER",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": "LEG-FED   EMR-000021      ANO-2007\n                EMENDA REGIMENTAL DO SUPREMO TRIBUNAL FEDERAL - STF",
+     "ORGAO_JULGADOR": null,
+     "TRIBUNAL": "stf",
+     "ORGAO_ORIGEM": "STF",
+     "DATA_DECISAO": null,
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "EMENTA\n    AUSÊNCIA DE PRELIMINAR FORMAL DE REPERCUSSÃO GERAL. INOBSERVÂNCIA DO ART. 5\n43-A, § 2º, DO CPC. REPERCUSSÃO GERAL PRESUMIDA OU RECONHECIDA EM OUTRO RECURSO\n NÃO VIABILIZA APELO SEM A PRELIMINAR FUNDAMENTADA DA REPERCUSSÃO GERAL. ACÓRDÃ\nO RECORRIDO\nPUBLICADO EM 18.02.2011.\n    Ausência de preliminar formal e fundamentada de repercussão geral. Inobserv\nância do art. 543-A, § 2º, do CPC.\n    Agravo regimental conhecido e não provido.",
+     "DECISAO": "A Turma negou provimento ao agravo regimental, nos termos do voto da relatora.\nUnânime. Presidência do Senhor Ministro Marco Aurélio. Primeira Turma, 14.10.20\n14.",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": null,
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": null,
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "c42245679dbe759213c9a866dc8758fd99f19257dfd90d8410b53eb53d1fef48",
+    "_source": {
+     "ORIGEM": "STF - Supremo Tribunal Federal",
+     "OBSERVACOES": "- Acórdão(s) citado(s):\n(REPERCUSSÃO GERAL, PRELIMINAR FORMAL)\nARE 663637 AgR-QO (TP), ARE 721962 AgR (TP), ARE 733120 AgR (1ªT).\n(REPERCUSSÃO GERAL PRESUMIDA)\nAI 688760 AgR (1ªT), AI 744686 AgR (TP).\nNúmero de páginas: 11.\nAnálise: 04/09/2015, BMP.\nMS - MATO GROSSO DO SUL",
+     "TIPO_DOCUMENTO": null,
+     "PROCESSO": "896313000051686",
+     "PROCESSO_CITACAO": "896313",
+     "CLASSE": "ARE-AgR - AG.REG. NO RECURSO EXTRAORDINÁRIO COM AGRAVO",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "ROSA WEBER",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": "LEG-FED   LEI-005869      ANO-1973\n          ART-00543A PAR-00002\n                CPC-1973 CÓDIGO DE PROCESSO CIVIL",
+     "ORGAO_JULGADOR": null,
+     "TRIBUNAL": "stf",
+     "ORGAO_ORIGEM": "STF",
+     "DATA_DECISAO": null,
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "EMENTA\n    DIREITO CIVIL. SISTEMA FINANCEIRO DE HABITAÇÃO. REVISÃO DO SALDO DEVEDOR. A\nUSÊNCIA DE PRELIMINAR FORMAL DE REPERCUSSÃO GERAL. INOBSERVÂNCIA DO ART. 543-A,\n § 2º, DO CPC. REPERCUSSÃO GERAL PRESUMIDA OU RECONHECIDA EM OUTRO RECURSO NÃO\nVIABILIZA APELO\nSEM A PRELIMINAR FUNDAMENTADA DA REPERCUSSÃO GERAL. ACÓRDÃO RECORRIDO PUBLICADO\n EM 29.4.2014.\n    1. Ausência de preliminar formal e fundamentada de repercussão geral. Inobs\nervância do art. 543-A, § 2º, do CPC.\n    2. As razões do agravo regimental não se mostram aptas a infirmar os fundam\nentos que lastrearam a decisão agravada.\n    3. Agravo regimental conhecido e não provido.",
+     "DECISAO": "A Turma negou provimento ao agravo regimental, nos termos do voto da Relatora.\nUnânime. Presidência da Senhora Ministra Rosa Weber. 1ª Turma, 4.8.2015.",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": null,
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": null,
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "trf5",
+     "doc_count": 225986
+    },
+    {
+     "key": "TRF1",
+     "doc_count": 147687
+    },
+    {
+     "key": "TRF3",
+     "doc_count": 103475
+    },
+    {
+     "key": "trf6",
+     "doc_count": 34051
+    },
+    {
+     "key": "stf",
+     "doc_count": 9324
+    },
+    {
+     "key": "trf2",
+     "doc_count": 9266
+    },
+    {
+     "key": "trf4",
+     "doc_count": 342
+    },
+    {
+     "key": "CJF",
+     "doc_count": 1
+    }
+   ]
+  },
+  "ORIGEM_JEF": {
+   "tr_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 7931,
+     "orgaos": [
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+       "doc_count": 1683
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+       "doc_count": 971
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - DF",
+       "doc_count": 880
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - TO",
+       "doc_count": 640
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MA",
+       "doc_count": 441
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+       "doc_count": 403
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AC",
+       "doc_count": 396
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - DF",
+       "doc_count": 333
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - BA",
+       "doc_count": 316
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - BA",
+       "doc_count": 313
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - GO",
+       "doc_count": 280
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - DF",
+       "doc_count": 244
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PA/AP",
+       "doc_count": 226
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - GO",
+       "doc_count": 127
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - PA/AP",
+       "doc_count": 120
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MG",
+       "doc_count": 107
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - MG",
+       "doc_count": 100
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PI",
+       "doc_count": 81
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - BA",
+       "doc_count": 72
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - BA",
+       "doc_count": 70
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - MG",
+       "doc_count": 56
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - MG",
+       "doc_count": 32
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MT",
+       "doc_count": 16
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO",
+       "doc_count": 11
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PA",
+       "doc_count": 6
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AM",
+       "doc_count": 3
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AP",
+       "doc_count": 1
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RR",
+       "doc_count": 1
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - DF",
+       "doc_count": 1
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - MA",
+       "doc_count": 1
+      }
+     ]
+    }
+   }
+  }
+ }
+}

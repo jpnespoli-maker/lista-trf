@@ -36,21 +36,30 @@ import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
+from tenacity import retry, retry_if_not_exception_type, stop_after_attempt, wait_exponential
 
+from shared import cjf_api
 from shared.base_juridica import TRIBUNAIS
+from shared.cjf_api import PortalJsfIndisponivel
 
 # HOST ANTIGO desde 22/10/2026: jurisprudencia.cjf.jus.br virou SPA (Angular,
 # "busca semântica", API JSON em /api/jurisprudencia/pesquisar) e não serve mais
 # o ViewState — toda chamada falhava. O portal JSF de sempre continua em
 # antiga-jurisprudencia.cjf.jus.br, que o próprio site novo indica como "versão
-# antiga do sistema". A API nova NÃO substitui este cliente: medido no mesmo dia,
-# ela só tem os seis TRFs, sem STF nem STJ.
+# antiga do sistema". A API nova não o substitui por inteiro (quase não tem STJ,
+# e o STF vem sem data nem órgão): é a RESERVA, em `shared/cjf_api.py`, para
+# quando este host também virar SPA.
 CJF_URL = "https://antiga-jurisprudencia.cjf.jus.br/unificada/index.xhtml"
 
 _AVISO_SEM_VIEWSTATE = (
     "ViewState não encontrado em {url}. Se a página for o SPA novo do CJF, o host "
-    "antigo também saiu do ar: ver a nota de CJF_URL em shared/cjf_client.py."
+    "antigo também saiu do ar e a busca segue pela API nova (shared/cjf_api.py)."
+)
+
+# A página sem ViewState não se conserta tentando de novo; vai direto à reserva.
+_RETRY_JSF = dict(
+    wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
+    retry=retry_if_not_exception_type(PortalJsfIndisponivel), reraise=True,
 )
 
 CJF_HEADERS = {
@@ -95,8 +104,7 @@ class CJFSession:
 
     # `reraise`: sem ele a falha chegava como "RetryError[<Future ...>]", e a
     # troca do portal pelo SPA (22/10/2026) passou um dia sem causa visível.
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
-           reraise=True)
+    @retry(**_RETRY_JSF)
     def obter_viewstate(self) -> str:
         """Obtém ViewState da página inicial e descobre o name do checkbox."""
         resp = self.session.get(CJF_URL, timeout=30)
@@ -116,7 +124,7 @@ class CJFSession:
             self._fetched_at = time.monotonic()
             return self.viewstate
 
-        raise ValueError(_AVISO_SEM_VIEWSTATE.format(url=CJF_URL))
+        raise PortalJsfIndisponivel(_AVISO_SEM_VIEWSTATE.format(url=CJF_URL))
 
     def _descobrir_checkbox_tribunal(self, html_inicial: str) -> None:
         """Descobre o ``name`` real do checkbox de tribunal no HTML do GET inicial.
@@ -134,8 +142,7 @@ class CJFSession:
                 self.checkbox_tribunal = m.group(1)
                 return
 
-    @retry(wait=wait_exponential(multiplier=1, min=2, max=10), stop=stop_after_attempt(3),
-           reraise=True)
+    @retry(**_RETRY_JSF)
     def buscar(self, termo: str, tribunais: List[str]) -> str:
         """Submete a busca e retorna o HTML (partial JSF) da primeira página."""
         if not self.viewstate_is_fresh:
@@ -289,6 +296,22 @@ def get_cjf_session() -> CJFSession:
 # ---------------------------------------------------------------------------
 
 def buscar_documentos(
+    termo: str,
+    tribunais: List[str],
+    max_resultados: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Busca no portal JSF; servindo ele o SPA, na API nova (``shared/cjf_api``).
+
+    Pela API, cada documento traz ``via: "api-nova"``, e tribunal que ela não
+    cobre (o STJ) levanta ``cjf_api.SemCoberturaNaApi`` em vez de virar zero.
+    """
+    try:
+        return _buscar_documentos_jsf(termo, tribunais, max_resultados)
+    except PortalJsfIndisponivel:
+        return cjf_api.buscar_unificada(termo, tribunais, max_resultados)
+
+
+def _buscar_documentos_jsf(
     termo: str,
     tribunais: List[str],
     max_resultados: int,

@@ -124,6 +124,11 @@ def _avisos(meta: dict) -> List[str]:
         )
     if meta.get("relaxada"):
         avisos.append(f'BUSCA RELAXADA: "{meta["relaxada"]}" | {AVISO_RELAXADA}')
+    if meta.get("via") == "api-nova":
+        avisos.append(
+            "FONTE: API nova do CJF — o portal regional antigo está fora. O total "
+            "de cada fonte conta todos os tipos de documento."
+        )
     return avisos
 
 

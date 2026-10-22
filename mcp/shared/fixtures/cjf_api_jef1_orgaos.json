@@ -1,0 +1,188 @@
+{
+ "results": {
+  "total": {
+   "value": 1502,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "39b7a5dc580018b7cc4539d04c1f1b8a2121d441b5df33cbc129bb89f95e7d7c",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0028857-21.2019.4.01.3300",
+     "PROCESSO_CITACAO": "0028857-21.2019.4.01.3300",
+     "CLASSE": "RECURSO CONTRA SENTENÇA DO JUIZADO CÍVEL",
+     "CLASSE_SIGLA": "AGREXT",
+     "RELATOR": "RENATA MESQUITA RIBEIRO QUADROS",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "PRIMEIRA TURMA RECURSAL - BA",
+     "TRIBUNAL": "JEF1",
+     "ORGAO_ORIGEM": "TR 1ª Região",
+     "DATA_DECISAO": "2022-04-29T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "PJe Publicação 29/04/2022",
+     "EMENTA": "SÚMULA DE JULGAMENTORESTABELECIMENTO DO BENEFÍCIO BOLSA FAMÍLIA. REQUISITOS NÃO PREENCHIDOS. RECURSO DA PARTE AUTORA DESPROVIDO. SENTENÇA MANTIDA.1. Trata-se de Recurso Inominado interposto pela parte autora contra a sentença de 1º grau, que rejeitou o pedido de o restabelecimento do benefício do programa Bolsa-Família. Alega a parte autora ninguém da família da parte Recorrente é pescador artesanal e tampouco recebe o benefício do seguro defeso.2. O Programa Bolsa Família foi instituído pela Lei nº 10.836/04 e regulamentado pelo Decreto nº 5.209/04, possuindo regras e princípios próprios. Consoante dispõe o art. 25, inciso VI, do Decreto nº 5.209/04: Art. 25. As famílias atendidas pelo Programa Bolsa Família permanecerão com os benefícios liberados mensalmente para pagamento, salvo na ocorrência das seguintes situações: III - omissão de informações ou prestação de informações falsas para o cadastramento que habilitem indevidamente o declarante e sua família ao recebimento dos benefícios financeiros do Programa Bolsa Família ou dos Programas Remanescentes.3. Nesse tocante, reputo inviável a reforma do r. julgamento no caso em tela, sentido em que bem salientou o Juízo a quo (...) Trata-se de ação na qual a parte autora requer o restabelecimento do benefício do programa Bolsa-Família. Afirma, em síntese, que ao tentar realizar o saque do seu benefício de Bolsa Família em abril de 2019 descobriu que este se encontrava suspenso devido a uma revisão feita pelo Governo Federal que constatou a existência na família da autora de recebimento de seguro desemprego para pescadores artesanais no período de abril de 2015 até março de 2019. Afirma que ninguém da sua família é pescador artesanal e tampouco recebe o seguro defeso. Decido. Inicialmente, verifico que consta nos documentos adunados ao feito pela CAIXA tela contendo protocolos de requerimento de seguro defeso registrados em nome da autora nos anos de 2010 a 2017. Outrossim, verifico que conforme o Portal da transparência, por meio do relatório Panorama da relação da pessoa com o Governo Federal que a autora recebeu recursos oriundos do programa bolsa família e do seguro defeso, o que afasta a alegação da autora de que nunca recebeu o seguro defeso. Com efeito, o Decreto 8.424 de 31 de março de 2015, que versa sobre a concessão do seguro desemprego, durante o período de defeso, ao pescador profissional artesanal que exerce sua atividade exclusiva e ininterruptamente, estipula em seu §2º do art.2 que: Art. 2º T...",
+     "DECISAO": "A Turma Recursal do Juizado Especial Federal da Seção Judiciária do Estado da Bahia, à unanimidade, conheceu e negou provimento ao recurso.",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "BA",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2022-04-29T03:00:00.000Z",
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "48937b62a16673deaefed9f4bf0c05d0eead7435b6f6fe38a746ef98f0d07658",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0014351-34.2014.4.01.3100",
+     "PROCESSO_CITACAO": "0014351-34.2014.4.01.3100",
+     "CLASSE": "RECURSO CONTRA SENTENÇA DO JUIZADO CÍVEL",
+     "CLASSE_SIGLA": "AGREXT",
+     "RELATOR": "CLÁUDIO HENRIQUE FONSECA DE PINA",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "SEGUNDA TURMA RECURSAL - PA/AP",
+     "TRIBUNAL": "JEF1",
+     "ORGAO_ORIGEM": "TR 1ª Região",
+     "DATA_DECISAO": "2018-04-11T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "Diário Eletrônico Publicação 11/04/2018",
+     "EMENTA": "BOLSA FAMÍLIA. COMPETÊNCIA EXCLUSIVA DO PODER EXECUTIVO. PROGRAMA INSTITUÍDO PELO GOVERNO FEDERAL. RECURSO A QUE SE NEGA PROVIMENTO.\n1. Insurge-se a parte autora, ora recorrente, contra sentença que julgou improcedente pedido de condenação da União a promover sua reinclusão no Programa Bolsa Família.\n2. O programa bolsa família é promovido pelo Governo Federal e instituído pela Lei n. 10.836/2004,consistindo em um programa de transferência de renda com vista a atender famílias de baixa renda que vivem em situação de extrema pobreza.\n3. Compete exclusivamente ao Poder Executivo a concessão do benefício do Programa Bolsa Família, instituído pela Lei nº 10.836/2004, não podendo o Poder Judiciário fazer a concessão do referido benefício, sob pena de invasão de competência e consequente violação ao art. 2º da Constituição Federal.\n4. Ausência de elementos que indiquem situação de pobreza ou extrema pobreza que justifiquem a concessão do benefício. Regular recebimento pela autora do benefício assistencial LOAS.\n5. Sentença mantida. Recurso desprovido.\n6. Isento de custas. Honorários advocatícios fixados em 10% sobre o valor atualizado da causa, suspensa sua exigibilidade em razão da concessão da justiça gratuita pleiteada na petição inicial.",
+     "DECISAO": "A 2ª Turma Recursal dos Juizados Especiais Federais PA/AP, com sede na Seção Judiciária do Pará, por unanimidade, CONHECEU E\nNEGOU PROVIMENTO ao recurso, nos termos do voto do Relator, lavrado sob a forma de ementa.",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "AP",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2018-04-11T03:00:00.000Z",
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": []
+  },
+  "ORIGEM_JEF": {
+   "tr_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 1502,
+     "orgaos": [
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+       "doc_count": 293
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - BA",
+       "doc_count": 202
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - BA",
+       "doc_count": 159
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MA",
+       "doc_count": 119
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+       "doc_count": 117
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+       "doc_count": 96
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AC",
+       "doc_count": 79
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - GO",
+       "doc_count": 61
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - GO",
+       "doc_count": 56
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - DF",
+       "doc_count": 41
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PA/AP",
+       "doc_count": 40
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - DF",
+       "doc_count": 34
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - BA",
+       "doc_count": 32
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - PA/AP",
+       "doc_count": 31
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MG",
+       "doc_count": 25
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - TO",
+       "doc_count": 25
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - DF",
+       "doc_count": 21
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MT",
+       "doc_count": 20
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - BA",
+       "doc_count": 17
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO",
+       "doc_count": 13
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PI",
+       "doc_count": 9
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - MG",
+       "doc_count": 8
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - MG",
+       "doc_count": 3
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - MG",
+       "doc_count": 1
+      }
+     ]
+    }
+   }
+  }
+ }
+}

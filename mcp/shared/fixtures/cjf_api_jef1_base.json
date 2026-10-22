@@ -1,0 +1,184 @@
+{
+ "results": {
+  "total": {
+   "value": 8918,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "9021ac666e7aa5bed59471af85c50e5cf8d9049727cc486ba5a7e0ccb2bc9f3d",
+    "_source": {
+     "ORIGEM": "STF - Supremo Tribunal Federal",
+     "OBSERVACOES": "DF - DISTRITO FEDERAL",
+     "TIPO_DOCUMENTO": null,
+     "PROCESSO": "3359000000737",
+     "PROCESSO_CITACAO": "3359",
+     "CLASSE": "ACO-MC-Ref - REFERENDO NA MEDIDA CAUTELAR NA AÇÃO CÍVEL ORIGINÁRIA",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "MARCO AURÉLIO",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": null,
+     "TRIBUNAL": "stf",
+     "ORGAO_ORIGEM": "STF",
+     "DATA_DECISAO": null,
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "AÇÃO CÍVEL ORIGINÁRIA – PROGRAMA BOLSA FAMÍLIA – REGIÃO NORDESTE – CALAMIDA\nDE PÚBLICA – MEDIDA LIMINAR – ADITAMENTO – REFERENDO. Cumpre deferir tutela de\nurgência determinando a suspensão, no Programa Bolsa Família, de cortes que afe\ntem os Estados\nda Região Nordeste, enquanto perdurar o estado de calamidade pública decorrente\n da pandemia de covid-19, bem assim a liberação uniforme, aos Estados da Federa\nção, de recursos para novas inscrições.",
+     "DECISAO": "O Tribunal, por unanimidade, referendou a medida cautelar deferida, em 20 de ma\nrço de 2020, pelo Ministro Marco Aurélio (Relator), nos seguintes termos: “Defi\nro a medida acauteladora para que a União disponibilize dados a justificarem a\nconcentração de\ncortes de benefícios do Programa Bolsa Famíli",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": null,
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": null,
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "trf5",
+     "doc_count": 2556
+    },
+    {
+     "key": "TRF3",
+     "doc_count": 2503
+    },
+    {
+     "key": "TRF1",
+     "doc_count": 1768
+    },
+    {
+     "key": "trf6",
+     "doc_count": 284
+    },
+    {
+     "key": "trf4",
+     "doc_count": 21
+    },
+    {
+     "key": "trf2",
+     "doc_count": 17
+    },
+    {
+     "key": "stf",
+     "doc_count": 6
+    }
+   ]
+  },
+  "ORIGEM_JEF": {
+   "tr_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 1502,
+     "orgaos": [
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+       "doc_count": 293
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - BA",
+       "doc_count": 202
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - BA",
+       "doc_count": 159
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MA",
+       "doc_count": 119
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+       "doc_count": 117
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+       "doc_count": 96
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AC",
+       "doc_count": 79
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - GO",
+       "doc_count": 61
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - GO",
+       "doc_count": 56
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - DF",
+       "doc_count": 41
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PA/AP",
+       "doc_count": 40
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - DF",
+       "doc_count": 34
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - BA",
+       "doc_count": 32
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - PA/AP",
+       "doc_count": 31
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MG",
+       "doc_count": 25
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - TO",
+       "doc_count": 25
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - DF",
+       "doc_count": 21
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MT",
+       "doc_count": 20
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - BA",
+       "doc_count": 17
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO",
+       "doc_count": 13
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PI",
+       "doc_count": 9
+      },
+      {
+       "key": "QUARTA TURMA RECURSAL - MG",
+       "doc_count": 8
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - MG",
+       "doc_count": 3
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - MG",
+       "doc_count": 1
+      }
+     ]
+    }
+   }
+  }
+ }
+}

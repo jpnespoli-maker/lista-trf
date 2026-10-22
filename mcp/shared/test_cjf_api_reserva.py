@@ -1,0 +1,184 @@
+"""A API nova do CJF como RESERVA dos clientes JSF (shared/cjf_api.py).
+
+Medido em 22/10/2026: o jurisprudencia.cjf.jus.br virou SPA e os clientes JSF
+passaram a antiga-jurisprudencia.cjf.jus.br. Quando esse host também virar SPA,
+a busca segue pela API nova, sem intervenção. A API cobre STF e os seis TRFs; o
+STJ é resíduo (2 contra 33.225 no portal antigo, "honorarios") e é RECUSADO,
+nunca devolvido como zero. O STF vem sem data nem órgão.
+
+Fixtures capturadas por `cjf_api.pesquisar` no mesmo dia e recortadas (sem
+INTEIRO_TEOR, DECISAO a 300 caracteres, dois documentos): "repercussao geral"
+em TRF2+STF; "bolsa familia" sem filtro (agregação de turma recursal da 1ª
+Região) e filtrada pelos 24 órgãos dela. Jurisprudência pública.
+"""
+
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+MCP = Path(__file__).resolve().parents[1]
+if str(MCP) not in sys.path:
+    sys.path.insert(0, str(MCP))
+
+from shared import cjf_api, cjf_client, cjf_regional_client  # noqa: E402
+
+_FIX = Path(__file__).parent / "fixtures"
+
+
+def _ler(nome):
+    return json.loads((_FIX / nome).read_text(encoding="utf-8"))
+
+
+TRF2_STF = _ler("cjf_api_trf2_stf.json")
+JEF1_BASE = _ler("cjf_api_jef1_base.json")
+JEF1_ORGAOS = _ler("cjf_api_jef1_orgaos.json")
+
+
+class TestDocumento:
+    def test_turma_recursal_com_data_e_orgao(self):
+        d = cjf_api.documento(JEF1_ORGAOS["results"]["hits"][0]["_source"])
+        assert d["numero"] == "0028857-21.2019.4.01.3300"
+        assert d["orgao_julgador"] == "PRIMEIRA TURMA RECURSAL - BA"
+        assert d["data_julgamento"] == "29/04/2022"
+        assert d["tribunal"] == "JEF1" and d["via"] == "api-nova"
+        assert "aviso" not in d
+
+    def test_stf_degradado_vem_com_aviso(self):
+        d = cjf_api.documento(TRF2_STF["results"]["hits"][0]["_source"])
+        assert d["tribunal"] == "STF"
+        assert d["numero"] == "672655"
+        assert not d["ementa"].startswith("EMENTA")
+        assert "data_julgamento" not in d and "orgao_julgador" not in d
+        assert "STF" in d["aviso"]
+
+
+class TestUnificada:
+    def test_stj_e_recusado_com_os_cobertos(self, monkeypatch):
+        monkeypatch.setattr(cjf_api, "pesquisar", lambda *a, **k: pytest.fail("não deveria buscar"))
+        with pytest.raises(cjf_api.SemCoberturaNaApi) as exc:
+            cjf_api.buscar_unificada("x", ["STF", "STJ", "TRF2"], 5)
+        assert exc.value.sem_cobertura == ["STJ"]
+        assert exc.value.cobertos == ["STF", "TRF2"]
+        assert "stj-jurisprudencia" in str(exc.value)
+
+    def test_totais_dos_baldes_sem_caixa(self, monkeypatch):
+        chamadas = []
+        monkeypatch.setattr(cjf_api, "pesquisar",
+                            lambda q, f, n: (chamadas.append(f), TRF2_STF)[1])
+        docs, totais = cjf_api.buscar_unificada("repercussao geral", ["trf2", "STF"], 2)
+        assert chamadas == [{"TRIBUNAL": ["TRF2", "STF"]}]
+        assert totais == {"TRF2": 9266, "STF": 9324}
+        assert [d["via"] for d in docs] == ["api-nova", "api-nova"]
+
+    def test_canario_total_sem_documentos(self, monkeypatch):
+        oco = {**TRF2_STF, "results": {**TRF2_STF["results"], "hits": []}}
+        monkeypatch.setattr(cjf_api, "pesquisar", lambda *a, **k: oco)
+        with pytest.raises(RuntimeError, match="não tratar como 'nada encontrado'"):
+            cjf_api.buscar_unificada("repercussao geral", ["TRF2"], 2)
+
+
+class TestRegional:
+    def test_jef1_filtra_pelos_orgaos_de_turma_recursal(self, monkeypatch):
+        chamadas = []
+
+        def _pesquisar(q, f, n):
+            chamadas.append(f)
+            return JEF1_BASE if len(chamadas) == 1 else JEF1_ORGAOS
+
+        monkeypatch.setattr(cjf_api, "pesquisar", _pesquisar)
+        docs, total = cjf_api.buscar_regional("bolsa familia", "JEF1", list(cjf_regional_client.TIPOS_DOCUMENTO), 2)
+        assert total == 1502
+        assert len(chamadas[1]["ORGAO_JULGADOR"]) == 24
+        assert all(d["fonte"] == "JEF1" and "RECURSAL" in d["orgao_julgador"] for d in docs)
+
+    @pytest.mark.parametrize("tipos, esperado", [
+        (["ACORDAO", "SUMULA", "ARGUICAO", "DECISAOMONO"], {}),
+        (["ACORDAO"], {"TIPO_DOCUMENTO": ["ACÓRDÃO"]}),
+    ])
+    def test_tipos(self, tipos, esperado):
+        assert cjf_api._filtro_tipos(tipos) == esperado
+
+    def test_tipo_sem_equivalente_e_recusado(self):
+        with pytest.raises(RuntimeError, match="SUMULA"):
+            cjf_api._filtro_tipos(["SUMULA"])
+
+
+class _SessaoSpa:
+    viewstate = None
+    _fetched_at = 0.0
+
+    def buscar(self, *_a, **_k):
+        raise cjf_api.PortalJsfIndisponivel("SPA")
+
+
+class TestDesvioAutomatico:
+    def test_unificada_vai_a_api_quando_o_jsf_serve_spa(self, monkeypatch):
+        monkeypatch.setattr(cjf_client, "get_cjf_session", lambda: _SessaoSpa())
+        monkeypatch.setattr(cjf_api, "buscar_unificada", lambda t, tr, n: (["doc"], {"TRF2": 1}))
+        assert cjf_client.buscar_documentos("x", ["TRF2"], 1) == (["doc"], {"TRF2": 1})
+
+    def test_regional_vai_a_api_e_declara_a_via(self, monkeypatch):
+        def _jsf(*_a, **_k):
+            raise cjf_api.PortalJsfIndisponivel("SPA")
+
+        monkeypatch.setattr(cjf_regional_client, "_buscar_uma_fonte", _jsf)
+        monkeypatch.setattr(cjf_api, "buscar_regional",
+                            lambda t, f, tp, n: ([{"numero": f, "ementa": f}], 7))
+        docs, meta = cjf_regional_client.buscar_documentos("x", ["TRF1", "JEF1"], ["ACORDAO"], 4)
+        assert meta["via"] == "api-nova" and meta["por_fonte"] == {"TRF1": 7, "JEF1": 7}
+
+    @pytest.mark.parametrize("modulo, classe", [
+        (cjf_client, "CJFSession"), (cjf_regional_client, "TRF1Session"),
+    ])
+    def test_spa_nao_se_tenta_de_novo(self, modulo, classe):
+        """Página sem ViewState não se conserta repetindo: um GET só."""
+        gets = []
+        resp = type("R", (), {"text": "<html>SPA</html>", "raise_for_status": lambda self: None})()
+        sessao = getattr(modulo, classe)()
+        sessao.session.get = lambda *a, **k: (gets.append(1), resp)[1]
+        with pytest.raises(cjf_api.PortalJsfIndisponivel):
+            sessao.obter_viewstate()
+        assert len(gets) == 1
+
+
+@pytest.fixture
+def srv_cjf(monkeypatch):
+    spec = importlib.util.spec_from_file_location(
+        "cjf_server_reserva", MCP / "cjf-jurisprudencia" / "server.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    monkeypatch.setattr(mod, "cached_http", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "registrar_dispositivo", lambda *a, **k: None)
+    monkeypatch.setattr(mod, "log_query", lambda **k: None)
+    monkeypatch.setattr(mod, "relaxar_cjf", lambda q: None)
+    return mod
+
+
+def test_servidor_busca_nos_cobertos_e_declara_o_stj(srv_cjf, monkeypatch):
+    chamadas = []
+
+    def _buscar(busca, tribs, n):
+        chamadas.append(list(tribs))
+        if "STJ" in tribs:
+            raise cjf_api.SemCoberturaNaApi(["STJ"], [t for t in tribs if t != "STJ"])
+        return [cjf_api.documento(JEF1_ORGAOS["results"]["hits"][0]["_source"])], {t: 3 for t in tribs}
+
+    monkeypatch.setattr(srv_cjf.cjf_client, "buscar_documentos", _buscar)
+    saida = srv_cjf.buscar_jurisprudencia_cjf("bolsa familia", tribunais="STJ,TRF1")
+    assert chamadas == [["STJ", "TRF1"], ["TRF1"]]
+    assert "SEM COBERTURA" in saida and "STJ" in saida
+    assert "FONTE: API nova do CJF" in saida
+    assert "<erro>" not in saida
+
+
+def test_servidor_so_stj_e_erro_declarado(srv_cjf, monkeypatch):
+    def _buscar(*_a, **_k):
+        raise cjf_api.SemCoberturaNaApi(["STJ"], [])
+
+    monkeypatch.setattr(srv_cjf.cjf_client, "buscar_documentos", _buscar)
+    saida = srv_cjf.buscar_jurisprudencia_cjf("honorarios", tribunais="STJ")
+    assert saida.startswith("<erro>") and "STJ" in saida
