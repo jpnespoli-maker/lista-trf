@@ -19,9 +19,11 @@ Estratégia de acesso:
 from mcp.server.fastmcp import FastMCP
 import requests
 import json as _json
+import re
 import time
 from typing import Any
-from tenacity import retry, wait_exponential, stop_after_attempt
+from tenacity import retry, retry_if_not_exception_type, wait_exponential, stop_after_attempt
+from xml.sax.saxutils import escape as _xml_escape
 import sys
 from pathlib import Path
 from playwright.async_api import async_playwright
@@ -87,18 +89,29 @@ HEADERS = {
 }
 
 SOURCE_FIELDS = [
+    "base",
+    "titulo",
     "processo_codigo_completo",
     "processo_numero",
     "processo_classe_processual_unificada_extenso",
     "processo_classe_processual_unificada_classe_sigla",
+    "orgao_julgador",
     "relator_processo_nome",
+    "relator_acordao_nome",
     "julgamento_data",
     "publicacao_data",
+    "ementa_texto",
     "decisao_texto",
+    "sumula_texto",
+    "conteudo_texto",
+    "resumo_noticia",
     "documental_indexacao_texto",
-    "documental_observacao_texto",
+    "documental_tese_tema_texto",
+    "documental_tese_texto",
+    "is_vinculante",
+    "situacao_sumula",
     "inteiro_teor_url",
-    "base",
+    "informativo_url",
 ]
 
 BASES_VALIDAS = {
@@ -108,23 +121,62 @@ BASES_VALIDAS = {
     "informativos": "Informativos",
 }
 
+# Valores do campo `base` no índice para cada base da tool. A API IGNORA o
+# `?base=` da URL: sem este filtro no corpo, as quatro bases devolviam o mesmo
+# conjunto (medido em 2026-10-22). Os informativos têm duas séries no índice.
+BASES_INDICE = {
+    "acordaos": ["acordaos"],
+    "sumulas": ["sumulas"],
+    "decisoes-monocraticas": ["decisoes"],
+    "informativos": ["informativos", "novo_informativo"],
+}
+ALIASES_BASE = {"decisoes": "decisoes-monocraticas"}
 
-def _payload(query: str, inicio: int, tamanho: int) -> dict:
+# O texto principal de cada base mora num campo próprio (ementa, enunciado,
+# informativo, tese). Fora da lista, a base fica inalcançável: só com os quatro
+# campos antigos, acórdãos e informativos davam zero.
+CAMPOS_BUSCA = [
+    # Peso no título: sem ele, "RE 567985" trazia antes os agravos que só o citam.
+    "titulo^5",
+    "ementa_texto",
+    "decisao_texto",
+    "sumula_texto",
+    "conteudo_texto",
+    "titulo_noticia",
+    "resumo_noticia",
+    "documental_tese_tema_texto",
+    "documental_tese_texto",
+    "documental_indexacao_texto",
+    "documental_observacao_texto",
+]
+
+# Sobe quando o corpo da busca muda de sentido, para o cache em disco não
+# servir resposta gravada pela versão anterior (a v1 não filtrava a base).
+_CACHE_VERSAO = 2
+
+
+def _escapar_barra(query: str) -> str:
+    """`/` abre regex no query_string, e `Lei 8.742/93` volta HTTP 400."""
+    return re.sub(r"(?<!\\)/", r"\\/", query)
+
+
+def _payload(query: str, inicio: int, tamanho: int, base: str) -> dict:
     return {
         "query": {
-            "query_string": {
-                "query": query,
-                "default_operator": "AND",
-                "fields": [
-                    "titulo",
-                    "documental_indexacao_texto",
-                    "decisao_texto",
-                    "documental_observacao_texto",
-                ],
+            "bool": {
+                "must": [{
+                    "query_string": {
+                        "query": _escapar_barra(query),
+                        "default_operator": "AND",
+                        "fields": CAMPOS_BUSCA,
+                    }
+                }],
+                "filter": [{"terms": {"base": BASES_INDICE[base]}}],
             }
         },
         "from": inicio,
         "size": tamanho,
+        "track_total_hits": True,
         "_source": SOURCE_FIELDS,
     }
 
@@ -135,6 +187,19 @@ def _payload(query: str, inicio: int, tamanho: int) -> dict:
 
 class _STFWAFBlock(RuntimeError):
     """Resposta sugere bloqueio AWS WAF / Cloudflare (202 vazio, 403, HTML challenge)."""
+
+
+class _STFQueryInvalida(ValueError):
+    """HTTP 400 do Elasticsearch: a query não parseia. Repetir ou subir o
+    navegador não muda nada, e tratá-la como bloqueio mandava o agente buscar
+    fonte alternativa achando que o STF estava fora do ar."""
+
+
+def _detalhe_400(texto: str) -> str:
+    try:
+        return str(_json.loads(texto).get("detail", texto))[:300]
+    except (ValueError, AttributeError):
+        return texto[:300]
 
 
 def _eh_resposta_bloqueada(resp: requests.Response) -> bool:
@@ -162,15 +227,18 @@ def _eh_resposta_bloqueada(resp: requests.Response) -> bool:
     return any(s in low for s in sinais)
 
 
-@retry(wait=wait_exponential(multiplier=1, min=1, max=2), stop=stop_after_attempt(2), reraise=True)
+@retry(wait=wait_exponential(multiplier=1, min=1, max=2), stop=stop_after_attempt(2), reraise=True,
+       retry=retry_if_not_exception_type(_STFQueryInvalida))
 def _buscar_via_requests(query: str, base: str, tamanho: int) -> dict:
     session = requests.Session()
     session.headers.update(HEADERS)
     resp = session.post(
         f"{STF_SEARCH_URL}?base={base}",
-        json=_payload(query, 0, tamanho),
+        json=_payload(query, 0, tamanho, base),
         timeout=10,
     )
+    if resp.status_code == 400:
+        raise _STFQueryInvalida(_detalhe_400(resp.text))
     if _eh_resposta_bloqueada(resp):
         raise _STFWAFBlock(
             f"WAF ativo (HTTP {resp.status_code}, CT={resp.headers.get('Content-Type','?')}, "
@@ -192,7 +260,7 @@ async def _buscar_via_playwright(query: str, base: str, tamanho: int) -> dict:
 
     Custo típico: 5-10s (boot do browser + waf challenge + fetch).
     """
-    body = _payload(query, 0, tamanho)
+    body = _payload(query, 0, tamanho, base)
     body_json = _json.dumps(body)
 
     pw_cm = async_playwright()
@@ -246,6 +314,8 @@ async def _buscar_via_playwright(query: str, base: str, tamanho: int) -> dict:
         finally:
             await browser.close()
 
+    if result["status"] == 400:
+        raise _STFQueryInvalida(_detalhe_400(result["text"]))
     if result["status"] != 200 or "json" not in (result["ct"] or "").lower():
         raise RuntimeError(
             f"Playwright também falhou: HTTP {result['status']} CT={result['ct']} "
@@ -261,36 +331,86 @@ async def _buscar_via_playwright(query: str, base: str, tamanho: int) -> dict:
 # Parser de resultado individual
 # ---------------------------------------------------------------------------
 
+# Texto principal, na ordem: ementa (acórdão), enunciado (súmula), decisão
+# monocrática, informativo novo e antigo. A indexação é só o último recurso —
+# é a lista de descritores do STF, não a ementa, e saía como se fosse.
+_CAMPOS_CONTEUDO = (
+    "ementa_texto",
+    "sumula_texto",
+    "decisao_texto",
+    "resumo_noticia",
+    "conteudo_texto",
+    "documental_indexacao_texto",
+)
+
+
+def _txt(src: dict, campo: str) -> str:
+    """Campo como texto: na série novo_informativo o tema e o número do
+    processo vêm como int, e o tratamento de texto quebrava com TypeError."""
+    valor = src.get(campo)
+    return "" if valor is None else str(valor)
+
+
 def _parse_resultado(hit: dict, base: str, max_tokens_ementa: int = 400) -> BaseResultadoJuridico:
     src = hit.get("_source", {})
-    numero = src.get("processo_codigo_completo") or src.get("processo_numero", "")
-    tipo = src.get("processo_classe_processual_unificada_extenso") or src.get(
-        "processo_classe_processual_unificada_classe_sigla", ""
-    )
-    relator = src.get("relator_processo_nome", "")
-    data = src.get("publicacao_data") or src.get("julgamento_data", "")
+    base_doc = _txt(src, "base") or base
+    numero = (_txt(src, "processo_codigo_completo") or _txt(src, "titulo")
+              or _txt(src, "processo_numero"))
+    if base_doc == "sumulas":
+        tipo = "Súmula Vinculante" if src.get("is_vinculante") else "Súmula"
+    elif base_doc in ("informativos", "novo_informativo"):
+        tipo = "Informativo"
+    else:
+        tipo = _txt(src, "processo_classe_processual_unificada_extenso") or _txt(
+            src, "processo_classe_processual_unificada_classe_sigla"
+        )
+    relator = _txt(src, "relator_processo_nome")
+    data = _txt(src, "publicacao_data") or _txt(src, "julgamento_data")
 
-    ementa = src.get("documental_indexacao_texto") or src.get("decisao_texto", "")
-    ementa = limpar_texto_html(ementa)
-    ementa = truncar_por_tokens(ementa, max_tokens=max_tokens_ementa)
+    conteudo = next((_txt(src, c) for c in _CAMPOS_CONTEUDO if _txt(src, c)), "")
+    conteudo = limpar_texto_html(conteudo)
+    conteudo = truncar_por_tokens(conteudo, max_tokens=max_tokens_ementa)
 
-    url = src.get("inteiro_teor_url", "")
+    redator = _txt(src, "relator_acordao_nome")
+    tema = src.get("documental_tese_tema_texto")
+    extra = {
+        "redator_acordao": redator if redator != relator else "",
+        "data_julgamento": _txt(src, "julgamento_data"),
+        "data_publicacao": _txt(src, "publicacao_data"),
+        "tema": f"Tema {tema}" if isinstance(tema, int) else limpar_texto_html(_txt(src, "documental_tese_tema_texto")),
+        "tese": limpar_texto_html(_txt(src, "documental_tese_texto")),
+        "situacao": _txt(src, "situacao_sumula"),
+        "url": _txt(src, "inteiro_teor_url") or _txt(src, "informativo_url"),
+        "base": base_doc,
+    }
 
     return BaseResultadoJuridico(
-        conteudo=ementa,
+        conteudo=conteudo,
         fonte="STF",
         tipo=tipo or base.upper(),
-        orgao="Supremo Tribunal Federal",
+        orgao=src.get("orgao_julgador") or "Supremo Tribunal Federal",
         numero=numero,
         relator=relator,
         data=data,
-        extra={"url": url, "base": base} if url else {"base": base},
+        extra=extra,
     )
 
 
 # ---------------------------------------------------------------------------
 # Tool pública
 # ---------------------------------------------------------------------------
+
+def _erro_sintaxe(base: str, detalhe: str) -> str:
+    return (
+        f'<erro tipo="sintaxe" base="{BASES_VALIDAS[base]}">'
+        f'O STF recusou a query (HTTP 400): ela não parseia no query_string do '
+        f'Elasticsearch. Não é bloqueio do portal: corrija a query e repita. '
+        f'Causas comuns: aspa ou parêntese sem fecho, dois-pontos fora de campo, '
+        f'caractere reservado ( + - = &amp;&amp; || &gt; &lt; ! ( ) {{ }} [ ] ^ " ~ * ? : \\ ) '
+        f'sem barra invertida. Detalhe: {_xml_escape(detalhe)}'
+        f'</erro>'
+    )
+
 
 @mcp.tool()
 async def buscar_jurisprudencia_stf(
@@ -304,20 +424,27 @@ async def buscar_jurisprudencia_stf(
     Use ajuda_sintaxe_stf() para guia completo de operadores e exemplos.
 
     SINTAXE RÁPIDA: termos simples (AND implícito), AND/OR/NOT explícito,
-    "frase exata", wildcards com *, boost com ^2.
+    "frase exata", wildcards com *, boost com ^2. Número de processo
+    ("RE 567985") traz o próprio processo primeiro.
 
-    BASES: acordaos (padrão) | sumulas | decisoes-monocraticas | informativos
+    BASES: acordaos (padrão) | sumulas | decisoes-monocraticas (ou decisoes) | informativos
+    Cada base devolve só documentos dela; base inexistente é erro.
 
     Args:
         query: Termos de busca em sintaxe Elasticsearch query_string
         base: Base de dados (acordaos | sumulas | decisoes-monocraticas | informativos)
         tamanho: Número de resultados (1–50, padrão 10)
-        max_tokens_ementa: Truncamento da ementa em tokens (50-4000). Default: 400.
+        max_tokens_ementa: Truncamento do conteúdo em tokens (50-4000). Default: 400.
                            Aumente para obter ementa mais longa/íntegra.
 
     Returns:
-        XML estruturado com os resultados encontrados.
+        XML estruturado. <conteudo> é a EMENTA no acórdão, o ENUNCIADO na súmula,
+        o texto da decisão na monocrática e o resumo no informativo. Campos de
+        citação: <orgao> (Pleno/Turma), <relator>, <redator_acordao> (quando
+        outro), <data_julgamento>, <data_publicacao>, <tema>/<tese> (RG),
+        <situacao> (súmula), <url> (inteiro teor) e <base> do documento.
         Comentário inicial indica qual rota respondeu (api-direta ou playwright-fallback).
+        Query que não parseia volta <erro tipo="sintaxe"> — não é bloqueio do portal.
 
     Notas de roteamento interno:
         1. Tenta a API JSON via `requests` (1-2s). Funciona se o portal não estiver
@@ -331,8 +458,12 @@ async def buscar_jurisprudencia_stf(
     tamanho = max(1, min(tamanho, 50))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
     base = base.lower().strip()
+    base = ALIASES_BASE.get(base, base)
     if base not in BASES_VALIDAS:
-        base = "acordaos"
+        return (
+            f'<erro tipo="base-invalida">Base "{_xml_escape(base)}" não existe. '
+            f'Bases válidas: {", ".join(BASES_VALIDAS)}.</erro>'
+        )
 
     t0 = time.perf_counter()
     cache_hit = False
@@ -344,7 +475,8 @@ async def buscar_jurisprudencia_stf(
         data = None
 
         # A1 — cache HTTP. STF é caro (Playwright fallback ~10s); cache vale ouro.
-        cache_key = {"mcp": "stf-jurisprudencia", "query": query, "base": base, "tamanho": tamanho}
+        cache_key = {"mcp": "stf-jurisprudencia", "query": query, "base": base, "tamanho": tamanho,
+                     "v": _CACHE_VERSAO}
         cached = cached_http("stf-jurisprudencia", cache_key)
         if cached is not None:
             data = _json.loads(cached)
@@ -356,6 +488,9 @@ async def buscar_jurisprudencia_stf(
             try:
                 data = _buscar_via_requests(query, base, tamanho)
                 rota = "api-direta"
+            except _STFQueryInvalida as e:
+                erro_final = f"sintaxe: {e}"
+                return _erro_sintaxe(base, str(e))
             except _STFWAFBlock as e:
                 erros.append(f"requests: WAF block — {e}")
             except Exception as e:
@@ -366,6 +501,9 @@ async def buscar_jurisprudencia_stf(
             try:
                 data = await _buscar_via_playwright(query, base, tamanho)
                 rota = "playwright-fallback"
+            except _STFQueryInvalida as e:
+                erro_final = f"sintaxe: {e}"
+                return _erro_sintaxe(base, str(e))
             except Exception as e:
                 erros.append(f"playwright: {type(e).__name__}: {str(e)[:200]}")
                 erro_final = " | ".join(erros)
@@ -397,7 +535,7 @@ async def buscar_jurisprudencia_stf(
             return (
                 f'<!-- STF | rota: {rota} | base: {BASES_VALIDAS[base]} -->\n'
                 f'<resultados total="0" base="{base}">'
-                f'<mensagem>Nenhum resultado encontrado para: {query}</mensagem>'
+                f'<mensagem>Nenhum resultado encontrado para: {_xml_escape(query)}</mensagem>'
                 f'</resultados>'
             )
 
@@ -442,22 +580,35 @@ OPERADORES:
   Frase exata:    '"benefício de prestação continuada"'
   Wildcards:      "assist*"
   Boost:          "BPC^2 assistência"
+  Barra:          "Lei 8.742/93" funciona — a ferramenta escapa a "/", que no
+                  query_string abriria expressão regular (HTTP 400)
 
-BASES DISPONÍVEIS:
-  acordaos            — Acórdãos do Plenário e Turmas (padrão)
-  sumulas             — Súmulas vinculantes e não vinculantes
-  decisoes-monocraticas — Decisões individuais dos Ministros
-  informativos        — Informativos de jurisprudência
+CARACTERES RESERVADOS: + - = && || > < ! ( ) { } [ ] ^ " ~ * ? : \\
+  Aspa ou parêntese sem fecho e dois-pontos solto ("tema: 1234") fazem a query
+  não parsear: volta <erro tipo="sintaxe">, que NÃO é bloqueio do portal —
+  corrija a query e repita, não troque de fonte.
+
+BASES DISPONÍVEIS (cada uma devolve só documentos dela):
+  acordaos              — Acórdãos do Plenário e Turmas (padrão); busca na ementa,
+                          na tese de RG, na decisão e na indexação
+  sumulas               — Súmulas vinculantes e não vinculantes; busca no enunciado
+  decisoes-monocraticas — Decisões individuais dos Ministros (alias: decisoes)
+  informativos          — Informativos de jurisprudência (série antiga e nova)
 
 EXEMPLOS:
+  buscar_jurisprudencia_stf("RE 567985")                       # o processo vem primeiro
   buscar_jurisprudencia_stf("BPC assistência social deficiência")
-  buscar_jurisprudencia_stf("FGTS expurgos inflacionários", base="acordaos", tamanho=5)
-  buscar_jurisprudencia_stf("súmula vinculante", base="sumulas")
+  buscar_jurisprudencia_stf("ato jurídico perfeito", base="sumulas")
+  buscar_jurisprudencia_stf("HC 184828", base="decisoes-monocraticas")
   buscar_jurisprudencia_stf('"repercussão geral" previdenciário', tamanho=20)
 
 DICAS:
-  - Para temas vinculantes: "Tema 1234"
-  - Para repercussão geral: inclua "repercussão geral" ou "RG" na query
+  - Para tema de repercussão geral: '"Tema 1234"' (entre aspas) — casa a tese
+    e os acórdãos que a aplicam; <tema> e <tese> vêm no resultado do leading case
+  - Súmula vinculante pelo enunciado, em base="sumulas"; <tipo> diz se é vinculante
+    e <situacao> se está aprovada, revogada ou cancelada
+  - Para citar o acórdão: <orgao>, <relator>, <redator_acordao> (quando o
+    relator ficou vencido), <data_julgamento> e <data_publicacao>
   - Resultados ordenados por relevância (score Elasticsearch)
 
 ROTEAMENTO INTERNO:
