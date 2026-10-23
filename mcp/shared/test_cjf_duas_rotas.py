@@ -44,7 +44,8 @@ def log(tmp_path, monkeypatch):
 def _dublar(monkeypatch, antiga=None, api=None):
     chamadas = {"api": []}
 
-    def _antiga(termo, tribunais, n):
+    def _antiga(termo, tribunais, n, *, prazo=None, espera=None):
+        chamadas.setdefault("prazo", []).append(prazo)
         return antiga(termo, tribunais, n) if antiga else ([], {})
 
     def _api(termo, tribunais, n):
@@ -167,6 +168,101 @@ def test_sessao_do_portal_antigo_atende_uma_busca_por_vez(monkeypatch):
         ("busca", "A"), ("pagina", 10), ("pagina", 20),
         ("busca", "B"), ("pagina", 10), ("pagina", 20),
     ]
+
+
+def test_busca_abandonada_pelo_teto_nao_faz_a_seguinte_sair_como_portal_lento(monkeypatch, log):
+    """Cenário da revisão final: teto 0,5 s; o portal leva 0,8 s numa busca e 0,3 s
+    nas seguintes. A chamada 0 estoura; a 1, disparada logo depois, encontra a
+    sessão ainda ocupada pela thread da 0. Ela não pode sair como `timeout` de
+    portal lento: ou responde, ou se declara como fila da sessão."""
+    duracoes = iter([0.8, 0.3, 0.3])
+    feitas = []
+
+    def portal(termo, tribunais, n, *, prazo=None):
+        feitas.append(termo)
+        time.sleep(next(duracoes))
+        return [], {"TRF4": 0}
+
+    monkeypatch.setattr(cjf_client, "_buscar_documentos_jsf_sob_trava", portal)
+    monkeypatch.setattr(cjf_api, "buscar_unificada", lambda t, tr, n: ([], {"TRF4": 0}))
+
+    r0 = buscar_duas_rotas("busca0", ["TRF4"], 5, teto_s=0.5)
+    r1 = buscar_duas_rotas("busca1", ["TRF4"], 5, teto_s=0.5)
+    time.sleep(0.7)  # deixa as threads abandonadas terminarem antes do próximo teste
+
+    assert r0.antiga.erro == "timeout"
+    assert r1.antiga.ok or r1.antiga.erro == cjf_duas_rotas.ERRO_FILA
+
+
+def test_prazo_vencido_antes_da_trava_nao_busca(monkeypatch):
+    feitas = []
+    monkeypatch.setattr(cjf_client, "_buscar_documentos_jsf_sob_trava",
+                        lambda *a, **k: feitas.append(a) or ([], {}))
+
+    # Trava livre, prazo já vencido: obtém a trava e desiste sem buscar.
+    with pytest.raises(cjf_client.FilaDaSessaoEsgotada):
+        cjf_client._buscar_documentos_jsf("x", ["TRF4"], 5, prazo=time.monotonic() - 1)
+
+    # Trava ocupada por outra busca: espera só até o prazo e desiste sem buscar.
+    espera = cjf_client.EsperaNaFila()
+    with cjf_client._TRAVA_SESSAO_JSF:
+        t0 = time.monotonic()
+        with pytest.raises(cjf_client.FilaDaSessaoEsgotada):
+            cjf_client._buscar_documentos_jsf("y", ["TRF4"], 5, prazo=t0 + 0.1, espera=espera)
+        assert time.monotonic() - t0 < 0.5
+    assert feitas == []
+    assert espera.esperou is True
+    assert not cjf_client._TRAVA_SESSAO_JSF.locked()
+
+
+def test_fila_esgotada_se_registra_como_fila(monkeypatch, log):
+    monkeypatch.setattr(cjf_api, "buscar_unificada", lambda t, tr, n: ([], {"TRF4": 0}))
+    monkeypatch.setattr(cjf_client, "_buscar_documentos_jsf_sob_trava", lambda *a, **k: ([], {}))
+    with cjf_client._TRAVA_SESSAO_JSF:
+        r = buscar_duas_rotas("x", ["TRF4"], 5, teto_s=0.2)
+        time.sleep(0.1)  # a thread da rota antiga desiste no prazo
+    assert r.antiga.ok is False
+    assert r.antiga.erro == cjf_duas_rotas.ERRO_FILA
+    reg = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert reg["antiga"]["erro"] == cjf_duas_rotas.ERRO_FILA
+
+
+def test_paginacao_para_no_prazo(monkeypatch):
+    paginas = []
+
+    class Sessao:
+        viewstate = "vs"
+        _fetched_at = 1.0
+
+        def buscar(self, termo, tribunais):
+            time.sleep(0.1)
+            return "p1"
+
+        def buscar_pagina(self, first, rows=10):
+            paginas.append(first)
+            return "p2"
+
+    monkeypatch.setattr(cjf_client, "get_cjf_session", lambda: Sessao())
+    monkeypatch.setattr(cjf_client, "extrair_totais", lambda h: {"TRF4": 30})
+    monkeypatch.setattr(cjf_client, "extrair_documentos",
+                        lambda h: [{"numero": h, "ementa": h + str(len(paginas))}])
+    docs, totais = cjf_client._buscar_documentos_jsf(
+        "x", ["TRF4"], 20, prazo=time.monotonic() + 0.05
+    )
+    assert paginas == []
+    assert [d["numero"] for d in docs] == ["p1"] and totais == {"TRF4": 30}
+
+    # Sem prazo (stj-jurisprudencia, corteidh): pagina como sempre.
+    docs, _ = cjf_client._buscar_documentos_jsf("x", ["TRF4"], 20)
+    assert paginas == [10, 20, 30, 40]
+
+
+def test_duas_rotas_passa_o_prazo_ao_portal_antigo(monkeypatch, log):
+    chamadas = _dublar(monkeypatch)
+    t0 = time.monotonic()
+    buscar_duas_rotas("x", ["TRF4"], 5, teto_s=7.0)
+    (prazo,) = chamadas["prazo"]
+    assert t0 + 6.5 < prazo <= time.monotonic() + 7.0
 
 
 def test_ambas_completa_campos_do_stf():

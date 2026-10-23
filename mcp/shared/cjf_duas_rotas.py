@@ -157,10 +157,15 @@ def fundir(
     return saida[:n], len(parceiro_da_api)
 
 
+ERRO_FILA = "timeout (fila da sessão)"
+
+
 def _rodar(chamada: Callable[[], Tuple[List[Dict[str, Any]], Dict[str, int]]]) -> ResultadoRota:
     t0 = time.monotonic()
     try:
         docs, totais = chamada()
+    except cjf_client.FilaDaSessaoEsgotada:
+        return ResultadoRota(ok=False, ms=int((time.monotonic() - t0) * 1000), erro=ERRO_FILA)
     except Exception as e:  # a falha de uma rota não pode derrubar a outra
         return ResultadoRota(
             ok=False, ms=int((time.monotonic() - t0) * 1000), erro=f"{type(e).__name__}: {e}"
@@ -185,11 +190,16 @@ def buscar_duas_rotas(
     pedidos = list(tribunais)
     cobertos = [t for t in pedidos if t.strip().upper() in cjf_api.TRIBUNAIS_COBERTOS]
     sem_cobertura = [t for t in pedidos if t not in cobertos]
+    # O prazo desce até a trava da sessão do portal antigo: a busca que não a obtém
+    # a tempo não é feita, e o timeout dela se declara como fila, não como portal lento.
+    prazo = time.monotonic() + teto_s
+    espera = cjf_client.EsperaNaFila()
 
     executor = ThreadPoolExecutor(max_workers=2)
     try:
         f_antiga = executor.submit(
-            _rodar, lambda: cjf_client._buscar_documentos_jsf(termo, pedidos, n)
+            _rodar,
+            lambda: cjf_client._buscar_documentos_jsf(termo, pedidos, n, prazo=prazo, espera=espera),
         )
         f_api = (
             executor.submit(_rodar, lambda: cjf_api.buscar_unificada(termo, cobertos, n))
@@ -198,7 +208,7 @@ def buscar_duas_rotas(
         )
         esperar = [f for f in (f_antiga, f_api) if f is not None]
         wait(esperar, timeout=teto_s)
-        antiga = _resultado(f_antiga, teto_s)
+        antiga = _resultado(f_antiga, teto_s, ERRO_FILA if espera.esperou else "timeout")
         api = _resultado(f_api, teto_s) if f_api is not None else _api_sem_nada([])
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
@@ -210,10 +220,12 @@ def buscar_duas_rotas(
     return resultado
 
 
-def _resultado(futuro, teto_s: float) -> ResultadoRota:
+def _resultado(futuro, teto_s: float, erro_timeout: str = "timeout") -> ResultadoRota:
+    """``erro_timeout`` é ``ERRO_FILA`` quando a busca do portal antigo esperou a
+    sessão ocupada por outra: parte do teto foi gasta na fila, não no portal."""
     if futuro.done():
         return futuro.result()
-    return ResultadoRota(ok=False, ms=int(teto_s * 1000), erro="timeout")
+    return ResultadoRota(ok=False, ms=int(teto_s * 1000), erro=erro_timeout)
 
 
 def _resumo_rota(rota: ResultadoRota) -> Dict[str, Any]:

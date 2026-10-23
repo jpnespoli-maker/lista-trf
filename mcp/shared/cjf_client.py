@@ -34,6 +34,7 @@ import html
 import re
 import threading
 import time
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
@@ -315,10 +316,26 @@ def buscar_documentos(
 _TRAVA_SESSAO_JSF = threading.Lock()
 
 
+class FilaDaSessaoEsgotada(TimeoutError):
+    """O prazo da chamada passou com a sessão do portal antigo ocupada por outra
+    busca: esta NÃO foi feita. Não é lentidão do portal."""
+
+
+@dataclass
+class EsperaNaFila:
+    """Preenchido por ``_buscar_documentos_jsf``: ``esperou`` é verdadeiro se a
+    sessão estava ocupada quando a busca chegou."""
+
+    esperou: bool = False
+
+
 def _buscar_documentos_jsf(
     termo: str,
     tribunais: List[str],
     max_resultados: int,
+    *,
+    prazo: Optional[float] = None,
+    espera: Optional[EsperaNaFila] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Busca no CJF e retorna (documentos, totais_por_tribunal).
 
@@ -331,15 +348,37 @@ def _buscar_documentos_jsf(
       submetida. Duas buscas intercaladas (ex.: thread de uma chamada que estourou
       o teto ainda rodando, mais a chamada seguinte) trariam a página 2 da busca
       errada, em silêncio.
+    - ``prazo`` (``time.monotonic()``): sem ele, espera a trava o quanto for
+      preciso (stj-jurisprudencia, corteidh). Com ele, não espera além do prazo e,
+      passado o prazo antes de começar, NÃO busca: levanta ``FilaDaSessaoEsgotada``.
+      Sem isso a busca abandonada pelo teto de ``buscar_duas_rotas`` entrava na
+      fila, atrasava a chamada seguinte (que saía como ``timeout`` com o portal
+      saudável) e ia ao portal para um resultado que ninguém lia. Começada a busca,
+      a paginação para no prazo e devolve o que já tem.
     """
-    with _TRAVA_SESSAO_JSF:
-        return _buscar_documentos_jsf_sob_trava(termo, tribunais, max_resultados)
+    if prazo is None:
+        with _TRAVA_SESSAO_JSF:
+            return _buscar_documentos_jsf_sob_trava(termo, tribunais, max_resultados)
+    if not _TRAVA_SESSAO_JSF.acquire(blocking=False):
+        if espera is not None:
+            espera.esperou = True
+        restante = prazo - time.monotonic()
+        if restante <= 0 or not _TRAVA_SESSAO_JSF.acquire(timeout=restante):
+            raise FilaDaSessaoEsgotada("a sessão do portal antigo não ficou livre dentro do prazo")
+    try:
+        if time.monotonic() >= prazo:
+            raise FilaDaSessaoEsgotada("a sessão do portal antigo ficou livre depois do prazo")
+        return _buscar_documentos_jsf_sob_trava(termo, tribunais, max_resultados, prazo=prazo)
+    finally:
+        _TRAVA_SESSAO_JSF.release()
 
 
 def _buscar_documentos_jsf_sob_trava(
     termo: str,
     tribunais: List[str],
     max_resultados: int,
+    *,
+    prazo: Optional[float] = None,
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     sess = get_cjf_session()
     try:
@@ -395,6 +434,8 @@ def _buscar_documentos_jsf_sob_trava(
     pagina = 1
     vistos = {(d.get("numero"), d.get("ementa")) for d in docs}
     while len(docs) < max_resultados and len(docs) < total_portal and pagina < _MAX_PAGINAS:
+        if prazo is not None and time.monotonic() >= prazo:
+            break
         try:
             html_extra = sess.buscar_pagina(first=pagina * _DOCS_POR_PAGINA)
         except Exception:
