@@ -109,6 +109,64 @@ def test_desde_filtra_pela_data(tmp_path, capsys):
     assert "buscas: 1" in capsys.readouterr().out
 
 
+def _normais_e_stj():
+    return [
+        _linha(_rota(ms=1000, n=5), _rota(ms=500, n=4, com_cnj=4, sem_cobertura=[])),
+        _linha(_rota(ms=1000, n=5), _rota(ms=700, n=4, com_cnj=4, sem_cobertura=[])),
+    ]
+
+
+def test_api_nao_chamada_fora_da_latencia_e_da_cobertura():
+    stj = _linha(_rota(n=4), _rota(ms=0, n=0, totais={}, sem_cobertura=["STJ"]))
+    base = resumir(_normais_e_stj())
+    r = resumir(_normais_e_stj() + [stj])
+    assert r["api"]["ms_mediana"] == base["api"]["ms_mediana"] == 600
+    assert r["api"]["ms_p90"] == base["api"]["ms_p90"]
+    assert r["so_antiga_achou"] == 0
+    assert r["api"]["chamadas"] == 3
+    assert r["api"]["disponibilidade"] == 1.0
+
+
+def test_api_vazia_de_verdade_conta_em_so_antiga_achou():
+    vazia = _linha(_rota(n=4), _rota(n=0, totais={}, sem_cobertura=[]))
+    assert resumir([vazia])["so_antiga_achou"] == 1
+
+
+def test_api_que_falhou_nao_conta_em_so_antiga_achou():
+    falha = _linha(_rota(n=4), _rota(ok=False, n=0, totais={}, erro="timeout", sem_cobertura=[]))
+    r = resumir([falha])
+    assert r["so_antiga_achou"] == 0
+    assert r["api"]["disponibilidade"] == 0.0
+
+
+@pytest.mark.parametrize("data", ["abc", "23/10/2026", "2026-13-40"])
+def test_desde_invalido_e_erro_de_argparse(data, capsys, tmp_path):
+    with pytest.raises(SystemExit) as e:
+        principal(["--log", str(tmp_path / "x.jsonl"), "--desde", data])
+    assert e.value.code == 2
+    assert "data invalida" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("campo,valor", [("n", None), ("totais", []), ("ms", "1"), ("ok", 1)])
+def test_tipo_errado_vai_para_linhas_invalidas(campo, valor, tmp_path, capsys):
+    ruim = _linha(_rota(), _rota(sem_cobertura=[]))
+    ruim["antiga"][campo] = valor
+    boa = _linha(_rota(), _rota(sem_cobertura=[]))
+    log = tmp_path / "rotas.jsonl"
+    log.write_text(json.dumps(ruim) + "\n" + json.dumps(boa) + "\n", encoding="utf-8")
+    assert principal(["--log", str(log)]) == 0
+    saida = capsys.readouterr().out
+    assert "linhas invalidas: 1" in saida
+    assert "buscas: 1" in saida
+
+
+def test_utf8_invalido_nao_derruba(tmp_path, capsys):
+    log = tmp_path / "rotas.jsonl"
+    log.write_bytes(b"\xff\xfe lixo\n" + json.dumps(_quatro()[0]).encode() + b"\n")
+    assert principal(["--log", str(log)]) == 0
+    assert "linhas invalidas: 1" in capsys.readouterr().out
+
+
 def test_log_default_e_o_do_modulo_das_rotas():
     from shared import cjf_duas_rotas
     assert comparar_rotas_cjf.LOG_PADRAO == cjf_duas_rotas.LOG_ROTAS
