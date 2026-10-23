@@ -13,29 +13,49 @@ Busca decisões de todos os tribunais federais:
 
 ### `buscar_jurisprudencia_cjf`
 
-Busca jurisprudência e retorna dados estruturados.
+Consulta o portal antigo e a API nova do CJF AO MESMO TEMPO (`shared/cjf_duas_rotas.py`)
+e devolve uma lista unificada; cada resultado traz `<origem>` (`portal-antigo`,
+`api-nova` ou `ambas`). Nenhuma rota substitui a outra (medido em 23/10/2026): a API
+traz o CNJ (84 de 90 documentos) mas não cobre o STJ; o portal antigo cobre o STJ mas
+quase nunca traz o CNJ (0 de 65). Rota caída vem declarada (`ROTA FORA`), e as duas
+caídas viram `<erro>`. Cada busca grava uma linha em `~/.claude/DPU/logs/cjf_rotas.jsonl`
+(contagens, tempos e erros, nunca texto), para decidir depois qual rota manter; o script
+de comparação lê esse log.
 
 ```
 Parâmetros:
-- busca: Termo de busca (ex: "pensão por morte")
-- tribunais: Tribunais separados por vírgula (default: todos)
-- max_resultados: Máximo de resultados (default: 30)
+- busca: operadores em MAIÚSCULO; palavras soltas são unidas por E
+- tribunais: separados por vírgula (default: STF, STJ e TRF1 a TRF6)
+- max_resultados: 1 a 100 (default: 10)
+- max_tokens_ementa: 50 a 4000 (default: 600)
+- modo: "comum" ou "semantica"
+- data_inicio, data_fim: AAAA-MM-DD ou DD/MM/AAAA
+- tipo_data: "decisao" ou "publicacao"
+- relator, legislacao ("Lei 8.742/93", "LC 80"...)
+- so_precedentes_relevantes, so_representativos
 ```
 
-### `gerar_relatorio_cjf`
+Os parâmetros a partir de `modo` só existem na API nova: usar qualquer um leva a busca
+SÓ à API e exclui o STJ (declarado em `SEM COBERTURA`). Entrada que não se entende
+(data, legislação, relator) volta como `<erro>`; a busca nunca roda sem o filtro.
 
-Busca e gera relatório formatado em Markdown com ementas completas.
+### `documento_cjf`
 
-```
-Parâmetros:
-- busca: Termo de busca
-- tribunais: Tribunais (default: todos)
-- max_resultados: Máximo (default: 10)
-```
+Ementa, decisão ou inteiro teor de um `<id>` devolvido pela busca (`id`, `campo`,
+`max_tokens`). Cache de 30 dias.
 
-### `listar_tribunais_cjf`
+### `similares_cjf`
 
-Lista todos os tribunais disponíveis.
+Julgados parecidos com um `<id>` (`id`, `max_resultados`, `max_tokens_ementa`). Cache de 1 dia.
+
+### `estatisticas_cjf`
+
+Total, julgamentos por ano, 10 relatores e 10 classes mais frequentes e tribunais de uma
+busca, só na API nova (não cobre o STJ). Cache de 1 dia.
+
+### `buscar_jurisprudencia_tnu` e `ajuda_sintaxe_cjf`
+
+TNU (API nova, até 2026) e o guia de sintaxe, rotas e filtros.
 
 ## Metadados Extraídos
 
@@ -55,11 +75,10 @@ Para cada documento:
 
 ## Tecnologia
 
-Este servidor faz scraping do site JSF/PrimeFaces do CJF:
-- Mantém sessão HTTP com cookies
-- Obtém ViewState da página
-- Faz requisições AJAX para buscar
-- Parseia respostas XML/HTML
+Duas rotas em paralelo:
+- Portal antigo (JSF/PrimeFaces, `shared/cjf_client.py`): sessão HTTP, ViewState, AJAX e parse do HTML
+- API nova (JSON, `shared/cjf_api.py`): busca, documento, similares, estatísticas e sugestão de relator
+- `shared/cjf_duas_rotas.py` funde as listas (só par inequívoco) e grava o log de comparação
 
 ## Configuração
 

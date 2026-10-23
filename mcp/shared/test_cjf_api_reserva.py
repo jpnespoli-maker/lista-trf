@@ -230,27 +230,48 @@ def srv_cjf(monkeypatch):
     return mod
 
 
-def test_servidor_busca_nos_cobertos_e_declara_o_stj(srv_cjf, monkeypatch):
+def _duas_rotas(docs, antiga_ok=True, api_ok=True, sem_cobertura=()):
+    from shared.cjf_duas_rotas import ResultadoDuasRotas, ResultadoRota
+
+    return ResultadoDuasRotas(
+        docs=docs,
+        antiga=ResultadoRota(ok=antiga_ok, totais={"TRF1": 3}, erro=None if antiga_ok else "SPA"),
+        api=ResultadoRota(ok=api_ok, totais={"TRF1": 3}, erro=None if api_ok else "HTTP 500",
+                          sem_cobertura=list(sem_cobertura)),
+        sobreposicao=0,
+    )
+
+
+def test_servidor_declara_o_stj_quando_a_api_nao_o_cobre(srv_cjf, monkeypatch):
+    doc = {**cjf_api.documento(TRF2_STF["results"]["hits"][0]["_source"]), "origem": "api-nova"}
     chamadas = []
 
-    def _buscar(busca, tribs, n):
+    def _duas(busca, tribs, n, **_k):
         chamadas.append(list(tribs))
-        if "STJ" in tribs:
-            raise cjf_api.SemCoberturaNaApi(["STJ"], [t for t in tribs if t != "STJ"])
-        return [cjf_api.documento(JEF1_ORGAOS["results"]["hits"][0]["_source"])], {t: 3 for t in tribs}
+        return _duas_rotas([doc], sem_cobertura=["STJ"])
 
-    monkeypatch.setattr(srv_cjf.cjf_client, "buscar_documentos", _buscar)
-    saida = srv_cjf.buscar_jurisprudencia_cjf("bolsa familia", tribunais="STJ,TRF1")
-    assert chamadas == [["STJ", "TRF1"], ["TRF1"]]
-    assert "SEM COBERTURA" in saida and "STJ" in saida
+    monkeypatch.setattr(srv_cjf.cjf_duas_rotas, "buscar_duas_rotas", _duas)
+    saida = srv_cjf.buscar_jurisprudencia_cjf("bolsa familia", tribunais="STJ,STF")
+    assert chamadas == [["STJ", "STF"]]
+    assert "COBERTURA" in saida and "STJ" in saida
     assert "FONTE: API nova do CJF" in saida
     assert "<erro>" not in saida
 
 
-def test_servidor_so_stj_e_erro_declarado(srv_cjf, monkeypatch):
-    def _buscar(*_a, **_k):
-        raise cjf_api.SemCoberturaNaApi(["STJ"], [])
-
-    monkeypatch.setattr(srv_cjf.cjf_client, "buscar_documentos", _buscar)
+def test_servidor_so_stj_com_portal_antigo_fora_e_erro_declarado(srv_cjf, monkeypatch):
+    monkeypatch.setattr(
+        srv_cjf.cjf_duas_rotas, "buscar_duas_rotas",
+        lambda *_a, **_k: _duas_rotas([], antiga_ok=False, sem_cobertura=["STJ"]),
+    )
     saida = srv_cjf.buscar_jurisprudencia_cjf("honorarios", tribunais="STJ")
-    assert saida.startswith("<erro>") and "STJ" in saida
+    assert saida.startswith("<erro>") and "STJ" in saida and "SPA" in saida
+
+
+def test_servidor_so_stj_com_portal_antigo_no_ar_traz_docs_e_avisa(srv_cjf, monkeypatch):
+    doc = {"numero": "REsp", "ementa": "e", "origem": "portal-antigo", "orgao_julgador": "T1"}
+    monkeypatch.setattr(
+        srv_cjf.cjf_duas_rotas, "buscar_duas_rotas",
+        lambda *_a, **_k: _duas_rotas([doc], sem_cobertura=["STJ"]),
+    )
+    saida = srv_cjf.buscar_jurisprudencia_cjf("honorarios", tribunais="STJ")
+    assert "<erro>" not in saida and "COBERTURA" in saida and "STJ" in saida

@@ -20,6 +20,7 @@ def srv(monkeypatch):
 
     if str(_RAIZ) not in sys.path:
         sys.path.insert(0, str(_RAIZ))
+    from shared.cjf_duas_rotas import ResultadoDuasRotas, ResultadoRota
     spec = importlib.util.spec_from_file_location(
         "cjf_server_cobertura", _RAIZ / "cjf-jurisprudencia" / "server.py"
     )
@@ -29,8 +30,15 @@ def srv(monkeypatch):
     monkeypatch.setattr(mod, "registrar_dispositivo", lambda *a, **k: None)
     monkeypatch.setattr(mod, "log_query", lambda **k: None)
     monkeypatch.setattr(mod, "relaxar_cjf", lambda q: None)
-    monkeypatch.setattr(mod.cjf_client, "buscar_documentos",
-                        lambda busca, tribs, n: ([], {t: 0 for t in tribs}))
+    monkeypatch.setattr(
+        mod.cjf_duas_rotas, "buscar_duas_rotas",
+        lambda busca, tribs, n, **k: ResultadoDuasRotas(
+            docs=[],
+            antiga=ResultadoRota(ok=True, totais={t: 0 for t in tribs}),
+            api=ResultadoRota(ok=True, totais={t: 0 for t in tribs}),
+            sobreposicao=0,
+        ),
+    )
     return mod
 
 
