@@ -7,6 +7,8 @@ Fixtures capturadas na API em 23/10/2026 e recortadas (sem INTEIRO_TEOR; DECISAO
 
 import json
 import sys
+
+import pytest
 from pathlib import Path
 
 MCP = Path(__file__).resolve().parents[1]
@@ -117,3 +119,113 @@ def test_buscar_api_reusa_tribunal_e_origem(monkeypatch):
     assert chamadas[0]["filtros"] == {"TRIBUNAL": ["TRF4"], "ORIGEM": ["JEF:TR:4", "JEF:TRU:4"]}
     assert chamadas[0]["extras"].modo == "semantica"
     assert set(totais) == {"TRF4"}
+
+
+DOCUMENTO = json.loads((_FIX / "cjf_api_documento.json").read_text(encoding="utf-8"))
+SIMILARES = json.loads((_FIX / "cjf_api_similares.json").read_text(encoding="utf-8"))
+ANALYTICS = json.loads((_FIX / "cjf_api_analytics.json").read_text(encoding="utf-8"))
+ID_PUIL = DOCUMENTO["results"]["hits"][0]["_id"]
+
+
+def _dublar_get(monkeypatch, resposta, status=200):
+    capturado = {}
+
+    class _Resp:
+        status_code = status
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return resposta
+
+    def _get(url, params=None, timeout=None):
+        capturado["url"] = url
+        capturado["params"] = params
+        return _Resp()
+
+    monkeypatch.setattr(cjf_api.requests, "get", _get)
+    return capturado
+
+
+def test_obter_documento_inteiro(monkeypatch):
+    cap = _dublar_get(monkeypatch, DOCUMENTO)
+    d = cjf_api.obter_documento(ID_PUIL)
+    assert cap["url"].endswith(f"/documento/{ID_PUIL}")
+    assert d["id"] == ID_PUIL
+    assert d["numero"] == "0044230-77.2023.4.05.8300"
+    assert d["inteiro_teor"]
+
+
+def test_obter_documento_campo(monkeypatch):
+    cap = _dublar_get(monkeypatch, {"campo": "EMENTA", "texto": "abc"})
+    assert cjf_api.obter_documento(ID_PUIL, "ementa") == {"id": ID_PUIL, "campo": "ementa", "texto": "abc"}
+    assert cap["url"].endswith(f"/documento/{ID_PUIL}/campo/ementa")
+
+
+def test_campo_invalido():
+    import pytest
+
+    with pytest.raises(ValueError):
+        cjf_api.obter_documento("x", "relator")
+
+
+def test_documento_inexistente_levanta(monkeypatch):
+    import pytest
+
+    _dublar_get(monkeypatch, {}, status=404)
+    with pytest.raises(RuntimeError, match="404"):
+        cjf_api.obter_documento("inexistente")
+
+
+def test_documento_sem_hit_levanta(monkeypatch):
+    import pytest
+
+    _dublar_get(monkeypatch, {"results": {"hits": []}, "aggregations": {}})
+    with pytest.raises(RuntimeError):
+        cjf_api.obter_documento("vazio")
+
+
+def test_similares_mapeia_documentos(monkeypatch):
+    cap = _dublar_get(monkeypatch, SIMILARES)
+    docs = cjf_api.similares(ID_PUIL, 3)
+    assert cap["url"].endswith(f"/similar/{ID_PUIL}")
+    assert cap["params"] == {"size": 3}
+    assert len(docs) == 3
+    assert all(d["id"] and d["via"] == "api-nova" for d in docs)
+
+
+def test_estatisticas_corpo_e_retorno(monkeypatch):
+    cap = _dublar_post(monkeypatch, ANALYTICS)
+    r = cjf_api.estatisticas("bolsa familia unipessoal", ["TRF4"], FiltrosApi())
+    assert cap["url"].endswith("/analytics")
+    assert cap["corpo"]["page_size"] == 0
+    assert cap["corpo"]["search_mode"] == "comum"
+    assert cap["corpo"]["query"] == "bolsa E familia E unipessoal"
+    assert cap["corpo"]["filters"]["TRIBUNAL"] == ["TRF4"]
+    assert cap["corpo"]["filters"]["ORIGEM"] == ["JEF:TR:4", "JEF:TRU:4"]
+    assert "total_documents" in r
+
+
+def test_estatisticas_recusa_tribunal_sem_cobertura():
+    import pytest
+
+    with pytest.raises(cjf_api.SemCoberturaNaApi):
+        cjf_api.estatisticas("x", ["STJ"], FiltrosApi())
+
+
+def test_sugerir_relator(monkeypatch):
+    cap = _dublar_get(monkeypatch, {"sugestoes": ["PAULO ROBERTO PARCA DE PINHO"]})
+    assert cjf_api.sugerir_relator("parca") == ["PAULO ROBERTO PARCA DE PINHO"]
+    assert cap["url"].endswith("/sugestoes/relator")
+    assert cap["params"] == {"q": "parca"}
+
+
+@pytest.mark.parametrize("entrada,esperado", [
+    ("Lei 8.742/93", "LEI-8742"),
+    ("lei 8742", "LEI-8742"),
+    ("LEI-8742", "LEI-8742"),
+    ("Lei 10.836/2004", "LEI-10836"),
+])
+def test_normalizar_legislacao(entrada, esperado):
+    assert cjf_api.normalizar_legislacao(entrada) == esperado

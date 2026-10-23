@@ -204,19 +204,30 @@ def _docs_com_canario(dados: Dict[str, Any], total: int, n: int, onde: str) -> L
     return docs[:n]
 
 
-def buscar_unificada(
-    termo: str, tribunais: Sequence[str], max_resultados: int, *, extras: FiltrosApi | None = None
-) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
-    """Mesmo contrato de ``cjf_client.buscar_documentos``: ``(docs, totais)``."""
+def _exigir_cobertura(tribunais: Sequence[str]) -> List[str]:
     pedidos = [t.strip().upper() for t in tribunais]
     sem = [t for t in pedidos if t not in TRIBUNAIS_COBERTOS]
     if sem:
         raise SemCoberturaNaApi(sem, [t for t in pedidos if t in TRIBUNAIS_COBERTOS])
-    # Cada TRF leva as turmas recursais e a TRU da sua Região, como no portal antigo.
+    return pedidos
+
+
+def _filtros_tribunais(pedidos: Sequence[str]) -> Dict[str, List[str]]:
+    """TRIBUNAL + ORIGEM: cada TRF leva as turmas recursais e a TRU da sua Região,
+    como no portal antigo; STF e demais só o TRIBUNAL."""
+    filtros: Dict[str, List[str]] = {"TRIBUNAL": list(pedidos)}
     regioes = [t[-1] for t in pedidos if t.startswith("TRF")]
-    filtros: Dict[str, List[str]] = {"TRIBUNAL": pedidos}
     if regioes:
         filtros["ORIGEM"] = [f"JEF:{tipo}:{r}" for r in regioes for tipo in ("TR", "TRU")]
+    return filtros
+
+
+def buscar_unificada(
+    termo: str, tribunais: Sequence[str], max_resultados: int, *, extras: FiltrosApi | None = None
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """Mesmo contrato de ``cjf_client.buscar_documentos``: ``(docs, totais)``."""
+    pedidos = _exigir_cobertura(tribunais)
+    filtros = _filtros_tribunais(pedidos)
     if extras is None:
         dados = pesquisar(termo, filtros, max_resultados)
     else:
@@ -319,3 +330,88 @@ def buscar_regional(
     for d in docs:
         d["fonte"] = fonte
     return docs, total
+
+
+_BASE_API = API_URL.rsplit("/", 1)[0]
+_CAMPOS_DOCUMENTO = ("ementa", "decisao", "inteiro_teor")
+
+
+def _get_json(caminho: str, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    resp = requests.get(f"{_BASE_API}{caminho}", params=params, timeout=_TIMEOUT_S)
+    if resp.status_code != 200:
+        raise RuntimeError(f"API nova do CJF respondeu HTTP {resp.status_code} em {caminho}")
+    return resp.json()
+
+
+def obter_documento(doc_id: str, campo: str = "") -> Dict[str, Any]:
+    """Documento pelo id. Sem ``campo``: o documento completo mais ``inteiro_teor``
+    (texto do ``_source``, quando há). Com ``campo`` (ementa, decisao,
+    inteiro_teor): só aquele texto, ``{"id", "campo", "texto"}``."""
+    if campo and campo not in _CAMPOS_DOCUMENTO:
+        raise ValueError(f"campo deve ser um de {', '.join(_CAMPOS_DOCUMENTO)}; recebido {campo!r}")
+    if campo:
+        dados = _get_json(f"/documento/{doc_id}/campo/{campo}")
+        return {"id": doc_id, "campo": campo, "texto": dados.get("texto", "")}
+    dados = _get_json(f"/documento/{doc_id}")
+    hits = (dados.get("results") or {}).get("hits") or []
+    if not hits:
+        raise RuntimeError(f"API nova do CJF não devolveu o documento {doc_id}")
+    source = hits[0].get("_source") or {}
+    doc = documento(source, hits[0].get("_id") or doc_id)
+    texto = _texto(source.get("INTEIRO_TEOR"))
+    if texto:
+        doc["inteiro_teor"] = texto
+    return doc
+
+
+def similares(doc_id: str, n: int) -> List[Dict[str, Any]]:
+    dados = _get_json(f"/similar/{doc_id}", {"size": n})
+    return [documento(h.get("_source") or {}, h.get("_id", "")) for h in dados["results"].get("hits", [])]
+
+
+def estatisticas(termo: str, tribunais: Sequence[str], extras: FiltrosApi) -> Dict[str, Any]:
+    """Agregações da busca (``/analytics``): total, julgamentos por ano e os
+    relatores, classes e tribunais que mais aparecem. Mesmos filtros de ``buscar_unificada``."""
+    pedidos = _exigir_cobertura(tribunais)
+    corpo = {
+        "query": _e_explicito(termo), "filters": _filtros_tribunais(pedidos), "sort": [], "page_size": 0,
+        "current_page": 1, "process_number": None, "decision_date_start": extras.data_inicio,
+        "decision_date_end": extras.data_fim, "date_type": extras.tipo_data, "rapporteurs": list(extras.relatores),
+        "revisors": [], "relator_convocado": None, "relator_acordaos": [],
+        "ref_legislativa": extras.legislacao, "search_mode": extras.modo,
+    }
+    if extras.so_precedentes_relevantes:
+        corpo["filters"]["PRECEDENTE_RELEVANTE"] = ["1"]
+    if extras.so_representativos:
+        corpo["filters"]["REPRESENTATIVO_CONTROVERSIA"] = ["1"]
+    resp = requests.post(f"{_BASE_API}/analytics", json=corpo, timeout=_TIMEOUT_S)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def sugerir_relator(texto: str) -> List[str]:
+    """Grafias de relator que a API conhece (``/sugestoes/relator?q=``).
+
+    Medido em 23/10/2026: o filtro ``rapporteurs`` casa a grafia exata da base e
+    várias grafias se SOMAM (OU), não se cruzam: ``["LUIZ FUX"]`` 6.358,
+    ``["Ministro Luiz Fux"]`` 1, as duas juntas 6.359; ``["PAULO ROBERTO PARCA DE
+    PINHO"]`` 297 + ``["LUIZ FUX"]`` 6.358 = 6.655 juntos. Por isso o relator se
+    filtra pela grafia devolvida aqui, e vários relatores ampliam a busca."""
+    return list(_get_json("/sugestoes/relator", {"q": texto}).get("sugestoes", []))
+
+
+_RE_LEGISLACAO = re.compile(r"([A-Za-z]+)[\s-]*([0-9][0-9.]*)")
+
+
+def normalizar_legislacao(texto: str) -> str:
+    """"Lei 8.742/93", "lei 8742", "LEI-8742" → ``LEI-8742``, o formato de ``ref_legislativa``.
+
+    Medido em 23/10/2026 (total de ``ref_legislativa``): ``LEI-8742`` 9.831 =
+    ``LEI-008742`` 9.831 (a API ignora os zeros; usa-se SEM zeros); ``LEG-FED
+    LEI-008742`` 5.777 (mais restrito, descartado); ``LEI-10836`` 35 =
+    ``LEI-010836`` 35. O ano ("/93") não entra na referência."""
+    m = _RE_LEGISLACAO.search(texto or "")
+    if not m:
+        return _texto(texto).upper()
+    numero = m.group(2).replace(".", "").lstrip("0")
+    return f"{m.group(1).upper()}-{numero}"
