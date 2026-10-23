@@ -161,6 +161,14 @@ def _resultados(documentos: List[Dict[str, Any]], max_tokens_ementa: int) -> Lis
     return resultados
 
 
+def _rotas_caidas(res: "cjf_duas_rotas.ResultadoDuasRotas") -> Dict[str, str]:
+    return {
+        nome: rota.erro or "sem detalhe"
+        for nome, rota in (("portal-antigo", res.antiga), ("api-nova", res.api))
+        if not rota.ok
+    }
+
+
 def _totais_str(totais: Dict[str, int]) -> str:
     return ", ".join(f"{k}:{v}" for k, v in totais.items())
 
@@ -268,6 +276,7 @@ def buscar_jurisprudencia_cjf(
         totais_antiga: Dict[str, int] = {}
         totais_api: Dict[str, int] = {}
         rotas_fora: Dict[str, str] = {}
+        avisos_rota: Dict[str, str] = {}
         cached = cached_http("cjf-jurisprudencia", cache_key)
         if cached is not None:
             cache_hit = True
@@ -316,24 +325,31 @@ def buscar_jurisprudencia_cjf(
             # zerava em 60,4% das 1.496 chamadas do período. A lista UNIFICADA
             # zerou (não só uma rota), reexecuta em OU — o precedente-âncora costuma
             # casar a maioria dos termos, não todos.
+            falhas_estrita = _rotas_caidas(res)
+            falhas_relaxada: Dict[str, str] = {}
             if not res.docs:
                 relaxada = relaxar_cjf(busca)
                 if relaxada:
                     res_relaxada = cjf_duas_rotas.buscar_duas_rotas(
                         relaxada, lista_tribunais, max_resultados, relaxada=True
                     )
+                    falhas_relaxada = _rotas_caidas(res_relaxada)
                     if res_relaxada.docs:
                         res, busca_relaxada = res_relaxada, relaxada
             documentos = res.docs
             totais_antiga, totais_api = res.antiga.totais, res.api.totais
-            for nome, rota in (("portal-antigo", res.antiga), ("api-nova", res.api)):
-                if not rota.ok:
-                    rotas_fora[nome] = rota.erro or "sem detalhe"
+            rotas_fora = _rotas_caidas(res)
+            # A rota caída da busca que NÃO foi a exibida também se declara: sem isso
+            # o zero (ou o resultado) passaria por limpo.
+            if busca_relaxada:
+                avisos_rota = {f"{n} na busca estrita": e for n, e in falhas_estrita.items()}
+            else:
+                avisos_rota = {f"{n} na busca relaxada": e for n, e in falhas_relaxada.items()}
             # Zero NÃO se cacheia (31/08/2026): um shard de tribunal às escuras
             # devolve 200 com "Total 0", e gravar isso deixava o falso zero GRUDADO.
             # Rota caída também não: o resultado parcial não pode valer por 7 dias.
             # Tribunal que a API não cobre (STJ) não impede: é limite conhecido.
-            if documentos and not rotas_fora:
+            if documentos and not rotas_fora and not falhas_estrita and not falhas_relaxada:
                 registrar_dispositivo(
                     "cjf-jurisprudencia", cache_key,
                     _json.dumps({
@@ -363,8 +379,8 @@ def buscar_jurisprudencia_cjf(
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | {totais_txt} -->\n'
         if so_api:
             meta += f"<!-- {AVISO_FILTROS_API} -->\n"
-        for nome, erro in rotas_fora.items():
-            meta += f"<!-- ROTA FORA: {nome} ({sanitizar_comentario_xml(erro)}) -->\n"
+        for nome, erro in {**rotas_fora, **avisos_rota}.items():
+            meta +=f"<!-- ROTA FORA: {nome} ({sanitizar_comentario_xml(erro)}) -->\n"
         if "STJ" in lista_tribunais and not so_api and not aviso_cobertura:
             meta += f"<!-- {AVISO_COBERTURA_STJ} -->\n"
         if aviso_cobertura:
@@ -537,10 +553,22 @@ def documento_cjf(id: str, campo: str = "", max_tokens: int = 0) -> str:
             doc = _json.loads(cached)
         else:
             doc = cjf_api.obter_documento(id, campo)
-            registrar_dispositivo(
-                "cjf-jurisprudencia", cache_key, _json.dumps(doc), ttl_s=_TTL_DOCUMENTO_S
+            # Resposta vazia não se cacheia: ficaria 30 dias como "sem texto".
+            vazio = (not doc.get("texto")) if campo else not (
+                doc.get("ementa") or doc.get("inteiro_teor")
             )
-        linhas = ["<documento_cjf>"]
+            if not vazio:
+                registrar_dispositivo(
+                    "cjf-jurisprudencia", cache_key, _json.dumps(doc), ttl_s=_TTL_DOCUMENTO_S
+                )
+        vazio = (not doc.get("texto")) if campo else not (
+            doc.get("ementa") or doc.get("inteiro_teor")
+        )
+        linhas = []
+        if vazio:
+            alvo = f"o campo {campo}" if campo else "ementa e inteiro teor"
+            linhas.append(f"<!-- VAZIO: a API nova devolveu {alvo} vazio para este id -->")
+        linhas.append("<documento_cjf>")
         for chave, valor in doc.items():
             if valor in (None, "", False):
                 continue
@@ -680,9 +708,11 @@ def estatisticas_cjf(
             dados = _json.loads(cached)
         else:
             dados = cjf_api.estatisticas(busca, lista, filtros)
-            registrar_dispositivo(
-                "cjf-jurisprudencia", cache_key, _json.dumps(dados), ttl_s=_TTL_ANALISE_S
-            )
+            # Total zero (ou ausente) não se cacheia: o falso zero ficaria grudado.
+            if dados.get("total_documents"):
+                registrar_dispositivo(
+                    "cjf-jurisprudencia", cache_key, _json.dumps(dados), ttl_s=_TTL_ANALISE_S
+                )
         return _texto_estatisticas(busca, dados)
     except Exception as e:
         erro_msg = str(e)

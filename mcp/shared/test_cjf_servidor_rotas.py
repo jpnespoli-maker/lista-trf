@@ -283,3 +283,45 @@ def test_ajuda_descreve_rotas_filtros_e_tools(srv):
                    "similares_cjf", "estatisticas_cjf", "EXCLUI o STJ"):
         assert trecho in ajuda
     assert "costuma vir vazio" not in srv.buscar_jurisprudencia_cjf.__doc__
+
+
+def test_falha_da_busca_relaxada_e_declarada_mesmo_sem_documento(srv, monkeypatch):
+    monkeypatch.setattr(srv, "relaxar_cjf", lambda q: "a OU b")
+    respostas = iter([_resultado(docs=[]), _resultado(docs=[], api_ok=False)])
+    srv._proximo = lambda: next(respostas)
+    saida = srv.buscar_jurisprudencia_cjf("a b", tribunais="TRF4")
+    assert "ROTA FORA: api-nova na busca relaxada (HTTP 500)" in saida
+    assert srv._gravados == []
+
+
+def test_rota_caida_na_estrita_impede_cache_e_e_declarada(srv, monkeypatch):
+    monkeypatch.setattr(srv, "relaxar_cjf", lambda q: "a OU b")
+    respostas = iter([_resultado(docs=[], antiga_ok=False), _resultado()])
+    srv._proximo = lambda: next(respostas)
+    saida = srv.buscar_jurisprudencia_cjf("a b", tribunais="TRF4")
+    assert srv._gravados == []
+    assert "ROTA FORA: portal-antigo na busca estrita (timeout)" in saida
+    assert "BUSCA RELAXADA" in saida and "<origem>ambas</origem>" in saida
+
+
+def test_estatisticas_com_total_zero_nao_cacheia(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "estatisticas", lambda b, t, e: {"total_documents": 0})
+    saida = srv.estatisticas_cjf("x", tribunais="TRF4")
+    assert "Total de documentos: 0" in saida and srv._gravados == []
+    monkeypatch.setattr(srv.cjf_api, "estatisticas", lambda b, t, e: {})
+    srv.estatisticas_cjf("y", tribunais="TRF4")
+    assert srv._gravados == []
+
+
+def test_documento_cjf_campo_vazio_nao_cacheia_e_avisa(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "obter_documento",
+                        lambda i, c="": {"id": i, "campo": c, "texto": ""})
+    saida = srv.documento_cjf("abc", campo="inteiro_teor")
+    assert "VAZIO" in saida and "inteiro_teor" in saida
+    assert srv._gravados == []
+
+
+def test_documento_cjf_completo_sem_texto_nao_cacheia_e_avisa(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "obter_documento", lambda i, c="": {"id": i, "numero": "1"})
+    saida = srv.documento_cjf("abc")
+    assert "VAZIO" in saida and srv._gravados == []
