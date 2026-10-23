@@ -195,6 +195,18 @@ def test_similares_mapeia_documentos(monkeypatch):
     assert all(d["id"] and d["via"] == "api-nova" for d in docs)
 
 
+def test_id_com_barra_nao_muda_o_caminho(monkeypatch):
+    cap = _dublar_get(monkeypatch, {"texto": "t"})
+    cjf_api.obter_documento("../a/b?c", "ementa")
+    assert cap["url"].endswith("/documento/..%2Fa%2Fb%3Fc/campo/ementa")
+    cap = _dublar_get(monkeypatch, DOCUMENTO)
+    cjf_api.obter_documento("a/b")
+    assert cap["url"].endswith("/documento/a%2Fb")
+    cap = _dublar_get(monkeypatch, SIMILARES)
+    cjf_api.similares("a/b", 3)
+    assert cap["url"].endswith("/similar/a%2Fb")
+
+
 def test_estatisticas_corpo_e_retorno(monkeypatch):
     cap = _dublar_post(monkeypatch, ANALYTICS)
     r = cjf_api.estatisticas("bolsa familia unipessoal", ["TRF4"], FiltrosApi())

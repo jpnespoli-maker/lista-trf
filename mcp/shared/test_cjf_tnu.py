@@ -100,7 +100,16 @@ def test_tool_devolve_cnj_decisao_e_aviso(srv, monkeypatch):
     assert "eproctnu-jur.cjf.jus.br" in saida
     assert f"<numero>{PUIL}</numero>" in saida
     assert "<decisao>" in saida
+    assert f"<id>{PROCESSO['results']['hits'][0]['_id']}</id>" in saida
     assert len(srv._gravados) == 1
+    assert srv._gravados[0][1]["v"] == 2  # cache de antes do <id> não serve
+
+
+def test_tool_devolve_link_do_inteiro_teor(srv, monkeypatch):
+    doc = {"id": "abc", "numero": PUIL, "ementa": "e", "link_inteiro_teor": "https://exemplo/teor"}
+    monkeypatch.setattr(srv.cjf_api, "buscar_tnu", lambda b, n, ordenar_por_data=False: ([doc], 1, True))
+    saida = srv.buscar_jurisprudencia_tnu("x")
+    assert "<id>abc</id>" in saida and "<link_inteiro_teor>https://exemplo/teor</link_inteiro_teor>" in saida
 
 
 def test_tool_zero_nao_se_cacheia(srv, monkeypatch):

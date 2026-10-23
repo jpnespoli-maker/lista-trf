@@ -142,10 +142,17 @@ def _montar_filtros(
         if not relatores:
             raise ValueError(f"relator não encontrado: {relator}")
     norma = cjf_api.normalizar_legislacao(legislacao) if legislacao.strip() else None
+    inicio = _data_api(data_inicio, "data_inicio")
+    fim = _data_api(data_fim, "data_fim")
+    if inicio and fim and inicio > fim:
+        raise ValueError(
+            f"data_inicio ({data_inicio}) é posterior a data_fim ({data_fim}); "
+            "o período vazio daria zero, que se leria como 'sem jurisprudência'."
+        )
     return cjf_api.FiltrosApi(
         modo=modo,
-        data_inicio=_data_api(data_inicio, "data_inicio"),
-        data_fim=_data_api(data_fim, "data_fim"),
+        data_inicio=inicio,
+        data_fim=fim,
         tipo_data=_TIPOS_DATA[chave_data],
         relatores=relatores,
         legislacao=norma,
@@ -410,6 +417,9 @@ def buscar_jurisprudencia_cjf(
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | {totais_txt} -->\n'
         if so_api:
             meta += f"<!-- {AVISO_FILTROS_API} -->\n"
+        if filtros.relatores:
+            nomes = "; ".join(sanitizar_comentario_xml(r) for r in filtros.relatores)
+            meta += f"<!-- RELATOR: {nomes} (grafias da API, somadas em OU) -->\n"
         for nome, erro in {**rotas_fora, **avisos_rota}.items():
             meta +=f"<!-- ROTA FORA: {nome} ({sanitizar_comentario_xml(erro)}) -->\n"
         if "STJ" in lista_tribunais and not so_api and not aviso_cobertura:
@@ -478,7 +488,8 @@ def buscar_jurisprudencia_tnu(
 
     Returns:
         XML com número CNJ, classe, relator, data e ementa; o campo DECISÃO vem
-        em <decisao>, truncado. Antes de citar, conferir no eProc da TNU.
+        em <decisao>, truncado; <id> (use em documento_cjf/similares_cjf) e, quando
+        há, <link_inteiro_teor>. Antes de citar, conferir no eProc da TNU.
     """
     max_resultados = max(1, min(int(max_resultados), 100))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
@@ -490,7 +501,7 @@ def buscar_jurisprudencia_tnu(
         import json as _json
         cache_key = {
             "mcp": "cjf-jurisprudencia", "tool": "tnu", "busca": busca,
-            "max_resultados": max_resultados, "ordenar_por_data": ordenar_por_data, "v": 1,
+            "max_resultados": max_resultados, "ordenar_por_data": ordenar_por_data, "v": 2,
         }
         cached = cached_http("cjf-jurisprudencia", cache_key)
         if cached is not None:
@@ -513,6 +524,9 @@ def buscar_jurisprudencia_tnu(
         resultados = []
         for doc in documentos:
             extra = {}
+            for campo in ("id", "link_inteiro_teor"):
+                if doc.get(campo):
+                    extra[campo] = doc[campo]
             if doc.get("decisao"):
                 extra["decisao"] = truncar_por_tokens(doc["decisao"], max_tokens=max_tokens_ementa)
             if doc.get("tipo"):

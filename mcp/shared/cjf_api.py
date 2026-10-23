@@ -44,6 +44,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
+from urllib.parse import quote
 
 import requests
 
@@ -368,10 +369,12 @@ def obter_documento(doc_id: str, campo: str = "") -> Dict[str, Any]:
     inteiro_teor): só aquele texto, ``{"id", "campo", "texto"}``."""
     if campo and campo not in _CAMPOS_DOCUMENTO:
         raise ValueError(f"campo deve ser um de {', '.join(_CAMPOS_DOCUMENTO)}; recebido {campo!r}")
+    # O id vai quotado: com "/" ou "?" ele mudaria o caminho pedido à API.
+    caminho = f"/documento/{quote(doc_id, safe='')}"
     if campo:
-        dados = _get_json(f"/documento/{doc_id}/campo/{campo}")
+        dados = _get_json(f"{caminho}/campo/{campo}")
         return {"id": doc_id, "campo": campo, "texto": dados.get("texto", "")}
-    dados = _get_json(f"/documento/{doc_id}")
+    dados = _get_json(caminho)
     hits = (dados.get("results") or {}).get("hits") or []
     if not hits:
         raise RuntimeError(f"API nova do CJF não devolveu o documento {doc_id}")
@@ -384,7 +387,7 @@ def obter_documento(doc_id: str, campo: str = "") -> Dict[str, Any]:
 
 
 def similares(doc_id: str, n: int) -> List[Dict[str, Any]]:
-    dados = _get_json(f"/similar/{doc_id}", {"size": n})
+    dados = _get_json(f"/similar/{quote(doc_id, safe='')}", {"size": n})
     return [documento(h.get("_source") or {}, h.get("_id", "")) for h in dados["results"].get("hits", [])]
 
 

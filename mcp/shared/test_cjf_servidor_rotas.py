@@ -237,8 +237,28 @@ def test_varias_grafias_de_relator_vao_todas(srv, monkeypatch):
     monkeypatch.setattr(srv.cjf_api, "sugerir_relator", lambda t: ["LUIZ FUX", "Ministro Luiz Fux"])
     monkeypatch.setattr(srv.cjf_api, "buscar_api",
                         lambda b, t, n, extras: (recebido.update(extras=extras), ([_doc_api()], {"STF": 1}))[1])
-    srv.buscar_jurisprudencia_cjf("x", tribunais="STF", relator="fux")
+    saida = srv.buscar_jurisprudencia_cjf("x", tribunais="STF", relator="fux")
     assert recebido["extras"].relatores == ("LUIZ FUX", "Ministro Luiz Fux")
+    assert "<!-- RELATOR: LUIZ FUX; Ministro Luiz Fux (grafias da API, somadas em OU) -->" in saida
+
+
+def test_sem_relator_nao_ha_linha_de_relator(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", lambda b, t, n, extras: ([_doc_api()], {"TRF4": 1}))
+    assert "RELATOR:" not in srv.buscar_jurisprudencia_cjf("x", tribunais="TRF4", data_inicio="2025-01-01")
+
+
+def test_data_inicio_posterior_a_data_fim_e_erro(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", lambda *a, **k: pytest.fail("buscou com período vazio"))
+    monkeypatch.setattr(srv.cjf_api, "estatisticas", lambda *a, **k: pytest.fail("buscou com período vazio"))
+    saida = srv.buscar_jurisprudencia_cjf("x", tribunais="TRF4", data_inicio="31/12/2025", data_fim="2025-01-01")
+    assert saida.startswith("<erro>data_inicio (31/12/2025) é posterior a data_fim (2025-01-01)")
+    assert srv._chamadas == []
+    assert srv.estatisticas_cjf("x", tribunais="TRF4", data_inicio="2026-01-01",
+                                data_fim="2025-01-01").startswith("<erro>data_inicio")
+    # O mesmo dia nas duas pontas é período válido.
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", lambda b, t, n, extras: ([_doc_api()], {"TRF4": 1}))
+    assert "<erro>" not in srv.buscar_jurisprudencia_cjf("x", tribunais="TRF4", data_inicio="2025-01-01",
+                                                         data_fim="01/01/2025")
 
 
 def test_cache_nao_grava_com_rota_em_erro(srv):
