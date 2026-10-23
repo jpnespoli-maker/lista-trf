@@ -1,0 +1,322 @@
+{
+ "results": {
+  "total": {
+   "value": 4,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "5ba30d0a3c487266a7e8045ef0dc91b9cee073a3e791aa8e7e9cc0ac0aafc1d8",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5000237-96.2025.4.04.9999",
+     "PROCESSO_CITACAO": "5000237-96.2025.4.04.9999",
+     "CLASSE": "AC - Apelação Cível",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "PAULO AFONSO BRUM VAZ",
+     "RELATOR_ACORDAO": "PAULO AFONSO BRUM VAZ",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "9ª TURMA",
+     "TRIBUNAL": "trf4",
+     "ORGAO_ORIGEM": "TRF 4ª Região",
+     "DATA_DECISAO": "2025-05-14T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "DIREITO DA SEGURIDADE SOCIAL. APELAÇÃO CÍVEL. BENEFÍCIO ASSISTENCIAL. PESSOA COM DEFICIÊNCIA. VISÃO MONOCULAR. VULNERABILIDADE SOCIOECONÔMICA COMPROVADA. PROVIMENTO DO RECURSO.\nI. CASO EM EXAME:1. Apelação cível interposta contra sentença que julgou improcedente o pedido de benefício assistencial, sob o argumento de que a parte autora não comprovou a condição de pessoa com deficiência e a situação de vulnerabilidade social.\nII. QUESTÃO EM DISCUSSÃO:1. Há duas questões em discussão: (i) a comprovação da condição de pessoa com deficiência da parte autora, notadamente a visão monocular; (ii) a demonstração da situação de vulnerabilidade social do núcleo familiar.\nIII. RAZÕES DE DECIDIR:1. A visão monocular é classificada como deficiência sensorial, do tipo visual, para todos os efeitos legais, conforme a Lei nº 14.126/2021. O portador de visão monocular, conquanto não possa ser considerado necessariamente incapaz, enquadrando-se legalmente na condição de Pessoa com Deficiência (PCD), por presumidamente enfrentar barreiras e impedimentos de longo prazo, encontrando-se a família em situação de vulnerabilidade socioeconômica, faz jus ao BPC.2. A situação de vulnerabilidade social da parte autora restou comprovada pelo estudo social, que demonstra a composição do núcleo familiar, a renda auferida (Bolsa Família e pensão por morte), bem como a condição de miserabilidade.3. As despesas com os cuidados necessários da parte autora (medicamentos, alimentação especial, tratamento médico, psicológico e fisioterápico) devem ser consideradas na análise da condição de vulnerabilidade da família.4. O valor auferido a título de Bolsa Família não deve ser computado no cálculo da renda per capita, e a composição do núcleo familiar, com pessoas com deficiência e menores de idade, presume gastos excepcionais para a manutenção da subsistência da família.5. A jurisprudência do STJ firmou entendimento de que a legislação não elenca o grau de incapacidade para fins de configuração da deficiência, não cabendo ao intérprete da lei a imposição de requisitos mais rígidos do que aqueles previstos para a sua concessão.\nIV. DISPOSITIVO E TESE:1. Recurso provido para reconhecer o direito ao benefício assistencial desde a DER (17/01/2023) e determinar a implantação do benefício.Tese de julgamento: 1. A comprovação da deficiência, incluindo a visão monocular, e da situação de vulnerabilidade social, autoriza a concessão do benefício assistencial, devendo ser considerados os gastos excepcionai...",
+     "DECISAO": " \nVistos e relatados estes autos em que são partes as acima indicadas, a Colenda 9ª Turma do Tribunal Regional Federal da 4ª Região decidiu, por unanimidade, dar provimento ao apelo da autora, bem como determinar a implantação do benefício, via CEAB, nos termos do relatório, votos e notas de julgame",
+     "REPRESENTATIVO_CONTROVERSIA": "0",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "RS",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2025-05-17T03:00:00.000Z",
+     "INTEIRO_TEOR_TRUNCADA": false,
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "6ec0240cde4dd67ad162b68cf8eb04f1983509c1627bdc78bdf01c92c4b036fa",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5001700-42.2023.4.04.7219",
+     "PROCESSO_CITACAO": "5001700-42.2023.4.04.7219",
+     "CLASSE": "AC - Apelação Cível",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "SEBASTIÃO OGÊ MUNIZ",
+     "RELATOR_ACORDAO": "PAULO AFONSO BRUM VAZ",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "9ª TURMA",
+     "TRIBUNAL": "trf4",
+     "ORGAO_ORIGEM": "TRF 4ª Região",
+     "DATA_DECISAO": "2025-10-08T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "DIREITO PREVIDENCIÁRIO E ASSISTENCIAL. APELAÇÃO CÍVEL. BENEFÍCIO ASSISTENCIAL À PESSOA IDOSA. REQUISITO ECONÔMICO. VULNERABILIDADE SOCIAL. RECURSO PROVIDO.\nI. CASO EM EXAME:1. Apelação cível interposta contra sentença que julgou improcedente o pedido de concessão de benefício assistencial à pessoa idosa, por não reconhecer a vulnerabilidade social da demandante.\nII. QUESTÃO EM DISCUSSÃO:2. A questão em discussão consiste em saber se a parte autora preenche o requisito de vulnerabilidade social para a concessão do benefício assistencial à pessoa idosa.\nIII. RAZÕES DE DECIDIR:3. O Supremo Tribunal Federal, ao julgar o RE 567985 (repercussão geral), reconheceu a inconstitucionalidade do § 3º do art. 20 da Lei nº 8.742/1993 (LOAS), por considerar defasado o critério de renda familiar per capita inferior a 1/4 do salário mínimo para caracterizar a vulnerabilidade, em consonância com o compromisso constitucional com a dignidade da pessoa humana.4. O Superior Tribunal de Justiça, no REsp nº 1.112.557/MG (Tema 27/STJ), firmou o entendimento de que a condição de miserabilidade pode ser demonstrada por outros meios de prova, mesmo quando a renda per capita do núcleo familiar for superior a 1/4 do salário mínimo, em observância ao princípio do livre convencimento motivado do juiz (art. 131 do CPC/1973).5. As despesas com os cuidados necessários da parte autora, como medicamentos, alimentação especial, fraldas descartáveis e tratamentos, devem ser consideradas na análise da condição de vulnerabilidade da família.6. A percepção de recursos do Programa Bolsa Família, destinado a famílias em situação de pobreza e extrema pobreza, não impede a concessão do benefício assistencial e constitui prova indiciária de grave risco social.7. O Supremo Tribunal Federal, no RE 580.963/PR, declarou a inconstitucionalidade do parágrafo único do art. 34 do Estatuto do Idoso, estendendo a exclusão do cálculo da renda familiar per capita a benefícios previdenciários de valor mínimo e a benefícios assistenciais ou previdenciários por incapacidade de pessoas com deficiência. Essa diretriz foi consolidada pela Portaria nº 1.282/2021 do INSS e pela Lei nº 15.077/2024.8. No caso concreto, o estudo social (e. 38.1) e as imagens do imóvel demonstram a vulnerabilidade social da autora. Excluindo-se a aposentadoria de valor mínimo do cônjuge, a renda familiar per capita de R$ 540,73 é insuficiente para cobrir as despesas mensais de R$ 1.446,17, caracterizando a situação de miserabilidade.\nIV. DISP...",
+     "DECISAO": "Vistos e relatados estes autos em que são partes as acima indicadas, a Egrégia 9ª Turma do Tribunal Regional Federal da 4ª Região decidiu, por maioria, vencido o relator, dar provimento ao recurso da parte autora, bem como determinar a implantação do benefício, via CEAB, nos termos do relatório, vot",
+     "REPRESENTATIVO_CONTROVERSIA": "0",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "SC",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2025-10-13T03:00:00.000Z",
+     "INTEIRO_TEOR_TRUNCADA": false,
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "33cbf145bdeddbbbfc52e2edc8d6b2ab1dcbe421a6b30bf869573e1c3b28b32d",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5000303-23.2024.4.04.7215",
+     "PROCESSO_CITACAO": "5000303-23.2024.4.04.7215",
+     "CLASSE": "RCIJEF - RECURSO CÍVEL",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "JAIRO GILBERTO SCHÄFER",
+     "RELATOR_ACORDAO": "JAIRO GILBERTO SCHÄFER",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "2ª TURMA RECURSAL DE SANTA CATARINA",
+     "TRIBUNAL": "trf4",
+     "ORGAO_ORIGEM": "TR 4ª Região",
+     "DATA_DECISAO": "2025-05-15T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "EMENTA\nDIREITO PREVIDENCIÁRIO E ASSISTENCIAL. RECURSO CÍVEL. BENEFÍCIO ASSISTENCIAL À PESSOA COM DEFICIÊNCIA (LOAS). REQUISITO SOCIOECONÔMICO. ANÁLISE DA VULNERABILIDADE SOCIAL ALÉM DO CRITÉRIO OBJETIVO DE RENDA. RECURSO DA PARTE AUTORA PROVIDO.\nI. CASO EM EXAME\n1. Recurso interposto contra sentença que julgou improcedente pedido de concessão de benefício assistencial à pessoa com deficiência.\n2. Autora, 18 anos, portadora de cegueira irreversível no olho direito, teve seu pedido indeferido em primeira instância por suposto não preenchimento do requisito socioeconômico.\n3. Núcleo familiar composto pela autora, três irmãos e seus genitores, residentes em imóvel cedido pelos avós paternos, em área rural de difícil acesso.\nII. QUESTÃO EM DISCUSSÃO\nCaracterização da vulnerabilidade socioeconômica como requisito para concessão do benefício assistencial de prestação continuada (LOAS) à pessoa com deficiência, considerando não apenas o critério objetivo de renda, mas a situação fática do grupo familiar.\nIII. RAZÕES DE DECIDIR\n1. O benefício assistencial previsto no art. 203, V, da CF/1988, regulamentado pela Lei nº 8.742/1993, exige dois pressupostos para sua concessão: a condição de pessoa idosa ou deficiente e a hipossuficiência econômica.\n2. O requisito da deficiência foi comprovado por perícia médica judicial que atestou cegueira irreversível no olho direito da autora, com impedimento de longo prazo superior a 2 anos.\n3. Quanto ao requisito socioeconômico, o laudo social demonstrou que a renda familiar advém do trabalho do genitor como motorista (valor pouco superior ao salário mínimo), dos rendimentos variáveis do irmão como agricultor diarista (média inferior ao salário mínimo) e do benefício Bolsa-Família.\n4. Evidenciadas despesas extraordinárias em razão do quadro clínico da autora e da genitora, além do estado gravídico da irmã da autora, configurando situação de vulnerabilidade social desde a data de entrada do requerimento (DER).\nIV. DISPOSITIVO\nRecurso provido para conceder o benefício assistencial de prestação continuada na condição de pessoa com deficiência (LOAS) desde a data de entrada do requerimento (21/08/2023), com antecipação dos efeitos da tutela para imediata implantação do benefício.\nLEGISLAÇÃO E JURISPRUDÊNCIA RELEVANTES CITADAS:\no CF/1988, art. 203, V\no Lei nº 8.742/1993, art. 20\no STF, RE 870.947 (Tema 810)\no STJ, REsp 1.492.221/PR (Tema 905)\no TRF4, APELREEX 5044874-22.2013.4.04.7100, Sexta Turma, Relatora Vânia Hack de Almeida\no TRF4,...",
+     "DECISAO": "A 2ª Turma Recursal de Santa Catarina decidiu, por maioria, vencida a Juíza Federal GABRIELA PIETSCH SERAFIN, DAR PROVIMENTO AO RECURSO DA PARTE AUTORA, antecipando os efeitos da tutela, para imediata implantação do benefício de amparo social a pessoa deficiente, a contar da DER. Prazo de cumpriment",
+     "REPRESENTATIVO_CONTROVERSIA": "0",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "SC",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2025-05-16T03:00:00.000Z",
+     "INTEIRO_TEOR_TRUNCADA": false,
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "UF": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "RS",
+     "doc_count": 2
+    },
+    {
+     "key": "SC",
+     "doc_count": 2
+    }
+   ]
+  },
+  "REPRESENTATIVO_CONTROVERSIA": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "0",
+     "doc_count": 4
+    }
+   ]
+  },
+  "DOCUMENTOS_SEM_TRIBUNAL": {
+   "doc_count": 0
+  },
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "trf4",
+     "doc_count": 3
+    }
+   ]
+  },
+  "ORGAO_JULGADOR": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "9ª TURMA",
+     "doc_count": 3
+    },
+    {
+     "key": "2ª TURMA RECURSAL DE SANTA CATARINA",
+     "doc_count": 1
+    }
+   ]
+  },
+  "ORIGEM_JEF": {
+   "total": 2,
+   "tnu": 1,
+   "tr_total": 1,
+   "tru_total": 0,
+   "tr_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 0
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 0
+    },
+    {
+     "key": "4",
+     "doc_count": 1
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 0
+    }
+   ],
+   "tru_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 0
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 0
+    },
+    {
+     "key": "4",
+     "doc_count": 0
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 0
+    }
+   ],
+   "tr_orgaos": [
+    {
+     "key": "2ª TURMA RECURSAL DE SANTA CATARINA",
+     "doc_count": 1
+    }
+   ],
+   "tru_orgaos": [],
+   "tr_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "2": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "3": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "4": {
+     "doc_count": 1,
+     "orgaos": [
+      {
+       "key": "2ª TURMA RECURSAL DE SANTA CATARINA",
+       "doc_count": 1
+      }
+     ]
+    },
+    "5": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "6": {
+     "doc_count": 0,
+     "orgaos": []
+    }
+   },
+   "tru_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "2": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "3": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "4": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "5": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "6": {
+     "doc_count": 0,
+     "orgaos": []
+    }
+   }
+  },
+  "TIPO_DOCUMENTO": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "ACÓRDÃO",
+     "doc_count": 4
+    }
+   ]
+  },
+  "HAS_IT3": {
+   "buckets": [
+    {
+     "key": "1",
+     "doc_count": 4
+    },
+    {
+     "key": "0",
+     "doc_count": 0
+    }
+   ]
+  },
+  "PRECEDENTE_RELEVANTE": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "1",
+     "doc_count": 4
+    }
+   ]
+  },
+  "CLASSE": {
+   "buckets": []
+  }
+ }
+}

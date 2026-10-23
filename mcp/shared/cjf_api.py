@@ -42,6 +42,7 @@ projeto tem a TNU posterior a julho de 2017.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 
 import requests
@@ -88,10 +89,33 @@ def _data_br(iso: Any) -> str:
     return f"{m.group(3)}/{m.group(2)}/{m.group(1)}" if m else ""
 
 
-def documento(source: Dict[str, Any]) -> Dict[str, Any]:
+@dataclass(frozen=True)
+class FiltrosApi:
+    """Filtros e modo que só a API nova tem. ``legislacao`` já vem no formato da API."""
+
+    modo: str = "comum"  # "comum" | "semantica"
+    data_inicio: str | None = None  # AAAA-MM-DD
+    data_fim: str | None = None
+    tipo_data: str = "DATA_DECISAO"  # ou "DATA_PUBLICACAO_PESQ"
+    relatores: Tuple[str, ...] = ()
+    legislacao: str | None = None
+    so_precedentes_relevantes: bool = False
+    so_representativos: bool = False
+
+    def ativo(self) -> bool:
+        return self != FiltrosApi()
+
+
+def documento(source: Dict[str, Any], doc_id: str = "") -> Dict[str, Any]:
     """``_source`` da API → dicionário dos clientes JSF (só os campos com valor)."""
     tribunal = (source.get("TRIBUNAL") or "").upper()
+    link = _texto(source.get("LINK_INTEIRO_TEOR"))
+    if not link:
+        inteiro = _texto(source.get("INTEIRO_TEOR"))
+        link = inteiro if inteiro.startswith("http") else ""
     doc = {
+        "id": _texto(doc_id),
+        "link_inteiro_teor": link,
         "numero": _texto(source.get("PROCESSO_CITACAO") or source.get("PROCESSO")),
         "classe": _texto(source.get("CLASSE")),
         "relator": _texto(source.get("RELATOR")),
@@ -104,6 +128,10 @@ def documento(source: Dict[str, Any]) -> Dict[str, Any]:
         "tipo": _texto(source.get("TIPO_DOCUMENTO")),
     }
     doc = {k: v for k, v in doc.items() if v}
+    if str(source.get("PRECEDENTE_RELEVANTE")) == "1":
+        doc["precedente_relevante"] = True
+    if str(source.get("REPRESENTATIVO_CONTROVERSIA")) == "1":
+        doc["representativo_controversia"] = True
     doc["tribunal"] = tribunal
     doc["via"] = VIA
     if tribunal == "STF":
@@ -132,16 +160,30 @@ def pesquisar(
     *,
     ordenar_por_data: bool = False,
     processo: str | None = None,
+    extras: FiltrosApi | None = None,
 ) -> Dict[str, Any]:
     ordem = [{"field": "DATA_DECISAO", "direction": "desc"}] if ordenar_por_data else []
+    url = API_URL
     corpo = {
-        "query": _e_explicito(query), "filters": filtros, "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
+        "query": _e_explicito(query), "filters": dict(filtros), "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
         "current_page": 1, "process_number": processo, "decision_date_start": None,
         "decision_date_end": None, "date_type": "DATA_DECISAO", "rapporteurs": [],
         "revisors": [], "relator_convocado": None, "relator_acordaos": [],
         "ref_legislativa": None,
     }
-    resp = requests.post(API_URL, json=corpo, timeout=_TIMEOUT_S)
+    if extras is not None:
+        if extras.modo == "semantica":
+            url = API_URL.rsplit("/", 1)[0] + "/pesquisa-semantica"
+        corpo["decision_date_start"] = extras.data_inicio
+        corpo["decision_date_end"] = extras.data_fim
+        corpo["date_type"] = extras.tipo_data
+        corpo["rapporteurs"] = list(extras.relatores)
+        corpo["ref_legislativa"] = extras.legislacao
+        if extras.so_precedentes_relevantes:
+            corpo["filters"]["PRECEDENTE_RELEVANTE"] = ["1"]
+        if extras.so_representativos:
+            corpo["filters"]["REPRESENTATIVO_CONTROVERSIA"] = ["1"]
+    resp = requests.post(url, json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
     dados = resp.json()
     if "results" not in dados or "aggregations" not in dados:
@@ -153,7 +195,7 @@ def pesquisar(
 
 
 def _docs_com_canario(dados: Dict[str, Any], total: int, n: int, onde: str) -> List[Dict[str, Any]]:
-    docs = [documento(h.get("_source") or {}) for h in dados["results"].get("hits", [])]
+    docs = [documento(h.get("_source") or {}, h.get("_id", "")) for h in dados["results"].get("hits", [])]
     if total > 0 and not docs:
         raise RuntimeError(
             f"API nova do CJF reportou {total} documento(s) em {onde} e devolveu 0 — "
@@ -163,7 +205,7 @@ def _docs_com_canario(dados: Dict[str, Any], total: int, n: int, onde: str) -> L
 
 
 def buscar_unificada(
-    termo: str, tribunais: Sequence[str], max_resultados: int
+    termo: str, tribunais: Sequence[str], max_resultados: int, *, extras: FiltrosApi | None = None
 ) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     """Mesmo contrato de ``cjf_client.buscar_documentos``: ``(docs, totais)``."""
     pedidos = [t.strip().upper() for t in tribunais]
@@ -175,7 +217,10 @@ def buscar_unificada(
     filtros: Dict[str, List[str]] = {"TRIBUNAL": pedidos}
     if regioes:
         filtros["ORIGEM"] = [f"JEF:{tipo}:{r}" for r in regioes for tipo in ("TR", "TRU")]
-    dados = pesquisar(termo, filtros, max_resultados)
+    if extras is None:
+        dados = pesquisar(termo, filtros, max_resultados)
+    else:
+        dados = pesquisar(termo, filtros, max_resultados, extras=extras)
     aggs = dados["aggregations"]
     totais = {t: 0 for t in pedidos}
     for balde in aggs.get("TRIBUNAL", {}).get("buckets", []):
@@ -190,6 +235,13 @@ def buscar_unificada(
                 totais[chave] += int(balde.get("doc_count", 0))
     docs = _docs_com_canario(dados, sum(totais.values()), max_resultados, ", ".join(pedidos))
     return docs, totais
+
+
+def buscar_api(
+    termo: str, tribunais: Sequence[str], max_resultados: int, extras: FiltrosApi
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
+    """``buscar_unificada`` com os filtros e o modo da API nova (``FiltrosApi``)."""
+    return buscar_unificada(termo, tribunais, max_resultados, extras=extras)
 
 
 # TNU (medido em 22/10/2026): filtra-se pelo órgão, com esta grafia EXATA

@@ -1,0 +1,874 @@
+{
+ "results": {
+  "total": {
+   "value": 400,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "671f5909fa485247e5b0a09b8fe4e5c972f2fa2e5ccd4c5530d18ba7bd37c3f0",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0005342-29.2011.4.03.6000",
+     "PROCESSO_CITACAO": "0005342-29.2011.4.03.6000",
+     "CLASSE": "APELAÇÃO CÍVEL",
+     "CLASSE_SIGLA": "ApCiv",
+     "RELATOR": "Desembargador Federal MARCELO MESQUITA SARAIVA",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "4ª TURMA",
+     "TRIBUNAL": "TRF3",
+     "ORGAO_ORIGEM": "TRF 3ª Região",
+     "DATA_DECISAO": "2021-02-02T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "DJEN DATA: 02/03/2021",
+     "EMENTA": "AÇÃO DE RITO ORDINÁRIO. PRELIMINAR. LEGITIMIDADE PASSIVA DA UNIÃO. ENSINO SUPERIOR. PROGRAMA UNIVERSIDADE PARA TODOS - PROUNI. PREENCHIMENTO DOS REQUISITOS PARA A CONCESSÃO DA BENESSE. CONDENAÇÃO DA UNIÃO AO PAGAMENTO DE HONORÁRIOS ADVOCATÍCIOS EM FAVOR DA DPU. POSSIBILIDADE.\n1. Preliminar de ilegitimidade passiva suscitada pela UNIÃO afastada, porquanto o PROUNI consiste em um programa instituído por ela, sendo o Ministério da Educação o órgão responsável pela aplicação dos recursos desse programa.\n2. O Programa Universidade para Todos-PROUNI, destina-se a oportunizar o ensino superior gratuito para pessoas comprovadamente carentes que preenchem os requisitos dispostos na Lei nº 11.096/2005, conforme estabelece os artigos 1º e 4º da mencionada lei.\n3. Todos os critérios para a concessão da bolsa foram preenchidos, isso porque o autor demonstrou que, além de perceber salário em torno de R$ 500,00 (fl. 19), não reside com seu pai, o qual mora em zona rural de Rio Negro, MS, conforme comprovante de residência de fl. 41.\n4. A educação é um direito social constitucionalmente e tem por finalidade o pleno desenvolvimento do educando, seu preparo para o exercício da cidadania e sua qualificação para o trabalho e ainda que os pais tenham o dever se responsabilizar pelo custeio dos estudos de sua prole, tal dever também advém do Estado, quando comprovado que os pais não possuem condições financeiras de proporcionar aos seus filhos a devida formação.\n5. O autor comprovou que não tem condições de arcar totalmente com o custo de seu curso, vez que reside sozinho e que possui salário em torno de R$ 500,00, o que inviabiliza o pagamento integral das mensalidades de sua faculdade particular, e, por isso, se valeu do programa de bolsas, mantido pelo Governo Federal.\n6. É devida a condenação ao pagamento de honorários advocatícios em favor da DPU. União condenada ao pagamento de honorários advocatícios, fixados em R$800,00.\n7. Preliminar de ilegitimidade afastada.Apelo da União desprovido. Apelo da parte autora provido.",
+     "DECISAO": "APELAÇÃO CÍVEL (198) Nº 0005342-29.2011.4.03.6000\nRELATOR: Gab. 14 - DES. FED. MARCELO SARAIVA\nAPELANTE: VINICIUS ARMOA TEIXEIRA, UNIÃO FEDERAL\n\n\nAPELADO: UNIÃO FEDERAL, VINICIUS ARMOA TEIXEIRA, ANHANGUERA EDUCACIONAL LTDA\n\nAdvogados do(a) APELADO: THIAGO MENDONCA PAULINO - MS10712-A, GUILHERME FERR",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "MS",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": "http://www.trf3.jus.br/trf3r/index.php?id=20&op=resultado&processo=00053422920114036000",
+     "DATA_PUBLICACAO_PESQ": "2021-03-02T03:00:00.000Z",
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": true
+    }
+   },
+   {
+    "_id": "654a41eb88159aa086287aefdd2c6eb66790ccccdf5fda214dc192a338277b4a",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5002552-24.2021.4.03.6327",
+     "PROCESSO_CITACAO": "5002552-24.2021.4.03.6327",
+     "CLASSE": "RECURSO INOMINADO CÍVEL",
+     "CLASSE_SIGLA": "RecInoCiv",
+     "RELATOR": "Juíza Federal FERNANDA SOUZA HUTZLER",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "14ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "TRIBUNAL": "TRF3",
+     "ORGAO_ORIGEM": "TR 3ª Região",
+     "DATA_DECISAO": "2022-05-24T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "Intimação via sistema DATA: 26/05/2022",
+     "EMENTA": "E M E N T A\nAUXÍLIO EMERGENCIAL. AUTOR RECEBEU BENEFÍCIO DE AUXÍLIO EMERGENCIAL 2020 E EXTENSÃO, MAS TEVE BENEFÍCIO DE 2021 NEGADO EM RAZÃO DA RENDA FAMILIAR. COMPROVAÇÃO DE ALTERAÇÃO DO GRUPO FAMILIAR. SENTENÇA PROCEDENTE. RECURSO DA UNIÃO. MANTER SENTENÇA PELO ART. 46 LEI Nº 9.099/45.\n1. Trata-se de recurso interposto pela parte ré em face da sentença que julgou procedente o pedido para condenar a União Federal a pagar o auxílio emergencial 2021 no valor de R$150,00, caso não haja outro motivo que justifique o indeferimento.\n2. Parte recorrente alega que a parte autora não possui o direito a que postula, na medida em que qualquer alteração do núcleo familiar posteriormente a 02 de abril de 2020 não tem qualquer relevância para fins de análise do direito ao auxílio emergencial como um todo, especificamente para fins de pagamento do auxílio emergencial 21.\n3. Parte autora comprovou através de documentos juntados aos autos e atualização no Cadúnico que reside sozinho e que está desempregado.\n4. Recurso da parte ré que se nega provimento.",
+     "DECISAO": "PODER JUDICIÁRIOTurmas Recursais dos Juizados Especiais Federais Seção Judiciária de São Paulo\n14ª Turma Recursal da Seção Judiciária de São Paulo\n\nRECURSO INOMINADO CÍVEL (460) Nº 5002552-24.2021.4.03.6327\nRELATOR: 40º Juiz Federal da 14ª TR SP\nRECORRENTE: ADVOCACIA GERAL DA UNIAO, UNIÃO FEDERAL\nPR",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "SP",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": "http://www.trf3.jus.br/trf3r/index.php?id=20&op=resultado&processo=50025522420214036327",
+     "DATA_PUBLICACAO_PESQ": "2022-05-26T03:00:00.000Z",
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": true
+    }
+   },
+   {
+    "_id": "50946b9460a1288ea2f642309e51a0db6919ac4a5395c60be2fca5099caad9ce",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "1011054-48.2023.4.01.9999",
+     "PROCESSO_CITACAO": "1011054-48.2023.4.01.9999",
+     "CLASSE": "APELAÇÃO CIVEL",
+     "CLASSE_SIGLA": "AC",
+     "RELATOR": "DESEMBARGADOR FEDERAL URBANO LEAL BERQUO NETO",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": "JUIZ FEDERAL PAULO ROBERTO LYRIO PIMENTA",
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "NONA TURMA",
+     "TRIBUNAL": "TRF1",
+     "ORGAO_ORIGEM": "TRF 1ª Região",
+     "DATA_DECISAO": "2023-12-19T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "PJe 19/12/2023 PAG",
+     "EMENTA": "CONSTITUCIONAL E PREVIDENCIÁRIO. BENEFÍCIO ASSISTENCIAL. LOAS. ART. 203, V, DA CF/88. LEI 8.742/93. PESSOA PORTADORA DE DEFICIENCIA FÍSICA E/OU MENTAL. LAUDO MÉDICO. IMPEDIMENTO DE LONGO PRAZO. LAUDO SOCIAL. AUSÊNCIA DE COMPROVAÇÃO DA MISERABILIDADE. NÃO PREENCHIMENTO DOS REQUISITOS LEGAIS. SENTENÇA DE IMPROCEDÊNCIA MANTIDA.\n\n1. O art. 203, inciso V da Constituição da República de 1988 estabelece como objetivo da assistência social a garantia de um salário mínimo de benefício mensal à pessoa portadora de deficiência e ao idoso que comprovem não possuir meios de prover à própria manutenção ou de tê-la provida por sua família.\n\n2. Visando regulamentar o estatuto constitucional, o art. 20 da Lei nº 8.742/1993 dispõe  que o benefício de prestação continuada é a garantia de um salário-mínimo mensal à pessoa com deficiência e ao idoso com 65 (sessenta e cinco) anos ou mais que comprovem não possuir meios de prover a própria manutenção nem de tê-la provida por sua família. \n\n3. O § 2o do aludido dispositivo esclarece que, para efeito de concessão do benefício de prestação continuada, considera-se pessoa com deficiência aquela que tem impedimento de longo prazo de natureza física, mental, intelectual ou sensorial, o qual, em interação com uma ou mais barreiras, pode obstruir sua participação plena e efetiva na sociedade em igualdade de condições com as demais pessoas. \n\n4. De fato, nos termos do Art. 20, § 1º, é requisito para participar do grupo familiar viver sob o mesmo teto. A família, por seu turno, nos termos do caput do mesmo artigo, é composta pelo requerente, o cônjuge ou companheiro, os pais e, na ausência de um deles, a madrasta ou o padrasto, os irmãos solteiros, os filhos e enteados solteiros e os menores tutelados, desde que vivam sob o mesmo teto.\n\n5. Ocorre que o laudo social de id 320213142, pág. 77 evidencia que: \"A Sra. Maria reside sozinha em uma chácara de 100x100m² que tem duas casas de alvenária a que ela reside tem 04 (quatro) cômodos, não tem forro, e os movéis da casa são bons, na outra casa vive o seu irmão com a família, a casa tem com 04 (quatro) cômodos. A renda atual mensal da senhora Maria é proveniente do filho Mozair Santos Araujo, que se apresentou como representante da mãe que, relata que ela tem problemas de saúde desde (2008) quando teve um derrame ficou com a memória baixa (fora do normal), e no anos de 2008 se tornou beneficiaria do BPC que foi cortado em 2021, Mozair informou que foi porque não foi realizado a atualização d...",
+     "DECISAO": "A Turma, por unanimidade, NEGOU PROVIMENTO à apelação.",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "DF",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": "https://pje2g.trf1.jus.br/consultapublica/ConsultaPublica/listView.seam",
+     "DATA_PUBLICACAO_PESQ": "2023-12-19T03:00:00.000Z",
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "UF": {
+   "buckets": [
+    {
+     "key": "SP",
+     "doc_count": 150
+    },
+    {
+     "key": "PE",
+     "doc_count": 74
+    },
+    {
+     "key": "MG",
+     "doc_count": 35
+    },
+    {
+     "key": "DF",
+     "doc_count": 32
+    },
+    {
+     "key": "MS",
+     "doc_count": 29
+    },
+    {
+     "key": "AM",
+     "doc_count": 20
+    },
+    {
+     "key": "GO",
+     "doc_count": 15
+    },
+    {
+     "key": "MA",
+     "doc_count": 13
+    },
+    {
+     "key": "BA",
+     "doc_count": 10
+    },
+    {
+     "key": "RO",
+     "doc_count": 5
+    },
+    {
+     "key": "MT",
+     "doc_count": 4
+    },
+    {
+     "key": "PA",
+     "doc_count": 4
+    },
+    {
+     "key": "AC",
+     "doc_count": 2
+    },
+    {
+     "key": "RJ",
+     "doc_count": 2
+    },
+    {
+     "key": "PI",
+     "doc_count": 1
+    },
+    {
+     "key": "RS",
+     "doc_count": 1
+    },
+    {
+     "key": "TO",
+     "doc_count": 1
+    }
+   ]
+  },
+  "REPRESENTATIVO_CONTROVERSIA": {
+   "buckets": [
+    {
+     "key": "0",
+     "doc_count": 400
+    }
+   ]
+  },
+  "DOCUMENTOS_SEM_TRIBUNAL": {
+   "doc_count": 0
+  },
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "TRF3",
+     "doc_count": 122
+    },
+    {
+     "key": "trf5",
+     "doc_count": 74
+    },
+    {
+     "key": "TRF1",
+     "doc_count": 45
+    },
+    {
+     "key": "trf6",
+     "doc_count": 27
+    },
+    {
+     "key": "stf",
+     "doc_count": 2
+    },
+    {
+     "key": "trf2",
+     "doc_count": 2
+    },
+    {
+     "key": "trf4",
+     "doc_count": 1
+    }
+   ]
+  },
+  "ORGAO_JULGADOR": {
+   "buckets": [
+    {
+     "key": "7ª TURMA",
+     "doc_count": 52
+    },
+    {
+     "key": "10ª TURMA",
+     "doc_count": 28
+    },
+    {
+     "key": "8ª TURMA",
+     "doc_count": 23
+    },
+    {
+     "key": "1ª TURMA",
+     "doc_count": 20
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+     "doc_count": 20
+    },
+    {
+     "key": "2ª TURMA - PREV/SERV",
+     "doc_count": 19
+    },
+    {
+     "key": "4ª TURMA",
+     "doc_count": 18
+    },
+    {
+     "key": "SEGUNDA TURMA",
+     "doc_count": 16
+    },
+    {
+     "key": "9ª TURMA",
+     "doc_count": 15
+    },
+    {
+     "key": "PRIMEIRA TURMA",
+     "doc_count": 13
+    },
+    {
+     "key": "10ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 12
+    },
+    {
+     "key": "OITAVA TURMA",
+     "doc_count": 12
+    },
+    {
+     "key": "6ª TURMA",
+     "doc_count": 10
+    },
+    {
+     "key": "3ª TURMA",
+     "doc_count": 8
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - GO",
+     "doc_count": 8
+    },
+    {
+     "key": "11ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 7
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - MA",
+     "doc_count": 7
+    },
+    {
+     "key": "14ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 6
+    },
+    {
+     "key": "1ª TURMA - PREV/SERV",
+     "doc_count": 6
+    },
+    {
+     "key": "3ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 6
+    },
+    {
+     "key": "NONA TURMA",
+     "doc_count": 6
+    },
+    {
+     "key": "15ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 5
+    },
+    {
+     "key": "5ª TURMA",
+     "doc_count": 5
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - BA",
+     "doc_count": 5
+    },
+    {
+     "key": "13ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 4
+    },
+    {
+     "key": "1ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE MATO GROSSO DO SUL",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - GO",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+     "doc_count": 4
+    },
+    {
+     "key": "9ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 3
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - DF",
+     "doc_count": 3
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - BA",
+     "doc_count": 3
+    },
+    {
+     "key": "SREEO",
+     "doc_count": 3
+    },
+    {
+     "key": "SÉTIMA TURMA",
+     "doc_count": 3
+    },
+    {
+     "key": "4ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "5ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "8ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - AC",
+     "doc_count": 2
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - MG",
+     "doc_count": 2
+    },
+    {
+     "key": "SEXTA TURMA",
+     "doc_count": 2
+    }
+   ]
+  },
+  "ORIGEM_JEF": {
+   "total": 127,
+   "tnu": 0,
+   "tr_total": 127,
+   "tru_total": 0,
+   "tr_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 70
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 57
+    },
+    {
+     "key": "4",
+     "doc_count": 0
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 0
+    }
+   ],
+   "tru_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 0
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 0
+    },
+    {
+     "key": "4",
+     "doc_count": 0
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 0
+    }
+   ],
+   "tr_orgaos": [
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+     "doc_count": 20
+    },
+    {
+     "key": "10ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 12
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - GO",
+     "doc_count": 8
+    },
+    {
+     "key": "11ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 7
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - MA",
+     "doc_count": 7
+    },
+    {
+     "key": "14ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 6
+    },
+    {
+     "key": "3ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 6
+    },
+    {
+     "key": "15ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 5
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - BA",
+     "doc_count": 5
+    },
+    {
+     "key": "13ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 4
+    },
+    {
+     "key": "1ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE MATO GROSSO DO SUL",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - GO",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+     "doc_count": 4
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+     "doc_count": 4
+    },
+    {
+     "key": "9ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 3
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - DF",
+     "doc_count": 3
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - BA",
+     "doc_count": 3
+    },
+    {
+     "key": "4ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "5ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "8ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 2
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - AC",
+     "doc_count": 2
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - MG",
+     "doc_count": 2
+    },
+    {
+     "key": "TERCEIRA TURMA RECURSAL - DF",
+     "doc_count": 2
+    },
+    {
+     "key": "2ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE MATO GROSSO DO SUL",
+     "doc_count": 1
+    },
+    {
+     "key": "2ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 1
+    },
+    {
+     "key": "6ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 1
+    },
+    {
+     "key": "7ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "doc_count": 1
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - MT",
+     "doc_count": 1
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - PA/AP",
+     "doc_count": 1
+    },
+    {
+     "key": "PRIMEIRA TURMA RECURSAL - TO",
+     "doc_count": 1
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - DF",
+     "doc_count": 1
+    },
+    {
+     "key": "SEGUNDA TURMA RECURSAL - PA/AP",
+     "doc_count": 1
+    },
+    {
+     "key": "TERCEIRA TURMA RECURSAL - BA",
+     "doc_count": 1
+    }
+   ],
+   "tru_orgaos": [],
+   "tr_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 70,
+     "orgaos": [
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AM/RR",
+       "doc_count": 20
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - GO",
+       "doc_count": 8
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MA",
+       "doc_count": 7
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - BA",
+       "doc_count": 5
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - GO",
+       "doc_count": 4
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - RO/AC",
+       "doc_count": 4
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL DE JUIZ DE FORA - MG",
+       "doc_count": 4
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - DF",
+       "doc_count": 3
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - BA",
+       "doc_count": 3
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - AC",
+       "doc_count": 2
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MG",
+       "doc_count": 2
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - DF",
+       "doc_count": 2
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - MT",
+       "doc_count": 1
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - PA/AP",
+       "doc_count": 1
+      },
+      {
+       "key": "PRIMEIRA TURMA RECURSAL - TO",
+       "doc_count": 1
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - DF",
+       "doc_count": 1
+      },
+      {
+       "key": "SEGUNDA TURMA RECURSAL - PA/AP",
+       "doc_count": 1
+      },
+      {
+       "key": "TERCEIRA TURMA RECURSAL - BA",
+       "doc_count": 1
+      }
+     ]
+    },
+    "2": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "3": {
+     "doc_count": 57,
+     "orgaos": [
+      {
+       "key": "10ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 12
+      },
+      {
+       "key": "11ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 7
+      },
+      {
+       "key": "14ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 6
+      },
+      {
+       "key": "3ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 6
+      },
+      {
+       "key": "15ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 5
+      },
+      {
+       "key": "13ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 4
+      },
+      {
+       "key": "1ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE MATO GROSSO DO SUL",
+       "doc_count": 4
+      },
+      {
+       "key": "9ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 3
+      },
+      {
+       "key": "4ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 2
+      },
+      {
+       "key": "5ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 2
+      },
+      {
+       "key": "8ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 2
+      },
+      {
+       "key": "2ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE MATO GROSSO DO SUL",
+       "doc_count": 1
+      },
+      {
+       "key": "2ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 1
+      },
+      {
+       "key": "6ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 1
+      },
+      {
+       "key": "7ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+       "doc_count": 1
+      }
+     ]
+    },
+    "4": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "5": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "6": {
+     "doc_count": 0,
+     "orgaos": []
+    }
+   },
+   "tru_orgaos_by_regiao": {
+    "1": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "2": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "3": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "4": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "5": {
+     "doc_count": 0,
+     "orgaos": []
+    },
+    "6": {
+     "doc_count": 0,
+     "orgaos": []
+    }
+   }
+  },
+  "TIPO_DOCUMENTO": {
+   "buckets": [
+    {
+     "key": "ACÓRDÃO",
+     "doc_count": 351
+    },
+    {
+     "key": "DECISÃO",
+     "doc_count": 23
+    },
+    {
+     "key": "SENTENÇA",
+     "doc_count": 16
+    },
+    {
+     "key": "DECISÃO MONOCRÁTICA",
+     "doc_count": 8
+    }
+   ]
+  },
+  "HAS_IT3": {
+   "buckets": [
+    {
+     "key": "1",
+     "doc_count": 391
+    },
+    {
+     "key": "0",
+     "doc_count": 9
+    }
+   ]
+  },
+  "PRECEDENTE_RELEVANTE": {
+   "buckets": [
+    {
+     "key": "0",
+     "doc_count": 397
+    },
+    {
+     "key": "1",
+     "doc_count": 3
+    }
+   ]
+  },
+  "CLASSE": {
+   "buckets": [
+    {
+     "key": "AC",
+     "label": "Apelação Cível",
+     "doc_count": 141
+    },
+    {
+     "key": "AGREXT",
+     "label": "AGREXT",
+     "doc_count": 64
+    },
+    {
+     "key": "RecInoCiv",
+     "label": "RecInoCiv",
+     "doc_count": 57
+    },
+    {
+     "key": "REMNE",
+     "label": "Remessa Necessária / Reexame Necessário",
+     "doc_count": 16
+    },
+    {
+     "key": "AI",
+     "label": "Agravo de Instrumento",
+     "doc_count": 5
+    },
+    {
+     "key": "AGVINJURIS",
+     "label": "AGVINJURIS",
+     "doc_count": 4
+    },
+    {
+     "key": "PUIL",
+     "label": "Pedido de Uniformização de Interpretação de Lei Federal",
+     "doc_count": 2
+    },
+    {
+     "key": "REMECACIV",
+     "label": "REMECACIV",
+     "doc_count": 2
+    },
+    {
+     "key": "AG",
+     "label": "Agravo de Instrumento",
+     "doc_count": 1
+    },
+    {
+     "key": "AMS",
+     "label": "Apelação em Mandado de Segurança",
+     "doc_count": 1
+    },
+    {
+     "key": "REO",
+     "label": "Remessa Ex Officio",
+     "doc_count": 1
+    }
+   ]
+  }
+ }
+}
