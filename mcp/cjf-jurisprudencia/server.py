@@ -593,6 +593,9 @@ def documento_cjf(id: str, campo: str = "", max_tokens: int = 0) -> str:
     """
     Documento da API nova do CJF pelo <id> que a busca devolve.
 
+    O inteiro_teor muitas vezes não é o texto do acórdão, e sim um LINK para o site
+    do tribunal de origem: aí o texto se lê lá.
+
     Args:
         id: o <id> de um resultado de buscar_jurisprudencia_cjf ou similares_cjf
             (só resultados com origem api-nova ou ambas têm id).

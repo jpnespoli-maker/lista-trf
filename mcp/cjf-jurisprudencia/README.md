@@ -19,8 +19,18 @@ e devolve uma lista unificada; cada resultado traz `<origem>` (`portal-antigo`,
 traz o CNJ (84 de 90 documentos) mas não cobre o STJ; o portal antigo cobre o STJ mas
 quase nunca traz o CNJ (0 de 65). Rota caída vem declarada (`ROTA FORA`), e as duas
 caídas viram `<erro>`. Cada busca grava uma linha em `~/.claude/DPU/logs/cjf_rotas.jsonl`
-(contagens, tempos e erros, nunca texto), para decidir depois qual rota manter; o script
-de comparação lê esse log.
+(o termo buscado, os tribunais, contagens, tempos e mensagens de erro; nenhum texto de
+documento), para decidir depois qual rota manter. O relatório por rota (disponibilidade,
+latência mediana e p90, taxa de CNJ, totais por tribunal, sobreposição e buscas em que
+só uma rota achou algo) sai de
+`mcp/shared/comparar_rotas_cjf.py`, rodado da raiz do repositório:
+
+```
+python mcp/shared/comparar_rotas_cjf.py [--log CAMINHO] [--desde AAAA-MM-DD]
+```
+
+`--log` troca o JSONL lido (padrão: o log acima) e `--desde` considera só as buscas
+daquela data em diante.
 
 ```
 Parâmetros:
@@ -72,6 +82,10 @@ Para cada documento:
 | fonte_publicacao | Fonte (DJE, página) |
 | ementa | **Texto completo da ementa** |
 | decisao | Resultado (unânime, etc.) |
+| origem | Rota que trouxe o resultado: `portal-antigo`, `api-nova` ou `ambas` |
+| id | Id do documento na API nova, para `documento_cjf` e `similares_cjf` (só `api-nova` e `ambas`) |
+| tribunal | Tribunal do documento (STF, TRF1...) |
+| link_inteiro_teor | Link do inteiro teor, quando a API o traz (em geral, para o site do tribunal de origem) |
 
 ## Tecnologia
 
