@@ -107,11 +107,66 @@ def test_nao_funde_dentro_da_mesma_rota():
     assert pares == 0
 
 
-def test_cada_documento_casa_no_maximo_uma_vez():
+def test_chave_repetida_no_antigo_nao_funde():
+    x1 = _doc(LONGA, data_julgamento="01/01/2000", orgao_julgador="TURMA A")
+    x2 = {**_doc(LONGA), "tribunal": "STF", "aviso": "sem data"}
+    fundidos, pares = fundir([x1, _doc(LONGA)], [x2], 10)
+    assert pares == 0
+    assert len(fundidos) == 3
+    assert "ambas" not in [d["origem"] for d in fundidos]
+    api = next(d for d in fundidos if d["origem"] == "api-nova")
+    assert api["aviso"] == "sem data"
+    assert "data_julgamento" not in api
+
+
+def test_chave_repetida_na_api_nao_funde():
     fundidos, pares = fundir([_doc(LONGA)], [_doc(LONGA), _doc(LONGA)], 10)
-    assert pares == 1
-    assert len(fundidos) == 2
-    assert sorted(d["origem"] for d in fundidos) == ["ambas", "api-nova"]
+    assert pares == 0
+    assert len(fundidos) == 3
+    assert "ambas" not in [d["origem"] for d in fundidos]
+
+
+def test_sessao_do_portal_antigo_atende_uma_busca_por_vez(monkeypatch):
+    ordem = []
+
+    class SessaoLenta:
+        viewstate = "vs"
+        _fetched_at = 1.0
+
+        def __init__(self):
+            self.atual = None
+
+        def buscar(self, termo, tribunais):
+            ordem.append(("busca", termo))
+            time.sleep(0.05)
+            return termo
+
+        def buscar_pagina(self, first, rows=10):
+            ordem.append(("pagina", first))
+            time.sleep(0.05)
+            return "pagina"
+
+    sessao = SessaoLenta()
+    monkeypatch.setattr(cjf_client, "get_cjf_session", lambda: sessao)
+    monkeypatch.setattr(cjf_client, "extrair_totais", lambda h: {"TRF4": 30})
+    monkeypatch.setattr(
+        cjf_client,
+        "extrair_documentos",
+        lambda h: [{"numero": f"{h}-{len(ordem)}", "ementa": f"{h}{len(ordem)}"}],
+    )
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fa = ex.submit(cjf_client._buscar_documentos_jsf, "A", ["TRF4"], 3)
+        time.sleep(0.01)
+        fb = ex.submit(cjf_client._buscar_documentos_jsf, "B", ["TRF4"], 3)
+        fa.result()
+        fb.result()
+    # A inteira (busca + 2 páginas) e só depois B inteira: sem intercalar
+    assert ordem == [
+        ("busca", "A"), ("pagina", 10), ("pagina", 20),
+        ("busca", "B"), ("pagina", 10), ("pagina", 20),
+    ]
 
 
 def test_ambas_completa_campos_do_stf():

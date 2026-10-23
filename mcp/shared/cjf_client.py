@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import html
 import re
+import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -311,6 +312,9 @@ def buscar_documentos(
         return cjf_api.buscar_unificada(termo, tribunais, max_resultados)
 
 
+_TRAVA_SESSAO_JSF = threading.Lock()
+
+
 def _buscar_documentos_jsf(
     termo: str,
     tribunais: List[str],
@@ -322,7 +326,21 @@ def _buscar_documentos_jsf(
       refresh do ViewState e tenta uma segunda vez.
     - Canário estrutural: total reportado > 0 e parser extraiu 0 → RuntimeError.
     - Pagina até reunir ``max_resultados`` documentos (máx. _MAX_PAGINAS).
+    - Corpo inteiro sob ``_TRAVA_SESSAO_JSF``: a sessão é única no processo e
+      guarda UM ViewState; a paginação reaproveita a visão da ÚLTIMA busca
+      submetida. Duas buscas intercaladas (ex.: thread de uma chamada que estourou
+      o teto ainda rodando, mais a chamada seguinte) trariam a página 2 da busca
+      errada, em silêncio.
     """
+    with _TRAVA_SESSAO_JSF:
+        return _buscar_documentos_jsf_sob_trava(termo, tribunais, max_resultados)
+
+
+def _buscar_documentos_jsf_sob_trava(
+    termo: str,
+    tribunais: List[str],
+    max_resultados: int,
+) -> Tuple[List[Dict[str, Any]], Dict[str, int]]:
     sess = get_cjf_session()
     try:
         html_resultado = sess.buscar(termo, tribunais)

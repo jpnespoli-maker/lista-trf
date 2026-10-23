@@ -9,7 +9,7 @@ decidir depois qual rota vale a pena manter.
 O mesmo julgado vindo das duas rotas NÃO tem chave de identidade comum: número e data
 não servem (o antigo traz a classe no lugar do número, e a data falta em parte da
 API). Casa-se pelo começo da ementa normalizada (5 de 5 pares no TRF4, 23/10/2026) e
-pelo relator.
+pelo relator, e só quando a chave é única nas duas rotas (ver ``fundir``).
 
 O log nunca grava texto de documento: só contagens, tempos e erros.
 """
@@ -69,7 +69,8 @@ def chave_ementa(doc: Dict[str, Any]) -> Optional[str]:
     Colisão medida em 23/10/2026 (5 buscas, TRF2+TRF4, 30 documentos por rota, 245
     documentos): 14 pares DISTINTOS com a mesma chave de 200 dentro da mesma rota (rubrica
     padrão repetida em julgados diferentes), 3 deles de relatores diferentes. Por isso o
-    casamento entre rotas usa (chave, relator normalizado) e é um para um.
+    casamento entre rotas usa (chave, relator normalizado) e só funde se essa chave for
+    única nas duas rotas (11 pares seguem ambíguos mesmo com o relator; ver ``fundir``).
     """
     texto = _normalizar(doc.get("ementa") or "")
     if texto.startswith("ementa"):
@@ -103,21 +104,33 @@ def fundir(
     docs_antiga: List[Dict[str, Any]], docs_api: List[Dict[str, Any]], n: int
 ) -> Tuple[List[Dict[str, Any]], int]:
     """Intercala por posição começando pela API; o par casado sai uma vez, na posição
-    do primeiro a aparecer. Casamento só entre rotas, um para um. Não muta a entrada."""
-    livres: Dict[Tuple[str, str], List[int]] = {}
+    do primeiro a aparecer. Não muta a entrada.
+
+    Funde SÓ quando a chave (ementa + relator) é ÚNICA nas duas rotas: exatamente um
+    documento com ela no portal antigo e exatamente um na API. Chave com 2+ candidatos
+    em qualquer lado não funde, e os documentos saem separados, cada um com a sua
+    ``origem``. Medido em 23/10/2026: há julgados distintos com a mesma chave e o mesmo
+    relator na mesma rota; parear por ordem completaria um com a data e o órgão do outro
+    (e tiraria o ``aviso`` do STF), e mostraria data errada como confirmada.
+    """
+    do_antigo: Dict[Tuple[str, str], List[int]] = {}
     for j, doc in enumerate(docs_antiga):
         chave = _chave_par(doc)
         if chave is not None:
-            livres.setdefault(chave, []).append(j)
+            do_antigo.setdefault(chave, []).append(j)
+    da_api: Dict[Tuple[str, str], List[int]] = {}
+    for i, doc in enumerate(docs_api):
+        chave = _chave_par(doc)
+        if chave is not None:
+            da_api.setdefault(chave, []).append(i)
 
     parceiro_da_api: Dict[int, int] = {}
     parceiro_do_antigo: Dict[int, int] = {}
-    for i, doc in enumerate(docs_api):
-        chave = _chave_par(doc)
-        if chave is not None and livres.get(chave):
-            j = livres[chave].pop(0)
-            parceiro_da_api[i] = j
-            parceiro_do_antigo[j] = i
+    for chave, indices_api in da_api.items():
+        indices_antigo = do_antigo.get(chave, [])
+        if len(indices_api) == 1 and len(indices_antigo) == 1:
+            parceiro_da_api[indices_api[0]] = indices_antigo[0]
+            parceiro_do_antigo[indices_antigo[0]] = indices_api[0]
 
     posicoes = [(2 * i, "api", i) for i in range(len(docs_api))]
     posicoes += [(2 * j + 1, "antiga", j) for j in range(len(docs_antiga))]
