@@ -74,6 +74,15 @@ AVISO_SEMANTICA = (
     "MODO SEMÂNTICO: os totais contam no máximo os 400 julgados mais próximos do "
     "sentido da busca; não medem o volume de jurisprudência sobre o tema"
 )
+# Medido em 23/10/2026 (agregação REPRESENTATIVO_CONTROVERSIA): a marcação é da TNU.
+# Sem filtro de tribunal, "beneficio" tem 103 representativos, todos da TNU; nos sete
+# tribunais desta tool (com turmas recursais e TRU), 0 em 1.467.263, e "tema" 2.
+AVISO_REPRESENTATIVOS = (
+    "REPRESENTATIVOS: na API nova a marcação de representativo de controvérsia é "
+    "quase só da TNU, que esta tool não alcança (\"beneficio\": 103 na TNU, 0 no STF e "
+    "nos TRFs; medido em 23/10/2026). Zero aqui não prova que não haja tema; para a "
+    "TNU, buscar_jurisprudencia_tnu"
+)
 
 _TRIBUNAIS_PADRAO = "STF,STJ,TRF1,TRF2,TRF3,TRF4,TRF5,TRF6"
 _TRIBUNAIS_VALIDOS = tuple(_TRIBUNAIS_PADRAO.split(","))
@@ -276,7 +285,9 @@ def buscar_jurisprudencia_cjf(
         legislacao: "Lei 8.742/93", "LC 80", "Decreto 3.048", "Decreto-Lei 4.657",
                     "MP 2.164" (só API).
         so_precedentes_relevantes: só julgados marcados como precedente relevante.
-        so_representativos: só representativos de controvérsia.
+        so_representativos: só representativos de controvérsia. A marcação é quase
+                            só da TNU (buscar_jurisprudencia_tnu): aqui costuma dar
+                            zero, e o zero não prova que não haja tema.
 
     Returns:
         XML com <origem>, <tribunal>, <id> (use em documento_cjf/similares_cjf),
@@ -424,6 +435,8 @@ def buscar_jurisprudencia_cjf(
             meta += f"<!-- {AVISO_FILTROS_API} -->\n"
         if filtros.modo == "semantica":
             meta += f"<!-- {AVISO_SEMANTICA} -->\n"
+        if filtros.so_representativos:
+            meta += f"<!-- {AVISO_REPRESENTATIVOS} -->\n"
         if filtros.relatores:
             nomes = "; ".join(sanitizar_comentario_xml(r) for r in filtros.relatores)
             meta += f"<!-- RELATOR: {nomes} (grafias da API, somadas em OU) -->\n"

@@ -340,6 +340,17 @@ def test_modo_semantico_declara_o_teto_de_400(srv, monkeypatch):
     assert "MODO SEMÂNTICO" not in srv.estatisticas_cjf("y", tribunais="TRF4")
 
 
+def test_so_representativos_avisa_que_a_marcacao_e_da_tnu(srv, monkeypatch):
+    """Medido em 23/10/2026: nos tribunais desta tool quase não há representativo, e o
+    zero sem aviso se leria como "não há tema"."""
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", lambda b, t, n, extras: ([], {"TRF4": 0}))
+    saida = srv.buscar_jurisprudencia_cjf("beneficio", tribunais="TRF4", so_representativos=True)
+    assert f"<!-- {srv.AVISO_REPRESENTATIVOS} -->" in saida
+    assert "buscar_jurisprudencia_tnu" in srv.AVISO_REPRESENTATIVOS
+    assert "REPRESENTATIVOS:" not in srv.buscar_jurisprudencia_cjf(
+        "beneficio", tribunais="TRF4", so_precedentes_relevantes=True)
+
+
 def test_estatisticas_cjf_stj_e_erro_declarado(srv, monkeypatch):
     def _recusa(b, t, extras):
         raise cjf_api.SemCoberturaNaApi(["STJ"], [])
