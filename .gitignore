@@ -133,3 +133,7 @@ relatorio_*.docx
 *.pem
 secrets/
 credentials/
+
+# Areas de trabalho locais (worktrees e registro do desenvolvimento por subagentes)
+.worktrees/
+.superpowers/
