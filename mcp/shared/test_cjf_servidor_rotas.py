@@ -329,6 +329,17 @@ def test_estatisticas_cjf_legivel(srv, monkeypatch):
     assert srv._gravados[0][2] == 86400
 
 
+def test_modo_semantico_declara_o_teto_de_400(srv, monkeypatch):
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", lambda b, t, n, extras: ([_doc_api()], {"TRF4": 400}))
+    saida = srv.buscar_jurisprudencia_cjf("x", tribunais="TRF4", modo="semantica")
+    assert f"<!-- {srv.AVISO_SEMANTICA} -->" in saida and "400" in srv.AVISO_SEMANTICA
+    assert "MODO SEMÂNTICO" not in srv.buscar_jurisprudencia_cjf("x", tribunais="TRF4", data_inicio="2025-01-01")
+
+    monkeypatch.setattr(srv.cjf_api, "estatisticas", lambda b, t, extras: ANALYTICS)
+    assert srv.estatisticas_cjf("x", tribunais="TRF4", modo="semantica").startswith(srv.AVISO_SEMANTICA)
+    assert "MODO SEMÂNTICO" not in srv.estatisticas_cjf("y", tribunais="TRF4")
+
+
 def test_estatisticas_cjf_stj_e_erro_declarado(srv, monkeypatch):
     def _recusa(b, t, extras):
         raise cjf_api.SemCoberturaNaApi(["STJ"], [])

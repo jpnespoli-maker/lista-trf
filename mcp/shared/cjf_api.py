@@ -168,10 +168,19 @@ def _corpo(
     processo: str | None = None,
     extras: FiltrosApi | None = None,
 ) -> Dict[str, Any]:
-    """Corpo JSON de ``/pesquisar`` e ``/analytics`` (o mesmo nas duas rotas)."""
+    """Corpo JSON de ``/pesquisar`` e ``/analytics`` (o mesmo nas duas rotas).
+
+    No modo semântico a query vai CRUA: o E explícito é da busca por palavra, e na
+    semântica muda o resultado. Medido em 23/10/2026 (/pesquisa-semantica, TRF1 a
+    TRF6, 10 por página), a mesma query crua repetida dá resposta idêntica, ao
+    passo que "pessoa que mora sozinha teve o bolsa familia cancelado" crua x
+    reescrita com E: total 400 nas duas, só 8 dos 10 primeiros em comum e TRF1
+    34 x 56; "idoso com deficiencia teve o beneficio assistencial negado por
+    renda": 10 de 10 em comum, em outra ordem, e TRF3 83 x 10."""
     ordem = [{"field": "DATA_DECISAO", "direction": "desc"}] if ordenar_por_data else []
+    semantica = extras is not None and extras.modo == "semantica"
     corpo = {
-        "query": _e_explicito(query), "filters": dict(filtros), "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
+        "query": query.strip() if semantica else _e_explicito(query), "filters": dict(filtros), "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
         "current_page": 1, "process_number": processo, "decision_date_start": None,
         "decision_date_end": None, "date_type": "DATA_DECISAO", "rapporteurs": [],
         "revisors": [], "relator_convocado": None, "relator_acordaos": [],

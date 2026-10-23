@@ -70,6 +70,19 @@ def test_semantica_vai_a_rota_semantica(monkeypatch):
     assert cap["url"].endswith("/pesquisa-semantica")
 
 
+def test_semantica_leva_a_query_crua_sem_e(monkeypatch):
+    """Medido em 23/10/2026: o E explícito muda o resultado da busca semântica."""
+    frase = "pessoa que mora sozinha teve o bolsa familia cancelado"
+    cap = _dublar_post(monkeypatch, SEMANTICA)
+    cjf_api.pesquisar(f" {frase} ", {}, 3, extras=FiltrosApi(modo="semantica"))
+    assert cap["corpo"]["query"] == frase
+    cjf_api.estatisticas(frase, ["TRF4"], FiltrosApi(modo="semantica"))
+    assert cap["corpo"]["query"] == frase and cap["corpo"]["search_mode"] == "semantica"
+    # No modo comum o E segue explícito (a API relaxaria para OU em silêncio).
+    cjf_api.pesquisar(frase, {}, 3, extras=FiltrosApi(data_inicio="2025-01-01"))
+    assert cap["corpo"]["query"] == " E ".join(frase.split())
+
+
 def test_filtros_viram_corpo(monkeypatch):
     cap = _dublar_post(monkeypatch, FILTRADA)
     extras = FiltrosApi(

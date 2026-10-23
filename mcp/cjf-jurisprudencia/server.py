@@ -69,6 +69,11 @@ AVISO_VIA_API = (
 AVISO_FILTROS_API = (
     "FILTROS DA API NOVA: busca só na API; portal antigo não tem estes filtros"
 )
+# Medido em 22-23/10/2026: a /pesquisa-semantica devolve no máximo 400 (`relation: eq`).
+AVISO_SEMANTICA = (
+    "MODO SEMÂNTICO: os totais contam no máximo os 400 julgados mais próximos do "
+    "sentido da busca; não medem o volume de jurisprudência sobre o tema"
+)
 
 _TRIBUNAIS_PADRAO = "STF,STJ,TRF1,TRF2,TRF3,TRF4,TRF5,TRF6"
 _TRIBUNAIS_VALIDOS = tuple(_TRIBUNAIS_PADRAO.split(","))
@@ -417,6 +422,8 @@ def buscar_jurisprudencia_cjf(
         meta = f'<!-- Busca: "{sanitizar_comentario_xml(busca)}" | {totais_txt} -->\n'
         if so_api:
             meta += f"<!-- {AVISO_FILTROS_API} -->\n"
+        if filtros.modo == "semantica":
+            meta += f"<!-- {AVISO_SEMANTICA} -->\n"
         if filtros.relatores:
             nomes = "; ".join(sanitizar_comentario_xml(r) for r in filtros.relatores)
             meta += f"<!-- RELATOR: {nomes} (grafias da API, somadas em OU) -->\n"
@@ -762,7 +769,10 @@ def estatisticas_cjf(
                 registrar_dispositivo(
                     "cjf-jurisprudencia", cache_key, _json.dumps(dados), ttl_s=_TTL_ANALISE_S
                 )
-        return _texto_estatisticas(busca, dados)
+        texto = _texto_estatisticas(busca, dados)
+        if filtros.modo == "semantica":
+            texto = f"{AVISO_SEMANTICA}.\n{texto}"
+        return texto
     except Exception as e:
         erro_msg = str(e)
         return f"<erro>Falha nas estatísticas CJF: {xml_escape(str(e))}</erro>"
