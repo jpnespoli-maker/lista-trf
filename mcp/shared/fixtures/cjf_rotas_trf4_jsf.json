@@ -1,0 +1,62 @@
+[
+ {
+  "indice": 0,
+  "numero": "AC - Apelação Cível",
+  "classe": "AC - Apelação Cível",
+  "relator": "CELSO KIPPER",
+  "orgao_julgador": "9ª Turma",
+  "data_julgamento": "08/08/2024",
+  "data_publicacao": "21/08/2024",
+  "fonte_publicacao": "21/08/2024",
+  "decisao": "Acórdão",
+  "ementa": "DIREITO DA SAÚDE. FORNECIMENTO GRATUITO DE MEDICAMENTO ONCOLÓGICO. LONSURF®. CÂNCER DE RETO. DEMONSTRAÇÃO DA IMPRESCINDIBILIDADE. OCORRÊNCIA. JULGAMENTO NA FORMA DO ART. 942 DO CPC. 1. A parte autora realiza tratamento oncológico pelo Sistema Único de Saúde (SUS) junto a estabelecimento cadastrado como UNACON, afigurando-se prescindível a realização de perícia prévia à análise da antecipação de tutela postulada. 2. Hipótese em que restou demonstrado que é imprescindível a concessão do medicamento Cloridrato de Tipiracila + Trifluridina (Lonsurf®) para tratamento de câncer colorretal metastático."
+ },
+ {
+  "indice": 1,
+  "numero": "AC - Apelação Cível",
+  "classe": "AC - Apelação Cível",
+  "relator": "PAULO AFONSO BRUM VAZ",
+  "orgao_julgador": "9ª Turma",
+  "data_julgamento": "12/12/2023",
+  "data_publicacao": "18/12/2023",
+  "fonte_publicacao": "18/12/2023",
+  "decisao": "Acórdão",
+  "ementa": "DIREITO DA SAÚDE. APELAÇÃO CÍVEL. FORNECIMENTO DE MEDICAMENTO ONCOLÓGICO. BRENTUXIMABE VENDOTINA. LINFOMA DE HODGKIN. IMPRESCINDIBILIDADE. DEMONSTRAÇÃO. RESPONSABILIDADE FINANCEIRA DA UNIÃO. VERBA HONORÁRIA. JULGAMENTO NA FORMA DO ART. 942 DO CPC. 1. O medicamento Brentuximabe Vendotina, por apresentar impacto na sobrevida livre de progressão, torna-se, com base na Medicina Baseada em Evidências, imprescindível para o tratamento de Linfoma de Hodgkin. 2. Em que pese a responsabilidade financeira pelo fornecimento do fármaco seja da União, os honorários devem ser fixados pro rata, por força da solidariedade existente entre os três entes da federação em matéria de saúde, conforme precedentes deste Tribunal."
+ },
+ {
+  "indice": 2,
+  "numero": "AC - Apelação Cível",
+  "classe": "AC - Apelação Cível",
+  "relator": "PAULO AFONSO BRUM VAZ",
+  "orgao_julgador": "9ª Turma",
+  "data_julgamento": "23/11/2021",
+  "data_publicacao": "29/11/2021",
+  "fonte_publicacao": "29/11/2021",
+  "decisao": "Acórdão",
+  "ementa": "DIREITO DA SAÚDE. FORNECIMENTO GRATUITO DE MEDICAMENTO ONCOLÓGICO. REGORAFENIBE. CÂNCER DE CÓLON. DEMONSTRAÇÃO DA IMPRESCINDIBILIDADE. OCORRÊNCIA. HONORÁRIOS ADVOCATÍCIOS. VALOR MATERIAL INESTIMÁVEL. JULGAMENTO NA FORMA DO ART. 942 DO CPC. 1. O medicamento Regorafenibe, por apresentar impacto na sobrevida livre de progressão, torna-se, com base na Medicina Baseada em Evidências, imprescindível para o tratamento de Neoplasia Maligna do Cólon. 2. Tratando-se de causa relacionada à garantia do direito à saúde, cujo valor material é inestimável, é o caso de aplicação do § 8º do art. 85 do novo CPC, que remete à apreciação equitativa considerando os incisos do § 2º do artigo citado (grau de zelo profissional, lugar da prestação do serviço, natureza e importância da causa, trabalho realizado pelo advogado e tempo exigido para o seu serviço)."
+ },
+ {
+  "indice": 3,
+  "numero": "AG - Agravo de Instrumento",
+  "classe": "AG - Agravo de Instrumento",
+  "relator": "VALDEMAR CAPELETTI",
+  "orgao_julgador": "4ª Turma",
+  "data_julgamento": "28/10/2009",
+  "data_publicacao": "18/12/2009",
+  "fonte_publicacao": "D.E. 18/12/2009",
+  "decisao": "Acórdão",
+  "ementa": "ADMINISTRATIVO. FORNECIMENTO DE MEDICAMENTO. PACIENTE EM TRATAMENTO EM CACON. PRESCRIÇÃO POR MÉDICO PARTICULAR. IMPOSSIBILIDADE. 1. Trata-se de solicitação do medicamento oncológico Rituximabe (MabThera®, Laboratório Roche). A prescrição é de médico particular, embora a paciente esteja sendo tratada em um Centro de Oncologia de Cascavel (Ceonc)/ Centro de Alta Complexidade em Oncologia (Cacon), com toda medicação para o seu tratamento disponibilizado. 2. Não pode o médico particular prescrever qualquer medicamento e pretender a sua disponibilização pelo SUS. O tratamento de elevada qualidade está disponível e é este que é oferecido."
+ },
+ {
+  "indice": 4,
+  "numero": "AG - Agravo de Instrumento",
+  "classe": "AG - Agravo de Instrumento",
+  "relator": "SÉRGIO RENATO TEJADA GARCIA",
+  "orgao_julgador": "4ª Turma",
+  "data_julgamento": "26/08/2009",
+  "data_publicacao": "09/11/2009",
+  "fonte_publicacao": "D.E. 09/11/2009",
+  "ementa": "ADMINISTRATIVO. AÇÃO INDIVIDUAL. FORNECIMENTO DE MEDICAMENTOS ONCOLÓGICOS. 1. O órgão responsável (fl. 48) informa que para o caso tem disponibilizado Infliximabe, Adalimumabe e Etarnecepte, e que o medicamento em questão não é padronizado, referindo que o medicamento Rituximabe em trabalhos recentes é indicado para o caso da doente. 2. Tratando-se de medicamento oncológico e havendo notificação expressa do Estado do Paraná no sentido de deferi-lo (Cemepar, fl. 35), deverá fazê-lo às suas expensas, com o que deve ser provido o agravo da União, que foi também responsabilizada financeiramente no caso específico.",
+  "decisao": ""
+ }
+]
