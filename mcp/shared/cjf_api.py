@@ -153,7 +153,7 @@ def _e_explicito(query: str) -> str:
     return " E ".join(termos)
 
 
-def pesquisar(
+def _corpo(
     query: str,
     filtros: Dict[str, List[str]],
     n: int,
@@ -162,8 +162,8 @@ def pesquisar(
     processo: str | None = None,
     extras: FiltrosApi | None = None,
 ) -> Dict[str, Any]:
+    """Corpo JSON de ``/pesquisar`` e ``/analytics`` (o mesmo nas duas rotas)."""
     ordem = [{"field": "DATA_DECISAO", "direction": "desc"}] if ordenar_por_data else []
-    url = API_URL
     corpo = {
         "query": _e_explicito(query), "filters": dict(filtros), "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
         "current_page": 1, "process_number": processo, "decision_date_start": None,
@@ -172,8 +172,6 @@ def pesquisar(
         "ref_legislativa": None,
     }
     if extras is not None:
-        if extras.modo == "semantica":
-            url = API_URL.rsplit("/", 1)[0] + "/pesquisa-semantica"
         corpo["decision_date_start"] = extras.data_inicio
         corpo["decision_date_end"] = extras.data_fim
         corpo["date_type"] = extras.tipo_data
@@ -183,6 +181,22 @@ def pesquisar(
             corpo["filters"]["PRECEDENTE_RELEVANTE"] = ["1"]
         if extras.so_representativos:
             corpo["filters"]["REPRESENTATIVO_CONTROVERSIA"] = ["1"]
+    return corpo
+
+
+def pesquisar(
+    query: str,
+    filtros: Dict[str, List[str]],
+    n: int,
+    *,
+    ordenar_por_data: bool = False,
+    processo: str | None = None,
+    extras: FiltrosApi | None = None,
+) -> Dict[str, Any]:
+    corpo = _corpo(query, filtros, n, ordenar_por_data=ordenar_por_data, processo=processo, extras=extras)
+    url = API_URL
+    if extras is not None and extras.modo == "semantica":
+        url = API_URL.rsplit("/", 1)[0] + "/pesquisa-semantica"
     resp = requests.post(url, json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
     dados = resp.json()
@@ -373,17 +387,9 @@ def estatisticas(termo: str, tribunais: Sequence[str], extras: FiltrosApi) -> Di
     """Agregações da busca (``/analytics``): total, julgamentos por ano e os
     relatores, classes e tribunais que mais aparecem. Mesmos filtros de ``buscar_unificada``."""
     pedidos = _exigir_cobertura(tribunais)
-    corpo = {
-        "query": _e_explicito(termo), "filters": _filtros_tribunais(pedidos), "sort": [], "page_size": 0,
-        "current_page": 1, "process_number": None, "decision_date_start": extras.data_inicio,
-        "decision_date_end": extras.data_fim, "date_type": extras.tipo_data, "rapporteurs": list(extras.relatores),
-        "revisors": [], "relator_convocado": None, "relator_acordaos": [],
-        "ref_legislativa": extras.legislacao, "search_mode": extras.modo,
-    }
-    if extras.so_precedentes_relevantes:
-        corpo["filters"]["PRECEDENTE_RELEVANTE"] = ["1"]
-    if extras.so_representativos:
-        corpo["filters"]["REPRESENTATIVO_CONTROVERSIA"] = ["1"]
+    corpo = _corpo(termo, _filtros_tribunais(pedidos), 1, extras=extras)
+    corpo["page_size"] = 0
+    corpo["search_mode"] = extras.modo
     resp = requests.post(f"{_BASE_API}/analytics", json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
     return resp.json()
@@ -400,18 +406,57 @@ def sugerir_relator(texto: str) -> List[str]:
     return list(_get_json("/sugestoes/relator", {"q": texto}).get("sugestoes", []))
 
 
-_RE_LEGISLACAO = re.compile(r"([A-Za-z]+)[\s-]*([0-9][0-9.]*)")
+_RE_LEGISLACAO = re.compile(
+    r"^\s*(DECRETO[\s-]*LEI|DEL|LEI[\s-]+COMPLEMENTAR|LCP|LC|MEDIDA[\s-]+PROVIS.RIA|MPV|MPR|MP|DECRETO|DEC|LEI)\b"
+    r"[\s.-]*(?:N[º°O]\.?|N\.)?[\s-]*([0-9][0-9.]*)",
+    re.IGNORECASE,
+)
+# Prefixo que a API guarda em REF_LEGISLATIVA (lido nos documentos).
+_PREFIXO_LEGISLACAO = {"LEI": "LEI", "LCP": "LCP", "LC": "LCP", "DEL": "DEL", "DEC": "DEC", "DECRETO": "DEC",
+                       "MPV": "MPR", "MPR": "MPR", "MP": "MPR"}
 
 
 def normalizar_legislacao(texto: str) -> str:
-    """"Lei 8.742/93", "lei 8742", "LEI-8742" → ``LEI-8742``, o formato de ``ref_legislativa``.
+    """"Lei 8.742/93", "lei nº 8.742", "LEI-8742" → ``LEI-8742``, o formato de ``ref_legislativa``.
 
-    Medido em 23/10/2026 (total de ``ref_legislativa``): ``LEI-8742`` 9.831 =
-    ``LEI-008742`` 9.831 (a API ignora os zeros; usa-se SEM zeros); ``LEG-FED
-    LEI-008742`` 5.777 (mais restrito, descartado); ``LEI-10836`` 35 =
-    ``LEI-010836`` 35. O ano ("/93") não entra na referência."""
-    m = _RE_LEGISLACAO.search(texto or "")
-    if not m:
-        return _texto(texto).upper()
-    numero = m.group(2).replace(".", "").lstrip("0")
-    return f"{m.group(1).upper()}-{numero}"
+    Aceita LEI, LEI COMPLEMENTAR/LC, DECRETO, DECRETO-LEI e MEDIDA PROVISÓRIA/MP,
+    com "nº", "n." ou "no" antes do número; o que vem depois do número (ano,
+    "art. N") é ignorado. Tipo ou número não reconhecido levanta ``ValueError``:
+    ``ref_legislativa`` errado dá zero, e zero se lê como "sem jurisprudência".
+
+    Medido em 23/10/2026 (total de ``ref_legislativa``, e o prefixo armazenado lido
+    nos documentos). O número vai SEM zeros (a API os ignora):
+    - Lei: ``LEI-8742`` 9.831 = ``LEI-008742`` 9.831; ``LEI-10836`` 35 =
+      ``LEI-010836`` 35. ``LEG-FED LEI-008742`` 5.777 (mais restrito, descartado).
+    - Lei Complementar: ``LCP-80`` 2.199 = ``LCP-000080`` 2.199; ``LC-80`` 12,
+      ``LEI COMPLEMENTAR-80`` e ``LEI-COMPLEMENTAR-80`` 15 (casam texto solto, não o
+      prefixo armazenado ``LCP``). Usa-se ``LCP-``.
+    - Decreto: ``DEC-3048`` e ``DEC-003048`` 10.000+ (satura; os 100 primeiros
+      hits trazem ``DEC-003048``), ``DEC-3049`` 82; ``DECRETO-3048`` 91 (texto
+      solto, descartado). Usa-se ``DEC-``.
+    - Decreto-Lei: ``DEL-4657`` 6.104 = ``DEL-004657`` 6.104 (99 dos 100 primeiros
+      hits trazem a referência); ``DECRETO-LEI-4657`` 27 (descartado). Usa-se ``DEL-``.
+    - Medida provisória: ``MPR-2164`` 3.178, ``MPR-2215`` 390, ``MPR-871`` 11;
+      ``MP-2164`` 115 e ``MEDIDA PROVISORIA-2164`` 2 (descartados). Usa-se ``MPR-``;
+      a reedição ("2.164-41") não entra.
+    Controle: número inexistente (``-999999``) dá 0 em LEI, LCP, DEC, DEL e MPR.
+    A API casa por token, então o total pode incluir documentos que só citam o
+    número em outro dispositivo (``LCP-80``: 18 dos 100 primeiros com ``LCP-...80``)."""
+    m = _RE_LEGISLACAO.match(texto or "")
+    numero = m.group(2).replace(".", "").lstrip("0") if m else ""
+    if not numero:
+        raise ValueError(
+            f"Legislação não entendida: {texto!r}. Formas aceitas: Lei, Lei Complementar (LC), "
+            "Decreto, Decreto-Lei e Medida Provisória (MP) seguidos do número, "
+            'ex.: "Lei 8.742/93", "LC 80", "Decreto 3.048", "Decreto-Lei 4.657", "MP 2.164".'
+        )
+    tipo = re.sub(r"[\s-]+", " ", m.group(1).upper())
+    if tipo.startswith("DECRETO") and "LEI" in tipo:
+        prefixo = "DEL"
+    elif tipo.startswith("LEI") and "COMPLEMENTAR" in tipo:
+        prefixo = "LCP"
+    elif tipo.startswith("MEDIDA"):
+        prefixo = "MPR"
+    else:
+        prefixo = _PREFIXO_LEGISLACAO[tipo]
+    return f"{prefixo}-{numero}"

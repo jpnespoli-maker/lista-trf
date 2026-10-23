@@ -229,3 +229,27 @@ def test_sugerir_relator(monkeypatch):
 ])
 def test_normalizar_legislacao(entrada, esperado):
     assert cjf_api.normalizar_legislacao(entrada) == esperado
+
+
+@pytest.mark.parametrize("entrada,esperado", [
+    ("Lei nº 8.742/1993", "LEI-8742"),
+    ("Lei n. 8.742", "LEI-8742"),
+    ("Lei no 8.742", "LEI-8742"),
+    ("Lei 8.742/93, art. 20", "LEI-8742"),
+    ("Lei Complementar 80/94", "LCP-80"),
+    ("lei complementar nº 80", "LCP-80"),
+    ("LC 80", "LCP-80"),
+    ("Decreto 3.048/99", "DEC-3048"),
+    ("Decreto-Lei 4.657", "DEL-4657"),
+    ("Decreto Lei nº 4.657/42", "DEL-4657"),
+    ("Medida Provisória 2.164-41/2001", "MPR-2164"),
+    ("MP 2.215", "MPR-2215"),
+])
+def test_normalizar_legislacao_tipos_medidos(entrada, esperado):
+    assert cjf_api.normalizar_legislacao(entrada) == esperado
+
+
+@pytest.mark.parametrize("entrada", ["CF art. 203", "Constituição Federal", "Lei", "Súmula 7", "", "8742"])
+def test_normalizar_legislacao_nao_entendida_levanta(entrada):
+    with pytest.raises(ValueError, match="não entendida"):
+        cjf_api.normalizar_legislacao(entrada)
