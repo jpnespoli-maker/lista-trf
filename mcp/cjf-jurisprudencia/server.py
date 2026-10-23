@@ -3,6 +3,7 @@ MCP Server: CJF Jurisprudência Unificada
 
 Acesso à jurisprudência unificada do Conselho da Justiça Federal.
 Inclui decisões de: STF, STJ, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6.
+A TNU tem tool própria (`buscar_jurisprudencia_tnu`), pela API nova do CJF.
 """
 
 from mcp.server.fastmcp import FastMCP
@@ -222,6 +223,111 @@ def buscar_jurisprudencia_cjf(
             tool="buscar_jurisprudencia_cjf",
             query=busca,
             filtros={"tribunais": tribunais, "max_resultados": max_resultados},
+            n_resultados=n_docs,
+            ms=int((time.perf_counter() - t0) * 1000),
+            cache_hit=cache_hit,
+            erro=erro_msg,
+        )
+
+
+AVISO_TNU = (
+    "FONTE: API do CJF, filtrada pela Turma Nacional de Uniformização (julgados até "
+    "2026). Antes de citar, conferir o acórdão no eProc da TNU "
+    "(eproctnu-jur.cjf.jus.br), que traz o campo DECISÃO por extenso."
+)
+
+
+@mcp.tool()
+def buscar_jurisprudencia_tnu(
+    busca: str,
+    max_resultados: int = 10,
+    max_tokens_ementa: int = 600,
+    ordenar_por_data: bool = False,
+) -> str:
+    """
+    Busca jurisprudência da TURMA NACIONAL DE UNIFORMIZAÇÃO (TNU) dos JEFs.
+
+    USE PARA: PUIL, temas representativos da TNU ("Tema 379"), tese de Juizado
+    uniformizada nacionalmente. É a única base do projeto com a TNU posterior a
+    julho de 2017 (vai até 2026); `buscar_jurisprudencia_cjf` não alcança a TNU.
+
+    Args:
+        busca: termos (operadores E, OU, ADJ, [EMEN], como no CJF) ou um número
+               CNJ sozinho ("0044230-77.2023.4.05.8300"), que traz os julgados
+               daquele processo.
+        max_resultados: 1 a 100. Padrão 10.
+        max_tokens_ementa: truncamento da ementa (50 a 4000). Padrão 600.
+        ordenar_por_data: True traz os mais recentes primeiro; o padrão é por
+                          relevância.
+
+    Returns:
+        XML com número CNJ, classe, relator, data e ementa; o campo DECISÃO vem
+        em <decisao>, truncado. Antes de citar, conferir no eProc da TNU.
+    """
+    max_resultados = max(1, min(int(max_resultados), 100))
+    max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
+    t0 = time.perf_counter()
+    cache_hit = False
+    n_docs = 0
+    erro_msg: Optional[str] = None
+    try:
+        import json as _json
+        cache_key = {
+            "mcp": "cjf-jurisprudencia", "tool": "tnu", "busca": busca,
+            "max_resultados": max_resultados, "ordenar_por_data": ordenar_por_data, "v": 1,
+        }
+        cached = cached_http("cjf-jurisprudencia", cache_key)
+        if cached is not None:
+            cache_hit = True
+            payload = _json.loads(cached)
+            documentos, total, exato = payload["docs"], payload["total"], payload["exato"]
+        else:
+            documentos, total, exato = cjf_api.buscar_tnu(
+                busca, max_resultados, ordenar_por_data=ordenar_por_data
+            )
+            # Zero não se cacheia, como na busca do CJF (31/08/2026).
+            if documentos:
+                registrar_dispositivo(
+                    "cjf-jurisprudencia", cache_key,
+                    _json.dumps({"docs": documentos, "total": total, "exato": exato}),
+                    ttl_s=7 * 86400,
+                )
+        n_docs = len(documentos)
+
+        resultados = []
+        for doc in documentos:
+            extra = {}
+            if doc.get("decisao"):
+                extra["decisao"] = truncar_por_tokens(doc["decisao"], max_tokens=max_tokens_ementa)
+            if doc.get("tipo"):
+                extra["tipo_documento"] = doc["tipo"]
+            resultados.append(BaseResultadoJuridico(
+                conteudo=truncar_por_tokens(doc.get("ementa", ""), max_tokens=max_tokens_ementa),
+                fonte="TNU",
+                tipo=doc.get("classe", ""),
+                orgao=doc.get("orgao_julgador", ""),
+                numero=doc.get("numero", ""),
+                relator=doc.get("relator", ""),
+                data=doc.get("data_julgamento", ""),
+                extra=extra,
+            ))
+
+        contagem = f"{total}" if exato else f"{total} ou mais"
+        meta = (
+            f'<!-- TNU | Busca: "{sanitizar_comentario_xml(busca)}" | Total: {contagem} '
+            f'| Exibindo: {len(resultados)} -->\n<!-- {AVISO_TNU} -->\n'
+        )
+        return meta + formatar_resultados_xml(resultados, "jurisprudencia_tnu")
+
+    except Exception as e:
+        erro_msg = str(e)
+        return f'<erro>Falha na busca da TNU: {str(e)}</erro>'
+    finally:
+        log_query(
+            mcp="cjf-jurisprudencia",
+            tool="buscar_jurisprudencia_tnu",
+            query=busca,
+            filtros={"max_resultados": max_resultados, "ordenar_por_data": ordenar_por_data},
             n_resultados=n_docs,
             ms=int((time.perf_counter() - t0) * 1000),
             cache_hit=cache_hit,

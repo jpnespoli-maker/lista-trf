@@ -26,6 +26,10 @@ O QUE FOI MEDIDO NA API (22/10/2026), e que este módulo respeita:
   (a soma deles bate com o ``doc_count`` da região).
 
 Cada documento sai no MESMO dicionário dos clientes JSF, com ``via: "api-nova"``.
+
+TNU: aqui a API não é reserva, é a ROTA PRINCIPAL (``buscar_tnu``, usado pela tool
+``buscar_jurisprudencia_tnu`` do ``cjf-jurisprudencia``) — nenhuma outra base do
+projeto tem a TNU posterior a julho de 2017.
 """
 
 from __future__ import annotations
@@ -100,10 +104,18 @@ def documento(source: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
-def pesquisar(query: str, filtros: Dict[str, List[str]], n: int) -> Dict[str, Any]:
+def pesquisar(
+    query: str,
+    filtros: Dict[str, List[str]],
+    n: int,
+    *,
+    ordenar_por_data: bool = False,
+    processo: str | None = None,
+) -> Dict[str, Any]:
+    ordem = [{"field": "DATA_DECISAO", "direction": "desc"}] if ordenar_por_data else []
     corpo = {
-        "query": query, "filters": filtros, "sort": [], "page_size": max(1, min(n, _PAGINA_MAX)),
-        "current_page": 1, "process_number": None, "decision_date_start": None,
+        "query": query, "filters": filtros, "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
+        "current_page": 1, "process_number": processo, "decision_date_start": None,
         "decision_date_end": None, "date_type": "DATA_DECISAO", "rapporteurs": [],
         "revisors": [], "relator_convocado": None, "relator_acordaos": [],
         "ref_legislativa": None,
@@ -145,6 +157,37 @@ def buscar_unificada(
             totais[chave] = int(balde.get("doc_count", 0))
     docs = _docs_com_canario(dados, sum(totais.values()), max_resultados, ", ".join(pedidos))
     return docs, totais
+
+
+# TNU (medido em 22/10/2026): filtra-se pelo órgão, com esta grafia EXATA
+# ("Turma Nacional de Uniformização" e "TNU" dão zero). O acervo vai até 2026 —
+# "beneficio assistencial" deu 2.702 julgados, o mais recente de 14/08/2026 —,
+# ao passo que a base da TNU no portal antigo termina em julho de 2017.
+TNU_ORGAO = "TURMA NACIONAL DE UNIFORMIZAÇÃO"
+# Número CNJ no TEXTO da busca dá zero; ele só casa pelo campo `process_number`.
+_RE_CNJ = re.compile(r"^\s*(\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4})(?:/TNU)?\s*$", re.I)
+
+
+def buscar_tnu(
+    termo: str, max_resultados: int, *, ordenar_por_data: bool = False
+) -> Tuple[List[Dict[str, Any]], int, bool]:
+    """Julgados da TNU: ``(docs, total, total_exato)``.
+
+    Busca que é só um número CNJ vai pelo ``process_number`` e traz os
+    julgados daquele processo. ``total_exato`` é falso quando a API satura a
+    contagem (``relation: gte``, a partir de 10.000).
+    """
+    m = _RE_CNJ.match(termo or "")
+    if m:
+        dados = pesquisar("", {"ORGAO_JULGADOR": [TNU_ORGAO]}, max_resultados,
+                          ordenar_por_data=ordenar_por_data, processo=m.group(1))
+    else:
+        dados = pesquisar(termo, {"ORGAO_JULGADOR": [TNU_ORGAO]}, max_resultados,
+                          ordenar_por_data=ordenar_por_data)
+    contagem = dados["results"].get("total") or {}
+    total = int(contagem.get("value", 0))
+    docs = _docs_com_canario(dados, total, max_resultados, "TNU")
+    return docs, total, contagem.get("relation", "eq") == "eq"
 
 
 def _filtro_tipos(tipos: Sequence[str]) -> Dict[str, List[str]]:

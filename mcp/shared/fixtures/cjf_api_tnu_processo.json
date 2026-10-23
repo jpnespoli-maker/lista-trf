@@ -1,0 +1,116 @@
+{
+ "results": {
+  "total": {
+   "value": 3,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "5947f1030c90a4353240077b4979f83f22ace70eefaf1e4dfbdd8eaeda0069b5",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0044230-77.2023.4.05.8300",
+     "PROCESSO_CITACAO": "0044230-77.2023.4.05.8300",
+     "CLASSE": "PUIL - Pedido de Uniformização de Interpretação de Lei (Turma)",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "IVANIR CESAR IRENO JUNIOR",
+     "RELATOR_ACORDAO": "IVANIR CESAR IRENO JUNIOR",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "TURMA NACIONAL DE UNIFORMIZAÇÃO",
+     "TRIBUNAL": "tnu",
+     "ORGAO_ORIGEM": "TNU",
+     "DATA_DECISAO": "2026-03-11T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "DIREITO CONSTITUCIONAL E ADMINISTRATIVO. PROCESSUAL CIVIL. EMBARGOS DE DECLARAÇÃO EM PEDIDO DE UNIFORMIZAÇÃO DE INTERPRETAÇÃO DE LEI FEDERAL (PUIL). PROGRAMA BOLSA FAMÍLIA. LIMITE DE FAMÍLIAS UNIPESSOAIS. PODER REGULAMENTAR. PRINCÍPIO DA LEGALIDADE. ART. 12-A DA LEI Nº 14.601/2023 (INCLUÍDO PELA LEI Nº 15.077/2024). INEXISTÊNCIA DE OMISSÃO, CONTRADIÇÃO OU OBSCURIDADE. PRETENSÃO DE REDISCUSSÃO DO MÉRITO. EMBARGOS REJEITADOS.",
+     "DECISAO": "A Turma Nacional de Uniformização decidiu, por unanimidade, REJEITAR os embargos de declaração opostos pela parte autora e pela Defensoria Pública da União (na qualidade de amicus curiae), nos termos do voto do relator.",
+     "REPRESENTATIVO_CONTROVERSIA": "1",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "PE",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2026-03-12T03:00:00.000Z",
+     "EMENTA_TRUNCADA": false,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "39309dbfd16c74704ad23ec646a7059160faf18247e99a2f8a4d3125db632d63",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0044230-77.2023.4.05.8300",
+     "PROCESSO_CITACAO": "0044230-77.2023.4.05.8300",
+     "CLASSE": "PUIL - Pedido de Uniformização de Interpretação de Lei (Turma)",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "PAULO ROBERTO PARCA DE PINHO",
+     "RELATOR_ACORDAO": "IVANIR CESAR IRENO JUNIOR",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "TURMA NACIONAL DE UNIFORMIZAÇÃO",
+     "TRIBUNAL": "tnu",
+     "ORGAO_ORIGEM": "TNU",
+     "DATA_DECISAO": "2025-12-03T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "DIREITO ADMINISTRATIVO E CONSTITUCIONAL. PEDIDO DE UNIFORMIZAÇÃO DE INTERPRETAÇÃO DE LEI FEDERAL. REPRESENTATIVO DE CONTROVÉRSIA. TEMA 379. PROGRAMA BOLSA FAMÍLIA. FAMÍLIA UNIPESSOAL. ÍNDICE MÁXIMO MUNICIPAL DE 16%. LEGALIDADE DA RESTRIÇÃO. FIXAÇÃO DE TESE. IMPOSSIBILIDADE DE APLICAÇÃO RETROATIVA. PEDIDO PARCIALMENTE PROVIDO.\nI. CASO EM EXAME\nPedido de uniformização de interpretação de lei federal, afetado como representativo de controvérsia (Tema 379), com o objetivo de definir se o preenchimento dos requisitos legais do Programa Bolsa Família (PBF) assegura direito subjetivo ao benefício, mesmo quando se trata de família unipessoal e o município já ultrapassou o limite percentual de 16% estabelecido pela Portaria MDS nº 911/2023. O relator propôs tese no sentido de reconhecer a ilegalidade da restrição imposta por portaria infralegal. A divergência apresentada sustenta a legalidade do índice máximo, especialmente após a inclusão do art. 12-A na Lei nº 14.601/2023 pela Lei nº 15.077/2024. Quanto ao caso concreto, ambos os votos convergem para o restabelecimento da sentença de procedência, com fundamento na irretroatividade da norma administrativa restritiva.\nII. QUESTÃO EM DISCUSSÃO\nHá duas questões em discussão: (i) definir se a fixação de índice máximo municipal de 16% para ingresso de famílias unipessoais no Programa Bolsa Família, por meio de ato infralegal, configura violação ao princípio da legalidade estrita; e (ii) estabelecer se tal restrição pode ser aplicada ao ca",
+     "DECISAO": "A Turma Nacional de Uniformização decidiu, por voto de desempate, vencidos o relator e os Juízes Federais GIOVANI BIGOLIN, ODILON ROMANO NETO, MONIQUE MARCHIOLI LEITE, LILIAN OLIVEIRA DA COSTA TOURINHO e JOÃO CARLOS CABRELON DE OLIVEIRA, DAR PARCIAL provimento ao pedido de uniformização interposto pela parte autora, nos termos do voto do Juiz Federal IVANIR CÉSAR IRENO JUNIOR, julgando-o como representativo de controvérsia, com a fixação da seguinte tese para o Tema 379: \"A partir da vigência do art. 12-A da Lei 14.601/2023 (incluído pela Lei 15.077/2024), do art. 2º, §3º, da Lei 15.077/2024 e",
+     "REPRESENTATIVO_CONTROVERSIA": "1",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "PE",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2025-12-05T03:00:00.000Z",
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   },
+   {
+    "_id": "627a5c000c1ee1647a58f2e9c00eeb32791a45617fc962f42dbf8439e7f887c4",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "0044230-77.2023.4.05.8300",
+     "PROCESSO_CITACAO": "0044230-77.2023.4.05.8300",
+     "CLASSE": "PUIL - Pedido de Uniformização de Interpretação de Lei (Turma)",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "PAULO ROBERTO PARCA DE PINHO",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "TURMA NACIONAL DE UNIFORMIZAÇÃO",
+     "TRIBUNAL": "tnu",
+     "ORGAO_ORIGEM": "TNU",
+     "DATA_DECISAO": "2025-04-09T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "11/04/2025",
+     "EMENTA": "DIREITO CONSTITUCIONAL E ADMINISTRATIVO. PEDIDO DE UNIFORMIZAÇÃO DE INTERPRETAÇÃO DE LEI. PROGRAMA BOLSA-FAMÍLIA. FAMÍLIA UNIPESSOAL. LIMITAÇÃO ADMINISTRATIVA. DIREITO SUBJETIVO AO BENEFÍCIO. INCIDENTE ADMITIDO. AFETAÇÃO COMO REPRESENTATIVO DE CONTROVÉRSIA.\nI. CASO EM EXAME\nPedido de uniformização de interpretação de lei interposto por beneficiário excluído do Programa Bolsa-Família, contra acórdão da 2ª Turma Recursal de Pernambuco que deu provimento ao recurso da União para julgar improcedente o pedido de restabelecimento do benefício assistencial, sob fundamento da ausência de direito subjetivo ao recebimento, diante da limitação orçamentária prevista no art. 11, §1º, da Lei nº 14.601/2023.O requerente alegou divergência jurisprudencial com acórdãos da 5ª Turma Recursal do Rio Grande do Sul, que reconhecem o direito subjetivo ao benefício assistencial quando preenchidos os requisitos legais, independentemente de restrições administrativas de ordem orçamentária ou critérios de limitação por tipo de composição familiar.\nII. QUESTÃO EM DISCUSSÃO3. A questão em discussão consiste em definir se o preenchimento dos requisitos legais do Programa Bolsa-Família assegura direito subjetivo ao benefício, mesmo nos casos em que o interessado integra família unipessoal e o Município onde reside já ultrapassou o limite percentual de 16% estabelecido pela Portaria MDS nº 911/2023.\nIII. RAZÕES DE DECIDIR\nPreliminar4. Caracterizada a divergência entre a interpretação adotada pelo acórdão re",
+     "DECISAO": "A Turma Nacional de Uniformização decidiu, por maioria, vencidos os Juízes Federais IVANIR CESAR IRENO JUNIOR, LEONARDO CASTANHO MENDES, FLAVIA HEINE PEIXOTO e NEIAN MILHOMEM CRUZ, admitir o incidente da parte autora e afetá-lo como representativo de controvérsia, nos termos do voto do relator, e por unanimidade, aprovar a seguinte Questão Controvertida: \"Definir se o preenchimento dos requisitos legais do Programa Bolsa-Família assegura direito subjetivo ao benefício, mesmo nos casos em que o interessado integra família unipessoal e o Município já ultrapassou o limite percentual de 16% estabe",
+     "REPRESENTATIVO_CONTROVERSIA": "0",
+     "PRECEDENTE_RELEVANTE": "0",
+     "UF": "PE",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2025-04-11T03:00:00.000Z",
+     "EMENTA_TRUNCADA": true,
+     "DECISAO_TRUNCADA": false
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": []
+  }
+ }
+}
