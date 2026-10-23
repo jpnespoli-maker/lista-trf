@@ -310,7 +310,12 @@ def buscar_documentos(
     try:
         return _buscar_documentos_jsf(termo, tribunais, max_resultados)
     except PortalJsfIndisponivel:
-        return cjf_api.buscar_unificada(termo, tribunais, max_resultados)
+        try:
+            return cjf_api.buscar_unificada(termo, tribunais, max_resultados)
+        except cjf_api.SemCoberturaNaApi as exc:
+            raise cjf_api.SemCoberturaNaApi(
+                exc.sem_cobertura, exc.cobertos, contexto="O portal antigo do CJF está fora, e "
+            ) from exc
 
 
 _TRAVA_SESSAO_JSF = threading.Lock()

@@ -103,7 +103,8 @@ def test_so_stj_com_portal_antigo_fora_e_erro_com_as_duas_causas(srv):
     srv._proximo = lambda: _resultado(docs=[], antiga_ok=False, sem_cobertura=["STJ"])
     saida = srv.buscar_jurisprudencia_cjf("honorarios", tribunais="STJ")
     assert saida.startswith("<erro>")
-    assert "portal antigo: timeout" in saida and "STJ" in saida and "API nova" in saida
+    assert ("portal antigo: timeout; API nova: não cobre STJ; "
+            "para o STJ, use stj-jurisprudencia") in saida
 
 
 def test_so_stj_com_portal_antigo_no_ar_traz_docs_e_avisa(srv):
@@ -159,6 +160,45 @@ def test_filtro_novo_com_stj_busca_nos_cobertos_e_declara(srv, monkeypatch):
     saida = srv.buscar_jurisprudencia_cjf("x", tribunais="STJ,TRF4", so_representativos=True)
     assert chamadas == [["STJ", "TRF4"], ["TRF4"]]
     assert "SEM COBERTURA" in saida and "<erro>" not in saida
+    assert ("SEM COBERTURA: os filtros novos só existem na API nova, que não cobre STJ; "
+            "para o STJ, use stj-jurisprudencia; a busca rodou só em TRF4") in saida
+    # O portal antigo pode estar no ar: nada de "está fora" numa busca só da API.
+    assert "fora" not in saida
+
+
+def test_filtro_novo_so_stj_e_erro_que_nao_diz_portal_fora(srv, monkeypatch):
+    def _api(busca, tribs, n, extras):
+        raise cjf_api.SemCoberturaNaApi(["STJ"], [])
+
+    monkeypatch.setattr(srv.cjf_api, "buscar_api", _api)
+    saida = srv.buscar_jurisprudencia_cjf("x", tribunais="STJ", data_inicio="2025-01-01")
+    assert saida.startswith("<erro>os filtros novos só existem na API nova, que não cobre STJ")
+    assert "portal antigo" in saida and "fora" not in saida
+
+
+@pytest.mark.parametrize("tribunais, nomeado", [("TNU,TRF4", "TNU"), ("XYZ", "XYZ")])
+def test_tribunal_fora_da_lista_e_erro_e_nao_some(srv, tribunais, nomeado):
+    saida = srv.buscar_jurisprudencia_cjf("bolsa familia", tribunais=tribunais)
+    assert saida.startswith("<erro>tribunal não reconhecido: " + nomeado)
+    assert srv._chamadas == []
+    assert ("buscar_jurisprudencia_tnu" in saida) == (nomeado == "TNU")
+    stats = srv.estatisticas_cjf("bolsa familia", tribunais=tribunais)
+    assert stats.startswith("<erro>tribunal não reconhecido: " + nomeado)
+
+
+def test_tribunais_em_minusculas_e_com_virgula_sobrando_valem(srv):
+    srv.buscar_jurisprudencia_cjf("x", tribunais="trf4, ")
+    assert srv._chamadas[0]["tribunais"] == ["TRF4"]
+
+
+def test_aviso_de_portal_fora_le_a_cobertura_da_rota(srv):
+    """O tribunal sem cobertura vem do resultado da rota, não de um STJ fixo."""
+    srv._proximo = lambda: _resultado(antiga_ok=False, sem_cobertura=["STJ"])
+    saida = srv.buscar_jurisprudencia_cjf("x", tribunais="STJ,TRF4")
+    assert ("SEM COBERTURA: STJ: a API nova não cobre STJ e o portal antigo está fora "
+            "(timeout); não há STJ nesta resposta") in saida
+    srv._proximo = lambda: _resultado(antiga_ok=False, sem_cobertura=[])
+    assert "SEM COBERTURA" not in srv.buscar_jurisprudencia_cjf("x", tribunais="STJ,TRF4")
 
 
 @pytest.mark.parametrize("campo, valor", [
@@ -274,7 +314,10 @@ def test_estatisticas_cjf_stj_e_erro_declarado(srv, monkeypatch):
         raise cjf_api.SemCoberturaNaApi(["STJ"], [])
 
     monkeypatch.setattr(srv.cjf_api, "estatisticas", _recusa)
-    assert srv.estatisticas_cjf("x", tribunais="STJ").startswith("<erro>")
+    saida = srv.estatisticas_cjf("x", tribunais="STJ")
+    assert saida.startswith("<erro>estatisticas_cjf usa só a API nova, que não cobre STJ; "
+                            "para o STJ, use stj-jurisprudencia</erro>")
+    assert "fora" not in saida
 
 
 def test_ajuda_descreve_rotas_filtros_e_tools(srv):

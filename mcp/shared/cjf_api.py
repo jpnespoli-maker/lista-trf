@@ -68,16 +68,21 @@ class PortalJsfIndisponivel(ValueError):
 
 
 class SemCoberturaNaApi(RuntimeError):
-    """Tribunal pedido que a API nova não cobre. Nunca vira zero."""
+    """Tribunal pedido que a API nova não cobre. Nunca vira zero.
 
-    def __init__(self, sem_cobertura: Sequence[str], cobertos: Sequence[str]):
+    A mensagem diz só o que a API não cobre; o PORQUÊ de a busca ter ido só a ela
+    (portal antigo fora, filtro que só a API tem) é do chamador, em ``contexto``
+    (ex.: "O portal antigo do CJF está fora, e ")."""
+
+    def __init__(self, sem_cobertura: Sequence[str], cobertos: Sequence[str], contexto: str = ""):
         self.sem_cobertura = list(sem_cobertura)
         self.cobertos = list(cobertos)
         dica = " Para o STJ, usar o stj-jurisprudencia (SCON)." if "STJ" in self.sem_cobertura else ""
-        super().__init__(
-            f"O portal antigo do CJF está fora e a API nova não cobre "
-            f"{', '.join(self.sem_cobertura)} (medido em 22/10/2026).{dica}"
+        texto = (
+            f"a API nova do CJF não cobre {', '.join(self.sem_cobertura)} "
+            f"(medido em 22/10/2026).{dica}"
         )
+        super().__init__(contexto + texto if contexto else texto[0].upper() + texto[1:])
 
 
 def _texto(valor: Any) -> str:

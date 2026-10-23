@@ -71,6 +71,7 @@ AVISO_FILTROS_API = (
 )
 
 _TRIBUNAIS_PADRAO = "STF,STJ,TRF1,TRF2,TRF3,TRF4,TRF5,TRF6"
+_TRIBUNAIS_VALIDOS = tuple(_TRIBUNAIS_PADRAO.split(","))
 _TIPOS_DATA = {"decisao": "DATA_DECISAO", "publicacao": "DATA_PUBLICACAO_PESQ"}
 _MODOS = ("comum", "semantica")
 _FORMATOS_DATA = ("%Y-%m-%d", "%d/%m/%Y")
@@ -90,6 +91,31 @@ def _data_api(valor: str, nome: str) -> Optional[str]:
         except ValueError:
             continue
     raise ValueError(f"{nome} não entendida: {valor!r}. Use AAAA-MM-DD ou DD/MM/AAAA.")
+
+
+def _lista_tribunais(tribunais: str) -> List[str]:
+    """Entrada da tool → siglas em maiúsculas. Nome fora de STF, STJ e TRF1 a TRF6
+    levanta ``ValueError``: as rotas o descartavam em silêncio, e o tribunal sumia da
+    resposta sem aviso (ex.: "TNU,TRF4" devolvia só o TRF4)."""
+    lista = [t.strip().upper() for t in (tribunais or "").split(",") if t.strip()]
+    if not lista:
+        raise ValueError(f"nenhum tribunal informado; aceitos: {', '.join(_TRIBUNAIS_VALIDOS)}")
+    invalidos = [t for t in lista if t not in _TRIBUNAIS_VALIDOS]
+    if invalidos:
+        dica = (" A TNU tem tool própria: buscar_jurisprudencia_tnu."
+                if "TNU" in invalidos else "")
+        raise ValueError(
+            f"tribunal não reconhecido: {', '.join(invalidos)}. "
+            f"Aceitos: {', '.join(_TRIBUNAIS_VALIDOS)}.{dica}"
+        )
+    return lista
+
+
+def _nao_cobre(sem_cobertura: List[str]) -> str:
+    texto = f"não cobre {', '.join(sem_cobertura)}"
+    if "STJ" in sem_cobertura:
+        texto += "; para o STJ, use stj-jurisprudencia"
+    return texto
 
 
 def _montar_filtros(
@@ -218,7 +244,8 @@ def buscar_jurisprudencia_cjf(
     so_precedentes_relevantes, so_representativos): só a API nova os tem. Usar
     QUALQUER um faz a busca ir SÓ à API e EXCLUI o STJ (aviso SEM COBERTURA).
     Entrada que não se entende (data, legislação, relator, modo) volta como <erro>,
-    nunca como busca sem o filtro.
+    nunca como busca sem o filtro. Tribunal fora da lista acima também (a TNU tem
+    tool própria, buscar_jurisprudencia_tnu).
 
     TOOLS IRMÃS: documento_cjf (ementa, decisão ou inteiro teor de um <id>),
     similares_cjf (julgados parecidos com um <id>), estatisticas_cjf (total,
@@ -243,7 +270,6 @@ def buscar_jurisprudencia_cjf(
         XML com <origem>, <tribunal>, <id> (use em documento_cjf/similares_cjf),
         ementa, relator, órgão julgador, data e, quando há, <link_inteiro_teor>.
     """
-    lista_tribunais = [t.strip().upper() for t in tribunais.split(",")]
     max_resultados = max(1, min(int(max_resultados), 100))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
 
@@ -254,6 +280,7 @@ def buscar_jurisprudencia_cjf(
     try:
         import json as _json
         try:
+            lista_tribunais = _lista_tribunais(tribunais)
             filtros = _montar_filtros(
                 modo, data_inicio, data_fim, tipo_data, relator, legislacao,
                 so_precedentes_relevantes, so_representativos,
@@ -295,9 +322,13 @@ def buscar_jurisprudencia_cjf(
                     busca, lista_efetiva, max_resultados, filtros
                 )
             except cjf_api.SemCoberturaNaApi as exc:
+                # O contexto é deste servidor: o portal antigo pode estar no ar, e
+                # o que exclui o tribunal é o filtro, que só a API tem.
+                motivo = "os filtros novos só existem na API nova, que " + _nao_cobre(exc.sem_cobertura)
                 if not exc.cobertos:
-                    raise
-                aviso_cobertura = str(exc)
+                    erro_msg = f"{motivo} (sem os filtros novos, a busca vai também ao portal antigo)"
+                    return f"<erro>{xml_escape(erro_msg)}</erro>"
+                aviso_cobertura = f"{motivo}; a busca rodou só em {', '.join(exc.cobertos)}"
                 documentos, totais_api = cjf_api.buscar_api(
                     busca, exc.cobertos, max_resultados, filtros
                 )
@@ -313,11 +344,10 @@ def buscar_jurisprudencia_cjf(
                 )
         else:
             res = cjf_duas_rotas.buscar_duas_rotas(busca, lista_tribunais, max_resultados)
-            cobertos = [t for t in lista_tribunais if t in cjf_api.TRIBUNAIS_COBERTOS]
+            sem_api = list(res.api.sem_cobertura)
+            cobertos = [t for t in lista_tribunais if t not in sem_api]
             if not res.antiga.ok and (not res.api.ok or not cobertos):
-                causa_api = res.api.erro if not res.api.ok else (
-                    f"não cobre {', '.join(lista_tribunais)}; use stj-jurisprudencia para o STJ"
-                )
+                causa_api = res.api.erro if not res.api.ok else _nao_cobre(sem_api)
                 raise RuntimeError(
                     f"portal antigo: {res.antiga.erro}; API nova: {causa_api}"
                 )
@@ -358,10 +388,11 @@ def buscar_jurisprudencia_cjf(
                     }),
                     ttl_s=_TTL_BUSCA_S,
                 )
-            if "STJ" in lista_tribunais and "portal-antigo" in rotas_fora:
+            if sem_api and "portal-antigo" in rotas_fora:
+                nomes = ", ".join(sem_api)
                 aviso_cobertura = (
-                    "STJ: a API nova não cobre o STJ e o portal antigo está fora "
-                    f"({rotas_fora['portal-antigo']}); não há STJ nesta resposta"
+                    f"{nomes}: a API nova não cobre {nomes} e o portal antigo está fora "
+                    f"({rotas_fora['portal-antigo']}); não há {nomes} nesta resposta"
                 )
         n_docs = len(documentos)
 
@@ -692,8 +723,8 @@ def estatisticas_cjf(
     erro_msg: Optional[str] = None
     try:
         import json as _json
-        lista = [t.strip().upper() for t in tribunais.split(",")]
         try:
+            lista = _lista_tribunais(tribunais)
             filtros = _montar_filtros(modo, data_inicio, data_fim, "decisao", relator)
         except ValueError as e:
             erro_msg = str(e)
@@ -707,7 +738,11 @@ def estatisticas_cjf(
             cache_hit = True
             dados = _json.loads(cached)
         else:
-            dados = cjf_api.estatisticas(busca, lista, filtros)
+            try:
+                dados = cjf_api.estatisticas(busca, lista, filtros)
+            except cjf_api.SemCoberturaNaApi as exc:
+                erro_msg = "estatisticas_cjf usa só a API nova, que " + _nao_cobre(exc.sem_cobertura)
+                return f"<erro>{xml_escape(erro_msg)}</erro>"
             # Total zero (ou ausente) não se cacheia: o falso zero ficaria grudado.
             if dados.get("total_documents"):
                 registrar_dispositivo(

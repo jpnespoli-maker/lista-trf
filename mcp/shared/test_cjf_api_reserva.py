@@ -66,6 +66,8 @@ class TestUnificada:
         assert exc.value.sem_cobertura == ["STJ"]
         assert exc.value.cobertos == ["STF", "TRF2"]
         assert "stj-jurisprudencia" in str(exc.value)
+        assert str(exc.value).startswith("A API nova do CJF não cobre STJ")
+        assert "fora" not in str(exc.value)
 
     def test_totais_dos_baldes_sem_caixa(self, monkeypatch):
         chamadas = []
@@ -191,6 +193,15 @@ class TestDesvioAutomatico:
         monkeypatch.setattr(cjf_client, "get_cjf_session", lambda: _SessaoSpa())
         monkeypatch.setattr(cjf_api, "buscar_unificada", lambda t, tr, n: (["doc"], {"TRF2": 1}))
         assert cjf_client.buscar_documentos("x", ["TRF2"], 1) == (["doc"], {"TRF2": 1})
+
+    def test_stj_com_o_portal_fora_diz_que_o_portal_esta_fora(self, monkeypatch):
+        """A mensagem da API é neutra; quem sabe que o portal caiu é o desvio."""
+        monkeypatch.setattr(cjf_client, "get_cjf_session", lambda: _SessaoSpa())
+        monkeypatch.setattr(cjf_api, "pesquisar", lambda *a, **k: pytest.fail("não deveria buscar"))
+        with pytest.raises(cjf_api.SemCoberturaNaApi) as exc:
+            cjf_client.buscar_documentos("x", ["STJ"], 1)
+        assert str(exc.value).startswith("O portal antigo do CJF está fora, e a API nova do CJF não cobre STJ")
+        assert exc.value.sem_cobertura == ["STJ"] and exc.value.cobertos == []
 
     def test_regional_vai_a_api_e_declara_a_via(self, monkeypatch):
         def _jsf(*_a, **_k):
