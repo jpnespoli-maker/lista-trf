@@ -35,6 +35,9 @@ def _ler(nome):
 TRF2_STF = _ler("cjf_api_trf2_stf.json")
 JEF1_BASE = _ler("cjf_api_jef1_base.json")
 JEF1_ORGAOS = _ler("cjf_api_jef1_orgaos.json")
+# 23/10/2026, "bolsa E familia E unipessoal" filtrada por TRF3+TRF4 com as
+# turmas recursais das duas Regiões; três documentos, um de cada espécie.
+TRF3_TRF4_COM_TR = _ler("cjf_api_trf3_trf4_com_tr.json")
 
 
 class TestDocumento:
@@ -69,15 +72,84 @@ class TestUnificada:
         monkeypatch.setattr(cjf_api, "pesquisar",
                             lambda q, f, n: (chamadas.append(f), TRF2_STF)[1])
         docs, totais = cjf_api.buscar_unificada("repercussao geral", ["trf2", "STF"], 2)
-        assert chamadas == [{"TRIBUNAL": ["TRF2", "STF"]}]
+        assert chamadas == [{"TRIBUNAL": ["TRF2", "STF"], "ORIGEM": ["JEF:TR:2", "JEF:TRU:2"]}]
         assert totais == {"TRF2": 9266, "STF": 9324}
         assert [d["via"] for d in docs] == ["api-nova", "api-nova"]
+
+    def test_trf_inclui_as_turmas_recursais_da_regiao(self, monkeypatch):
+        """O filtro TRIBUNAL só alcança o 2º grau: sem ORIGEM, 43 dos 59 julgados
+        do TRF3 nesta busca (os das turmas recursais de SP) sumiam, e o TRF4
+        saía com zero. O portal antigo conta as turmas no próprio TRF."""
+        chamadas = []
+        monkeypatch.setattr(cjf_api, "pesquisar",
+                            lambda q, f, n: (chamadas.append(f), TRF3_TRF4_COM_TR)[1])
+        docs, totais = cjf_api.buscar_unificada("bolsa E familia E unipessoal", ["TRF3", "TRF4"], 3)
+        assert chamadas == [{
+            "TRIBUNAL": ["TRF3", "TRF4"],
+            "ORIGEM": ["JEF:TR:3", "JEF:TRU:3", "JEF:TR:4", "JEF:TRU:4"],
+        }]
+        assert totais == {"TRF3": 59, "TRF4": 3}
+        assert sum(totais.values()) == TRF3_TRF4_COM_TR["results"]["total"]["value"]
+        assert any("TURMA RECURSAL" in d["orgao_julgador"] for d in docs)
+
+    def test_stf_sozinho_nao_leva_origem(self, monkeypatch):
+        chamadas = []
+        monkeypatch.setattr(cjf_api, "pesquisar",
+                            lambda q, f, n: (chamadas.append(f), TRF2_STF)[1])
+        cjf_api.buscar_unificada("repercussao geral", ["STF"], 2)
+        assert chamadas == [{"TRIBUNAL": ["STF"]}]
 
     def test_canario_total_sem_documentos(self, monkeypatch):
         oco = {**TRF2_STF, "results": {**TRF2_STF["results"], "hits": []}}
         monkeypatch.setattr(cjf_api, "pesquisar", lambda *a, **k: oco)
         with pytest.raises(RuntimeError, match="não tratar como 'nada encontrado'"):
             cjf_api.buscar_unificada("repercussao geral", ["TRF2"], 2)
+
+
+class TestOperadorExplicito:
+    """Palavras soltas iam como estavam, e a API, quando o E daria zero, passa
+    a OU sem avisar: "bolsa familia unipessoal" no TRF4 devolvia 2.590 julgados
+    contra 0 da busca com E (23/10/2026). Com o E explícito o zero chega ao
+    servidor do MCP, que relaxa com o aviso de BUSCA RELAXADA."""
+
+    @pytest.mark.parametrize("busca, enviada", [
+        ("bolsa familia unipessoal", "bolsa E familia E unipessoal"),
+        ("  bolsa   familia ", "bolsa E familia"),
+        ("aposentad$ especial", "aposentad$ E especial"),
+        ("auxílio-doença cessação", "auxílio-doença E cessação"),
+        ("Tema 379", "Tema E 379"),
+        # Minúsculo não é operador na API ("unipessoal e xyzzyqwe" relaxa como
+        # sem operador); o "e" que sobra é neutro: 625 com ele e sem ele.
+        ("pensao e morte", "pensao E e E morte"),
+        ("unipessoal", "unipessoal"),
+        ("", ""),
+    ])
+    def test_palavras_soltas_ganham_e(self, busca, enviada):
+        assert cjf_api._e_explicito(busca) == enviada
+
+    @pytest.mark.parametrize("busca", [
+        "bolsa E familia",
+        "bolsa OU familia",
+        "bolsa ADJ familia unipessoal",
+        "aposentadoria PROX3 invalidez",
+        "servidor NAO militar",
+        '"bolsa familia" unipessoal',
+        "(bolsa familia) unipessoal",
+        "pensao[EMEN] morte",
+    ])
+    def test_busca_com_operador_vai_intacta(self, busca):
+        assert cjf_api._e_explicito(busca) == busca
+
+    def test_pesquisar_envia_a_busca_com_e(self, monkeypatch):
+        enviados = []
+        resp = type("R", (), {
+            "raise_for_status": lambda self: None,
+            "json": lambda self: {"results": {}, "aggregations": {}},
+        })()
+        monkeypatch.setattr(cjf_api.requests, "post",
+                            lambda url, json, timeout: (enviados.append(json), resp)[1])
+        cjf_api.pesquisar("bolsa familia unipessoal", {}, 1)
+        assert enviados[0]["query"] == "bolsa E familia E unipessoal"
 
 
 class TestRegional:

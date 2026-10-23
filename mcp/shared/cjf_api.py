@@ -9,12 +9,19 @@ busca cai aqui, sem intervenção.
 O QUE FOI MEDIDO NA API (22/10/2026), e que este módulo respeita:
 
 - ``POST /api/jurisprudencia/pesquisar``, JSON, sem token. Aceita ``E``, ``OU``,
-  ``ADJ`` e ``[EMEN]`` na query. Resposta Elasticsearch: ``results.hits[]._source``
-  e agregações.
-- Filtro ``{"TRIBUNAL": [...]}``, sem distinção de caixa. As agregações por
-  ``TRIBUNAL`` vêm GLOBAIS (não mudam com o filtro) e com contagem exata, ao
-  passo que ``results.total`` satura em 10.000 (``relation: gte``) — por isso os
-  totais saem dos baldes.
+  ``ADJ`` e ``[EMEN]`` na query, só em MAIÚSCULAS. Resposta Elasticsearch:
+  ``results.hits[]._source`` e agregações.
+- Palavras soltas, sem operador, a API relaxa para OU em silêncio quando o E
+  daria zero (23/10/2026: "bolsa familia unipessoal" no TRF4, 2.590 contra 0).
+  ``pesquisar`` explicita o E, e o zero chega ao chamador, que relaxa com aviso.
+- Filtro ``{"TRIBUNAL": [...]}``, sem distinção de caixa, alcança SÓ o 2º grau.
+  Turma recursal e TNU se filtram por ``{"ORIGEM": ["JEF:TR:<n>", "JEF:TRU:<n>",
+  "JEF:TNU"]}``, as fichas do próprio site; as duas chaves na mesma chamada se
+  SOMAM (TRF3 16 + turma recursal da 3ª Região 42 = 58, 23/10/2026).
+- As agregações ``TRIBUNAL`` (2º grau) e ``ORIGEM_JEF`` (``tr_by_regiao``,
+  ``tru_by_regiao``, ``tnu``) vêm GLOBAIS (não mudam com o filtro) e com contagem
+  exata, ao passo que ``results.total`` satura em 10.000 (``relation: gte``) —
+  por isso os totais saem delas.
 - COBERTURA: STF e os seis TRFs. O STJ é RESÍDUO ("honorarios": 2 contra 33.225
   no portal antigo) e é recusado aqui, nunca devolvido como zero.
 - O STF vem DEGRADADO: sem data, sem órgão julgador, ementa com o rótulo
@@ -104,6 +111,20 @@ def documento(source: Dict[str, Any]) -> Dict[str, Any]:
     return doc
 
 
+_RE_OPERADOR = re.compile(r"^(E|OU|NAO|NÃO|XOU|COM|MESMO|ADJ\d*|PROX\d*)$")
+
+
+def _e_explicito(query: str) -> str:
+    """Palavras soltas → unidas por ``E``. Busca com operador, aspas, parênteses
+    ou campo (``[EMEN]``) vai intacta: ali a API não relaxa."""
+    termos = query.split()
+    if len(termos) < 2 or any(c in query for c in '"()[]'):
+        return query.strip()
+    if any(_RE_OPERADOR.match(t) for t in termos):
+        return query
+    return " E ".join(termos)
+
+
 def pesquisar(
     query: str,
     filtros: Dict[str, List[str]],
@@ -114,7 +135,7 @@ def pesquisar(
 ) -> Dict[str, Any]:
     ordem = [{"field": "DATA_DECISAO", "direction": "desc"}] if ordenar_por_data else []
     corpo = {
-        "query": query, "filters": filtros, "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
+        "query": _e_explicito(query), "filters": filtros, "sort": ordem, "page_size": max(1, min(n, _PAGINA_MAX)),
         "current_page": 1, "process_number": processo, "decision_date_start": None,
         "decision_date_end": None, "date_type": "DATA_DECISAO", "rapporteurs": [],
         "revisors": [], "relator_convocado": None, "relator_acordaos": [],
@@ -149,12 +170,24 @@ def buscar_unificada(
     sem = [t for t in pedidos if t not in TRIBUNAIS_COBERTOS]
     if sem:
         raise SemCoberturaNaApi(sem, [t for t in pedidos if t in TRIBUNAIS_COBERTOS])
-    dados = pesquisar(termo, {"TRIBUNAL": pedidos}, max_resultados)
+    # Cada TRF leva as turmas recursais e a TRU da sua Região, como no portal antigo.
+    regioes = [t[-1] for t in pedidos if t.startswith("TRF")]
+    filtros: Dict[str, List[str]] = {"TRIBUNAL": pedidos}
+    if regioes:
+        filtros["ORIGEM"] = [f"JEF:{tipo}:{r}" for r in regioes for tipo in ("TR", "TRU")]
+    dados = pesquisar(termo, filtros, max_resultados)
+    aggs = dados["aggregations"]
     totais = {t: 0 for t in pedidos}
-    for balde in dados["aggregations"].get("TRIBUNAL", {}).get("buckets", []):
+    for balde in aggs.get("TRIBUNAL", {}).get("buckets", []):
         chave = str(balde.get("key", "")).upper()
         if chave in totais:
             totais[chave] = int(balde.get("doc_count", 0))
+    origem_jef = aggs.get("ORIGEM_JEF", {})
+    for agregacao in ("tr_by_regiao", "tru_by_regiao"):
+        for balde in origem_jef.get(agregacao, []):
+            chave = f"TRF{balde.get('key')}"
+            if chave in totais:
+                totais[chave] += int(balde.get("doc_count", 0))
     docs = _docs_com_canario(dados, sum(totais.values()), max_resultados, ", ".join(pedidos))
     return docs, totais
 

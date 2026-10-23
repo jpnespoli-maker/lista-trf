@@ -1,0 +1,189 @@
+{
+ "results": {
+  "total": {
+   "value": 62,
+   "relation": "eq"
+  },
+  "hits": [
+   {
+    "_id": "1425cb827d9fbef688385a3969b760bb82d405f41e8662a53485baf44a158544",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5020607-72.2025.4.04.7000",
+     "PROCESSO_CITACAO": "5020607-72.2025.4.04.7000",
+     "CLASSE": "RCIJEF - RECURSO CÍVEL",
+     "CLASSE_SIGLA": null,
+     "RELATOR": "GERSON LUIZ ROCHA",
+     "RELATOR_ACORDAO": "GERSON LUIZ ROCHA",
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "1ª TURMA RECURSAL DO PARANÁ",
+     "TRIBUNAL": "trf4",
+     "ORGAO_ORIGEM": "TR 4ª Região",
+     "DATA_DECISAO": "2026-07-23T03:00:00.000Z",
+     "FONTE_PUBLICACAO": null,
+     "EMENTA": "EMENTA\nDIREITO ADMINISTRATIVO E ASSISTENCIAL. RECURSO CÍVEL. PROGRAMA BOLSA FAMÍLIA. FAMÍLIA UNIPESSOAL. LIMITE MÁXIMO MUNICIPAL DE 16%. PROVIMENTO DO RECURSO.\nI. CASO EM EXAME: 1. Recurso cível interposto pela União contra sentença que julgou procedente o pedido de inclusão da autora no Programa Bolsa Família, com o pagamento das parcelas retroativas desde a data do ingresso da ação.\nII. QUESTÃO EM DISCUSSÃO: 2. A questão em discussão consiste em saber se é legal a imposição de limite máximo de 16% de famílias unipessoais por município como condicionante para o ingresso no Programa Bolsa Família.\nIII. RAZÕES DE DECIDIR: 3. A Turma Nacional de Uniformização, no julgamento do Tema 379, fixou o entendimento de que é legal a imposição de um índice máximo de famílias unipessoais por município como condicionante para o ingresso no Programa Bolsa Família. 4. O Programa Bolsa Família possui natureza programática e progressiva, de modo que o ingresso de novos beneficiários está condicionado à disponibilidade orçamentária e ao atendimento de critérios de priorização e seleção. 5. A fixação do limite de 16% para famílias unipessoais insere-se no legítimo exercício do poder regulamentar do Poder Executivo, com o objetivo de evitar a fragmentação artificial de núcleos familiares e priorizar o atendimento de famílias com crianças e adolescentes. 6. O art. 12-A da Lei nº 14.601/2023, incluído pela Lei nº 15.077/2024, estabelece expressamente o dever de observância do índice máximo de famílias unipessoais inscritas no programa, conforme ato do Poder Executivo federal. 7. O Supremo Tribunal Federal, no julgamento do ARE 1560998 AgR, chancelou a validade da aplicação do limite municipal para o ingresso de famílias unipessoais no programa. 8. No caso concreto, restou demonstrado que o município de residência da autora ultrapassa o limite regulamentar de 16% de famílias unipessoais, o que obsta a concessão do benefício pleiteado.\nIV. DISPOSITIVO E TESE: 9. Recurso provido. Tese de julgamento: 10. É legal a imposição de limite máximo de famílias unipessoais por município como condicionante para o ingresso no Programa Bolsa Família, nos termos do art. 12-A da Lei nº 14.601/2023.\n___________ Dispositivos relevantes citados: Lei nº 14.601/2023, art. 12-A; Lei nº 15.077/2024, art. 2º, § 3º; Portaria MDS nº 897/2023, art. 6º. Jurisprudência relevante citada: TNU, Tema 379, j. 03.12.2025; STF, ARE 1560998 AgR, Rel. Min. Luís Roberto Barroso, Tribunal Pleno, j. 01.09.2025.",
+     "DECISAO": "A 1ª Turma Recursal do Paraná decidiu, por unanimidade, DAR PROVIMENTO AO RECURSO, nos termos do voto do(a) Relator(a).",
+     "REPRESENTATIVO_CONTROVERSIA": "0",
+     "PRECEDENTE_RELEVANTE": "1",
+     "UF": "PR",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": null,
+     "DATA_PUBLICACAO_PESQ": "2026-07-27T03:00:00.000Z"
+    }
+   },
+   {
+    "_id": "391c1f32a134c714849192d8987b4d9bc23802f3739135a58da0830b160e0ffe",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5003790-20.2025.4.03.6301",
+     "PROCESSO_CITACAO": "5003790-20.2025.4.03.6301",
+     "CLASSE": "RECURSO INOMINADO CÍVEL",
+     "CLASSE_SIGLA": "RecInoCiv",
+     "RELATOR": "Juiz Federal RICARDO GERALDO REZENDE SILVEIRA",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "8ª TURMA RECURSAL DA SEÇÃO JUDICIÁRIA DE SÃO PAULO",
+     "TRIBUNAL": "TRF3",
+     "ORGAO_ORIGEM": "TR 3ª Região",
+     "DATA_DECISAO": "2025-08-19T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "Intimação via sistema DATA: 04/09/2025",
+     "EMENTA": "E M E N T A\n \nASSISTENCIAL. PROGRAMA BOLSA FAMÍLIA. SENTENÇA DE EXTINÇÃO DIANTE DA ILEGITIMIDADE PASSIVA DA UNIÃO. RECURSO DEFENSORIA PÚBLICA. LIMITAÇÃO POR MEIO DE ATO ADMINISTRATIVO EM RELAÇÃO AO NÚMERO PERCENTUAL DE RECEBEDORES EM CADA MUNICÍPIO. GESTÃO DESCENTRALIZADA. ATO DE RESPONSABILIDADE DOS MUNICÍPIOS. EXTINÇÃO CORRETA. SITUAÇÃO QUE DEVERIA ENSEJAR A ILEGITIMIDADE DA UNIÃO OU A INCOMPETÊNCIA DO JEF POR TRATAR-SE DE ANULAÇÃO DE ATO ADMINISTRATIVO. POSSIBILIDADE DE TUTELA COLETIVA",
+     "DECISAO": "PODER JUDICIÁRIOTurmas Recursais dos Juizados Especiais Federais Seção Judiciária de São Paulo\n8ª Turma Recursal da Seção Judiciária de São Paulo\n\nRECURSO INOMINADO CÍVEL (460) Nº 5003790-20.2025.4.03.6301\nRELATOR: 24º Juiz Federal da 8ª TR SP\nRECORRENTE: MARIA DE LOURDES MOREIRA DA SILVA\n\nRECORRIDO",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "SP",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": "http://www.trf3.jus.br/trf3r/index.php?id=20&op=resultado&processo=50037902020254036301",
+     "DATA_PUBLICACAO_PESQ": "2025-09-04T03:00:00.000Z"
+    }
+   },
+   {
+    "_id": "78cdcb04855689504e52043e3a1e43824938a3bb2e87bba0daa4c74e7e0ce5f9",
+    "_source": {
+     "ORIGEM": null,
+     "OBSERVACOES": null,
+     "TIPO_DOCUMENTO": "ACÓRDÃO",
+     "PROCESSO": "5001685-65.2020.4.03.6133",
+     "PROCESSO_CITACAO": "5001685-65.2020.4.03.6133",
+     "CLASSE": "APELAÇÃO CÍVEL",
+     "CLASSE_SIGLA": "ApCiv",
+     "RELATOR": "Desembargador Federal LUIS ANTONIO JOHONSOM DI SALVO",
+     "RELATOR_ACORDAO": null,
+     "RELATOR_CONVOCADO": null,
+     "REF_LEGISLATIVA": null,
+     "ORGAO_JULGADOR": "6ª TURMA",
+     "TRIBUNAL": "TRF3",
+     "ORGAO_ORIGEM": "TRF 3ª Região",
+     "DATA_DECISAO": "2022-01-28T03:00:00.000Z",
+     "FONTE_PUBLICACAO": "Intimação via sistema DATA: 03/02/2022",
+     "EMENTA": "E M E N T A\n \n \nAGRAVO. TRIBUTÁRIO. AUXÍLIO EMERGENCIAL. RECURSO IMPROVIDO. \nO Órgão Especial desta Corte decidiu que a competência para examinar demandas referentes ao auxílio-emergencial previsto na Lei nº 13.982/2020, é desta 2ª Seção (TRF 3ª Região, Órgão Especial, CCCiv - CONFLITO DE COMPETÊNCIA CÍVEL - 5003830-29.2021.4.03.0000, Rel. Desembargador Federal NEWTON DE LUCCA, julgado em 10/06/2021, Intimação via sistema DATA: 14/06/2021).\nO princípio da celeridade processual permitiu a decisão unipessoal no caso.\nA justificativa invocada para o indeferimento do benefício não encontra amparo legal, porquanto, conforme se observa do §1º do art. 2º da Lei nº 13.982/2020, o auxílio-emergencial pode ser pago para até duas pessoas da mesma família, no presente caso, o impetrante e sua irmã.\nNesse sentido, em suas informações, o Ministério da Cidadania comunicou o deferimento administrativo do auxílio-emergencial em favor do impetrante.\nNão obstante, mesmo já estando creditado em conta em seu nome, o apelante noticiou que a Caixa Econômica Federal não operacionalizou o saque. Assim, é de rigor, além do reconhecimento da legitimidade passiva da instituição financeira, a imposição de multa diária para que cumpra a obrigação determinada no presente mandamus.\nAssim, cabível a imposição de multa cominatória à Caixa Econômica Federal para o caso de não operacionalização do saque do benefício pelo impetrante que fixou-se em R$ 500,00 por dia de atraso, desde o esgotamento do prazo de 10 (dez) dias imposto pela decisão que deferiu a liminar (ID 165826137) em 18.11.2020, até o efetivo pagamento, a reverter em favor do impetrante.",
+     "DECISAO": "PODER JUDICIÁRIOTribunal Regional Federal da 3ª Região\n6ª Turma\n\nAPELAÇÃO CÍVEL (198) Nº 5001685-65.2020.4.03.6133\nRELATOR: Gab. 21 - DES. FED. JOHONSOM DI SALVO\nAPELANTE: MAICON UEHARA DE SOUZA\n\nAdvogado do(a) APELANTE: EDUARDO MOUREIRA GONCALVES - SP291404-A\n\nAPELADO: UNIÃO FEDERAL, CAIXA ECONOMIC",
+     "REPRESENTATIVO_CONTROVERSIA": null,
+     "PRECEDENTE_RELEVANTE": null,
+     "UF": "SP",
+     "HAS_IT3": [
+      "multiline"
+     ],
+     "LINK_INTEIRO_TEOR": "http://www.trf3.jus.br/trf3r/index.php?id=20&op=resultado&processo=50016856520204036133",
+     "DATA_PUBLICACAO_PESQ": "2022-02-03T03:00:00.000Z"
+    }
+   }
+  ]
+ },
+ "aggregations": {
+  "TRIBUNAL": {
+   "doc_count_error_upper_bound": 0,
+   "sum_other_doc_count": 0,
+   "buckets": [
+    {
+     "key": "TRF3",
+     "doc_count": 16
+    },
+    {
+     "key": "trf5",
+     "doc_count": 15
+    },
+    {
+     "key": "TRF1",
+     "doc_count": 6
+    },
+    {
+     "key": "trf6",
+     "doc_count": 5
+    },
+    {
+     "key": "trf2",
+     "doc_count": 1
+    }
+   ]
+  },
+  "ORIGEM_JEF": {
+   "total": 58,
+   "tnu": 4,
+   "tr_total": 54,
+   "tru_total": 0,
+   "tr_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 5
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 43
+    },
+    {
+     "key": "4",
+     "doc_count": 3
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 3
+    }
+   ],
+   "tru_by_regiao": [
+    {
+     "key": "1",
+     "doc_count": 0
+    },
+    {
+     "key": "2",
+     "doc_count": 0
+    },
+    {
+     "key": "3",
+     "doc_count": 0
+    },
+    {
+     "key": "4",
+     "doc_count": 0
+    },
+    {
+     "key": "5",
+     "doc_count": 0
+    },
+    {
+     "key": "6",
+     "doc_count": 0
+    }
+   ]
+  }
+ }
+}
