@@ -3,3 +3,6 @@
 mcp==1.27.0
 requests==2.33.1
 tenacity==9.1.4
+# shared/cjf_api.py: o WAF do CJF só deixa passar TLS de navegador (27/10/2026).
+# A TNU posterior a 2017 só existe na API nova; sem isto, a tool TNU cai.
+curl_cffi==0.14.0

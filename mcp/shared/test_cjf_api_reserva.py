@@ -148,7 +148,7 @@ class TestOperadorExplicito:
             "raise_for_status": lambda self: None,
             "json": lambda self: {"results": {}, "aggregations": {}},
         })()
-        monkeypatch.setattr(cjf_api.requests, "post",
+        monkeypatch.setattr(cjf_api, "_http_post",
                             lambda url, json, timeout: (enviados.append(json), resp)[1])
         cjf_api.pesquisar("bolsa familia unipessoal", {}, 1)
         assert enviados[0]["query"] == "bolsa E familia E unipessoal"
@@ -170,16 +170,96 @@ class TestBloqueioWaf:
 
     def test_pagina_de_bloqueio_vira_erro_que_diz_waf(self, monkeypatch):
         resp = self._resp_html("<html><h1>Acesso não autorizado</h1> captcha</html>")
-        monkeypatch.setattr(cjf_api.requests, "post", lambda url, json, timeout: resp)
+        monkeypatch.setattr(cjf_api, "_http_post", lambda url, json, timeout: resp)
         with pytest.raises(cjf_api.BloqueioWafCjf, match="WAF"):
             cjf_api.pesquisar("auxilio", {}, 1)
 
     def test_outro_html_segue_como_json_invalido(self, monkeypatch):
         resp = self._resp_html("<html>manutencao</html>")
-        monkeypatch.setattr(cjf_api.requests, "post", lambda url, json, timeout: resp)
+        monkeypatch.setattr(cjf_api, "_http_post", lambda url, json, timeout: resp)
         with pytest.raises(ValueError) as exc:
             cjf_api.pesquisar("auxilio", {}, 1)
         assert not isinstance(exc.value, cjf_api.BloqueioWafCjf)
+
+
+class _RespTransporte:
+    def __init__(self, ctype):
+        self.headers = {"content-type": ctype}
+
+
+class _CffiFalso:
+    """Dublê do ``curl_cffi.requests``: cada sessão registra o que fez; os POSTs
+    respondem, em ordem, com os content-types de ``respostas``."""
+
+    def __init__(self, respostas):
+        self.respostas = list(respostas)
+        self.sessoes = []
+        dono = self
+
+        class Session:
+            def __init__(self, impersonate=None):
+                self.impersonate = impersonate
+                self.eventos = []
+                dono.sessoes.append(self)
+
+            def get(self, url, timeout=None, **kw):
+                self.eventos.append(("get", url, kw.get("headers")))
+                return _RespTransporte("text/html")
+
+            def post(self, url, json=None, headers=None, timeout=None):
+                self.eventos.append(("post", url, headers))
+                return _RespTransporte(dono.respostas.pop(0))
+
+        self.Session = Session
+
+
+class TestTransporteComSessaoDeNavegador:
+    """27/10/2026: só passam TLS de navegador + cookies do GET da página inicial
+    + cabeçalhos do site, os três juntos (medido contra o portal real)."""
+
+    @pytest.fixture(autouse=True)
+    def _sessao_limpa(self, monkeypatch):
+        monkeypatch.setattr(cjf_api, "_sessao", None)
+
+    def test_primeira_chamada_abre_a_pagina_e_manda_os_cabecalhos(self, monkeypatch):
+        falso = _CffiFalso(["application/json", "application/json"])
+        monkeypatch.setattr(cjf_api, "_cffi", falso)
+        cjf_api._http_post(cjf_api.API_URL, json={})
+        cjf_api._http_post(cjf_api.API_URL, json={})
+        assert len(falso.sessoes) == 1, "a sessão se reaproveita entre buscas"
+        s = falso.sessoes[0]
+        assert s.impersonate == "chrome"
+        assert s.eventos[0][:2] == ("get", "https://jurisprudencia.cjf.jus.br/")
+        post = s.eventos[1]
+        assert post[0] == "post"
+        assert post[2]["Origin"] == "https://jurisprudencia.cjf.jus.br"
+        assert post[2]["Referer"] == "https://jurisprudencia.cjf.jus.br/"
+
+    def test_bloqueio_refaz_a_sessao_uma_vez(self, monkeypatch):
+        falso = _CffiFalso(["text/html", "application/json"])
+        monkeypatch.setattr(cjf_api, "_cffi", falso)
+        resp = cjf_api._http_post(cjf_api.API_URL, json={})
+        assert resp.headers["content-type"] == "application/json"
+        assert len(falso.sessoes) == 2
+        assert falso.sessoes[1].eventos[0][0] == "get", "sessão nova reabre a página"
+
+    def test_bloqueio_que_persiste_nao_insiste_alem_de_uma_vez(self, monkeypatch):
+        falso = _CffiFalso(["text/html", "text/html"])
+        monkeypatch.setattr(cjf_api, "_cffi", falso)
+        resp = cjf_api._http_post(cjf_api.API_URL, json={})
+        assert resp.headers["content-type"] == "text/html"
+        assert len(falso.sessoes) == 2 and falso.respostas == []
+
+    def test_sem_curl_cffi_segue_pelo_requests_e_o_erro_diz_o_que_falta(self, monkeypatch):
+        monkeypatch.setattr(cjf_api, "_cffi", None)
+        chamadas = []
+        monkeypatch.setattr(cjf_api.requests, "post",
+                            lambda url, timeout, json=None: (chamadas.append(url), "r")[1])
+        assert cjf_api._http_post(cjf_api.API_URL, json={}) == "r"
+        assert chamadas == [cjf_api.API_URL]
+        resp = TestBloqueioWaf._resp_html("<h1>Acesso não autorizado</h1>")
+        with pytest.raises(cjf_api.BloqueioWafCjf, match="falta o curl_cffi"):
+            cjf_api._json(resp)
 
 
 class TestRegional:

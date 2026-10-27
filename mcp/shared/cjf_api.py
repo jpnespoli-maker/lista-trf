@@ -37,16 +37,29 @@ Cada documento sai no MESMO dicionário dos clientes JSF, com ``via: "api-nova"`
 TNU: aqui a API não é reserva, é a ROTA PRINCIPAL (``buscar_tnu``, usado pela tool
 ``buscar_jurisprudencia_tnu`` do ``cjf-jurisprudencia``) — nenhuma outra base do
 projeto tem a TNU posterior a julho de 2017.
+
+WAF (27/10/2026): a API passou a responder a página "Acesso não autorizado" a
+cliente que não é navegador. Medido, contra o portal real, que só passam as TRÊS
+coisas juntas: impressão TLS de navegador (``curl_cffi``, Chrome ou Firefox),
+os cookies que o WAF entrega no GET da página inicial, e os cabeçalhos que o
+próprio site manda (Origin, Referer, Accept). Faltando o TLS ou os cookies, vem
+o bloqueio; faltando os cabeçalhos, a página de desafio. Daí ``_pedir``.
 """
 
 from __future__ import annotations
 
 import re
+import threading
 from dataclasses import dataclass
 from typing import Any, Dict, List, Sequence, Tuple
 from urllib.parse import quote
 
 import requests
+
+try:
+    from curl_cffi import requests as _cffi
+except ImportError:  # venv sem curl_cffi: segue pelo requests, e o WAF bloqueia
+    _cffi = None
 
 API_URL = "https://jurisprudencia.cjf.jus.br/api/jurisprudencia/pesquisar"
 TRIBUNAIS_COBERTOS = ("STF", "TRF1", "TRF2", "TRF3", "TRF4", "TRF5", "TRF6")
@@ -84,12 +97,54 @@ def _json(resp) -> Any:
     try:
         return resp.json()
     except ValueError:
-        if "Acesso não autorizado".encode("utf-8") in (getattr(resp, "content", b"") or b""):
+        if _BLOQUEIO in (getattr(resp, "content", b"") or b""):
+            falta = "" if _cffi is not None else "; falta o curl_cffi neste venv, sem ele não há como passar"
             raise BloqueioWafCjf(
                 "API nova do CJF bloqueada pelo WAF do portal (página 'Acesso não "
-                "autorizado', com captcha): o CJF recusa este cliente, não é rede fora"
+                f"autorizado', com captcha): o CJF recusa este cliente, não é rede fora{falta}"
             ) from None
         raise
+
+
+_BLOQUEIO = "Acesso não autorizado".encode("utf-8")
+_PAGINA_INICIAL = "https://jurisprudencia.cjf.jus.br/"
+_CABECALHOS = {
+    "Accept": "application/json, text/plain, */*",
+    "Origin": "https://jurisprudencia.cjf.jus.br",
+    "Referer": _PAGINA_INICIAL,
+}
+_sessao = None
+# A sessão do curl_cffi não é thread-safe, e o servidor roda tools em threads.
+_TRAVA = threading.Lock()
+
+
+def _veio_html(resp) -> bool:
+    """Bloqueio ou desafio do WAF: a API só responde JSON."""
+    return str(resp.headers.get("content-type", "")).startswith("text/html")
+
+
+def _pedir(metodo: str, url: str, **kw):
+    """Pedido à API com sessão de navegador; vindo o WAF, refaz a sessão UMA vez."""
+    global _sessao
+    if _cffi is None:
+        return getattr(requests, metodo)(url, timeout=_TIMEOUT_S, **kw)
+    with _TRAVA:
+        for tentativa in range(2):
+            if _sessao is None or tentativa:
+                _sessao = _cffi.Session(impersonate="chrome")
+                _sessao.get(_PAGINA_INICIAL, timeout=_TIMEOUT_S)
+            resp = getattr(_sessao, metodo)(url, headers=_CABECALHOS, timeout=_TIMEOUT_S, **kw)
+            if not _veio_html(resp):
+                break
+        return resp
+
+
+def _http_post(url: str, json: Any = None, timeout: int = _TIMEOUT_S):
+    return _pedir("post", url, json=json)
+
+
+def _http_get(url: str, params: Dict[str, Any] | None = None, timeout: int = _TIMEOUT_S):
+    return _pedir("get", url, params=params)
 
 
 class SemCoberturaNaApi(RuntimeError):
@@ -236,7 +291,7 @@ def pesquisar(
     url = API_URL
     if extras is not None and extras.modo == "semantica":
         url = API_URL.rsplit("/", 1)[0] + "/pesquisa-semantica"
-    resp = requests.post(url, json=corpo, timeout=_TIMEOUT_S)
+    resp = _http_post(url, json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
     dados = _json(resp)
     if "results" not in dados or "aggregations" not in dados:
@@ -390,7 +445,7 @@ _CAMPOS_DOCUMENTO = ("ementa", "decisao", "inteiro_teor")
 
 
 def _get_json(caminho: str, params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    resp = requests.get(f"{_BASE_API}{caminho}", params=params, timeout=_TIMEOUT_S)
+    resp = _http_get(f"{_BASE_API}{caminho}", params=params, timeout=_TIMEOUT_S)
     if resp.status_code != 200:
         raise RuntimeError(f"API nova do CJF respondeu HTTP {resp.status_code} em {caminho}")
     return _json(resp)
@@ -431,7 +486,7 @@ def estatisticas(termo: str, tribunais: Sequence[str], extras: FiltrosApi) -> Di
     corpo = _corpo(termo, _filtros_tribunais(pedidos), 1, extras=extras)
     corpo["page_size"] = 0
     corpo["search_mode"] = extras.modo
-    resp = requests.post(f"{_BASE_API}/analytics", json=corpo, timeout=_TIMEOUT_S)
+    resp = _http_post(f"{_BASE_API}/analytics", json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
     return _json(resp)
 

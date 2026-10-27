@@ -38,7 +38,7 @@ def _dublar_post(monkeypatch, resposta):
         capturado["corpo"] = json
         return _Resp()
 
-    monkeypatch.setattr(cjf_api.requests, "post", _post)
+    monkeypatch.setattr(cjf_api, "_http_post", _post)
     return capturado
 
 
@@ -157,7 +157,7 @@ def _dublar_get(monkeypatch, resposta, status=200):
         capturado["params"] = params
         return _Resp()
 
-    monkeypatch.setattr(cjf_api.requests, "get", _get)
+    monkeypatch.setattr(cjf_api, "_http_get", _get)
     return capturado
 
 
