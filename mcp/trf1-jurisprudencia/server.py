@@ -21,6 +21,9 @@ SÓ A 1ª REGIÃO. Não há base equivalente para as demais: ``/trf2`` a ``/trf6
 no mesmo host respondem 404 (verificado em 2026-08-11). O CJF publica duas
 bases — ``unificada`` e ``trf1``.
 
+INTEIRO TEOR: ``inteiro_teor_trf1`` lê relatório e voto do arquivo do tribunal
+(``arquivo_trf1.py``). Só acórdão do TRF1 de numeração antiga; PJe e JEF1 não.
+
 Origem: adaptado do pacote ``trf1-jurisprudencia-mcp`` (MIT), por sua vez
 derivado do ``julia-pesquisa-mcp`` do kit-helio (MIT). O transporte JSF e as
 salvaguardas vivem em ``shared/cjf_regional_client.py``.
@@ -44,6 +47,9 @@ from shared.base_juridica import (
 )
 from shared import cjf_regional_client as trf1
 from shared.relaxamento import AVISO_RELAXADA, relaxar_cjf
+
+sys.path.insert(0, str(Path(__file__).parent))
+import arquivo_trf1  # noqa: E402
 
 # Onda 2 — cache HTTP de respostas (TTL 7d, mesma política do CJF).
 try:
@@ -181,7 +187,8 @@ def buscar_jurisprudencia_trf1(
     Returns:
         XML com os documentos: número CNJ, classe, órgão julgador, relator,
         data, fonte (TRF1 ou JEF1) e ementa. A ementa deve ser reproduzida
-        FIELMENTE na peça — é proibido resumir ou parafrasear.
+        FIELMENTE na peça — é proibido resumir ou parafrasear. O voto de
+        acórdão do TRF1 (não do JEF1) sai por inteiro_teor_trf1(<numero>).
     """
     max_resultados = max(1, min(int(max_resultados), 150))
     max_tokens_ementa = max(50, min(int(max_tokens_ementa), 4000))
@@ -340,6 +347,65 @@ def relatorio_jurisprudencia_trf1(
             n_resultados=n_docs,
             ms=int((time.perf_counter() - t0) * 1000),
             cache_hit=cache_hit,
+            erro=erro_msg,
+        )
+
+
+@mcp.tool()
+def inteiro_teor_trf1(numero: str, max_caracteres: int = 60000) -> str:
+    """
+    INTEIRO TEOR de acórdão do TRF1 achado pela busca: relatório, voto, ementa
+    e certidão de julgamento, lidos do arquivo do tribunal (arquivo.trf1.jus.br).
+
+    USE ANTES DE CLASSIFICAR UM PRECEDENTE COMO FAVORÁVEL OU ANÁLOGO. A ementa
+    dá o resultado; o fato que torna o caso análogo e a razão de decidir estão
+    no VOTO. Confira também quem assinou: a base do CJF dá o relator titular, e
+    o acórdão pode ter sido lavrado por juiz convocado.
+
+    ALCANCE: acórdão do TRF1 com número antigo (iniciado por 0, autos físicos
+    ou migrados, até ~2020). Processo do PJe (numeração 1xxxxxx) e turma
+    recursal (JEF1) NÃO estão neste arquivo e voltam erro dizendo isso — não é
+    sinal de que o acórdão não exista. Processo dos anos 1990 pode vir só em
+    páginas digitalizadas, sem texto: a ferramenta lista as páginas e avisa.
+
+    TRANSPORTE: o arquivo está atrás de desafio do Cloudflare; a leitura abre o
+    Edge por CDP (janela visível, perfil próprio, como no MCP do STJ). Sem
+    sessão gráfica, ou com DPU_CDP_DESABILITADO=1, volta erro.
+
+    Args:
+        numero: o CNJ do campo <numero> de buscar_jurisprudencia_trf1
+                (com ou sem pontuação; precisa dos 20 dígitos).
+        max_caracteres: teto do texto devolvido (mínimo 1000); `truncado`
+                        indica o corte — não concluir sobre texto lido pela metade.
+
+    Returns:
+        Cabeçalho com número, url, peças, chars_total e truncado, seguido do
+        texto de cada peça (relatório, voto, ementa, certidão).
+    """
+    max_caracteres = max(1000, int(max_caracteres))
+    t0 = time.perf_counter()
+    erro_msg: Optional[str] = None
+    try:
+        r = arquivo_trf1.obter_e_formatar(numero, max_caracteres)
+        cab = (
+            f"<!-- Inteiro teor TRF1 | {r['numero']} | peças: "
+            f"{sanitizar_comentario_xml(', '.join(r['pecas']))} | "
+            f"chars_total {r['chars_total']} | truncado: {str(r['truncado']).lower()} | "
+            f"{sanitizar_comentario_xml(r['url'])} -->\n"
+        )
+        return cab + r["texto"]
+    except Exception as e:
+        erro_msg = str(e)
+        return f"<erro>{sanitizar_comentario_xml(str(e))}</erro>"
+    finally:
+        log_query(
+            mcp="trf1-jurisprudencia",
+            tool="inteiro_teor_trf1",
+            query=str(numero),
+            filtros={"max_caracteres": max_caracteres},
+            n_resultados=0 if erro_msg else 1,
+            ms=int((time.perf_counter() - t0) * 1000),
+            cache_hit=False,
             erro=erro_msg,
         )
 

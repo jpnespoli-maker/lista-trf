@@ -91,6 +91,9 @@ logs/
 *.docx
 *.doc
 *.pdf
+# Fixtures sintéticas do extrator de .doc do arquivo do TRF1 (sem metadado de
+# autor): a regra acima é para as listas importadas, não para elas.
+!tests/fixtures/trf1/*.doc
 
 # ===========================================
 # Arquivos temporarios
