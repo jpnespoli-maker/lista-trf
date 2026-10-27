@@ -1,6 +1,12 @@
 # Dependências diretas do MCP eleitoral-jurisprudencia
 # (venv: mcp-venvs/eleitoral-jurisprudencia, Python 3.11)
 mcp==1.27.0
+# Transitivas do mcp, fixadas nas versões do venv em produção (27/10/2026):
+# sem pino, a instalação numa máquina nova trazia outras (#268, nota d).
+pydantic==2.14.1
+pydantic-settings==2.16.0
+# shared/tls_sistema.py monta o bundle de CA a partir do certifi.
+certifi==2026.7.22
 curl_cffi==0.14.0
 # connect_over_cdp a um Edge lançado fora do Playwright (shared/cdp_edge.py);
 # não precisa de `playwright install` — não usa navegador próprio.
