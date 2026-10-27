@@ -68,6 +68,30 @@ class PortalJsfIndisponivel(ValueError):
     """O host do portal JSF serviu página sem ViewState (o SPA novo)."""
 
 
+class BloqueioWafCjf(RuntimeError):
+    """A API respondeu 200 com a página HTML de "Acesso não autorizado" do WAF."""
+
+
+def _json(resp) -> Any:
+    """``resp.json()``; corpo HTML de bloqueio vira ``BloqueioWafCjf``, não ``JSONDecodeError``.
+
+    Medido em 27/10/2026 nas duas máquinas: o POST em ``/pesquisar`` volta 200,
+    ``text/html``, com a página "Acesso não autorizado — o acesso foi bloqueado
+    por um mecanismo de segurança do portal" e captcha. O ``JSONDecodeError`` que
+    saía no ``ROTA FORA`` não dizia isso. Confere-se nos BYTES: a página vem sem
+    charset, o ``requests`` decodifica como ISO-8859-1 e o ``resp.text`` traz "nÃ£o".
+    """
+    try:
+        return resp.json()
+    except ValueError:
+        if "Acesso não autorizado".encode("utf-8") in (getattr(resp, "content", b"") or b""):
+            raise BloqueioWafCjf(
+                "API nova do CJF bloqueada pelo WAF do portal (página 'Acesso não "
+                "autorizado', com captcha): o CJF recusa este cliente, não é rede fora"
+            ) from None
+        raise
+
+
 class SemCoberturaNaApi(RuntimeError):
     """Tribunal pedido que a API nova não cobre. Nunca vira zero.
 
@@ -214,7 +238,7 @@ def pesquisar(
         url = API_URL.rsplit("/", 1)[0] + "/pesquisa-semantica"
     resp = requests.post(url, json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
-    dados = resp.json()
+    dados = _json(resp)
     if "results" not in dados or "aggregations" not in dados:
         raise RuntimeError(
             f"API nova do CJF respondeu sem 'results'/'aggregations' — o contrato "
@@ -369,7 +393,7 @@ def _get_json(caminho: str, params: Dict[str, Any] | None = None) -> Dict[str, A
     resp = requests.get(f"{_BASE_API}{caminho}", params=params, timeout=_TIMEOUT_S)
     if resp.status_code != 200:
         raise RuntimeError(f"API nova do CJF respondeu HTTP {resp.status_code} em {caminho}")
-    return resp.json()
+    return _json(resp)
 
 
 def obter_documento(doc_id: str, campo: str = "") -> Dict[str, Any]:
@@ -409,7 +433,7 @@ def estatisticas(termo: str, tribunais: Sequence[str], extras: FiltrosApi) -> Di
     corpo["search_mode"] = extras.modo
     resp = requests.post(f"{_BASE_API}/analytics", json=corpo, timeout=_TIMEOUT_S)
     resp.raise_for_status()
-    return resp.json()
+    return _json(resp)
 
 
 def sugerir_relator(texto: str) -> List[str]:

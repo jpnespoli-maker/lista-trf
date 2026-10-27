@@ -154,6 +154,34 @@ class TestOperadorExplicito:
         assert enviados[0]["query"] == "bolsa E familia E unipessoal"
 
 
+class TestBloqueioWaf:
+    """27/10/2026, principal e espelho: o POST volta 200 com a página HTML de
+    "Acesso não autorizado" do WAF. Saía ``JSONDecodeError`` no ``ROTA FORA``."""
+
+    @staticmethod
+    def _resp_html(texto):
+        """Como o real: sem charset no cabeçalho, o ``text`` sai em ISO-8859-1 ("nÃ£o")."""
+        corpo = texto.encode("utf-8")
+
+        def _falha(self):
+            raise json.JSONDecodeError("Expecting value", texto, 0)
+        return type("R", (), {"raise_for_status": lambda self: None, "json": _falha,
+                              "content": corpo, "text": corpo.decode("iso-8859-1")})()
+
+    def test_pagina_de_bloqueio_vira_erro_que_diz_waf(self, monkeypatch):
+        resp = self._resp_html("<html><h1>Acesso não autorizado</h1> captcha</html>")
+        monkeypatch.setattr(cjf_api.requests, "post", lambda url, json, timeout: resp)
+        with pytest.raises(cjf_api.BloqueioWafCjf, match="WAF"):
+            cjf_api.pesquisar("auxilio", {}, 1)
+
+    def test_outro_html_segue_como_json_invalido(self, monkeypatch):
+        resp = self._resp_html("<html>manutencao</html>")
+        monkeypatch.setattr(cjf_api.requests, "post", lambda url, json, timeout: resp)
+        with pytest.raises(ValueError) as exc:
+            cjf_api.pesquisar("auxilio", {}, 1)
+        assert not isinstance(exc.value, cjf_api.BloqueioWafCjf)
+
+
 class TestRegional:
     def test_jef1_filtra_pelos_orgaos_de_turma_recursal(self, monkeypatch):
         chamadas = []
