@@ -1,0 +1,13 @@
+# Dependências diretas do MCP trf-jurisprudencia
+# (venv: mcp-venvs/trf-jurisprudencia, Python 3.11, criado pelo uv)
+# Versões do venv em produção na máquina principal (26/10/2026); sem este
+# arquivo a instalação numa máquina nova era adivinhada pelos imports.
+mcp==1.27.0
+pydantic==2.13.4
+pydantic-settings==2.15.0
+requests==2.34.2
+urllib3==2.7.0
+beautifulsoup4==4.15.0
+tenacity==9.1.4
+# shared/tls_sistema.py monta o bundle de CA a partir do certifi.
+certifi==2026.7.22
